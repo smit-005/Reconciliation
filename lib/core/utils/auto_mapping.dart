@@ -16,7 +16,7 @@ class AutoMappingService {
   static List<AutoMappingResult> autoMapParties({
     required List<String> purchaseParties,
     required List<String> tdsParties,
-    double threshold = 0.65,
+    double threshold = 0.80,
   }) {
     final uniquePurchase = purchaseParties
         .map((e) => e.trim())
@@ -36,7 +36,7 @@ class AutoMappingService {
 
     for (final purchaseParty in uniquePurchase) {
       String? bestMatch;
-      double bestScore = 0;
+      double bestScore = 0.0;
 
       for (final tdsParty in uniqueTds) {
         final score = _similarityScore(purchaseParty, tdsParty);
@@ -47,12 +47,16 @@ class AutoMappingService {
         }
       }
 
+      final isSafeMatch = bestMatch != null &&
+          bestScore >= threshold &&
+          _isSafeBusinessNameMatch(purchaseParty, bestMatch);
+
       results.add(
         AutoMappingResult(
           purchaseParty: purchaseParty,
-          matchedTdsParty: bestScore >= threshold ? bestMatch : null,
+          matchedTdsParty: bestMatch, // IMPORTANT: always keep best match
           score: bestScore,
-          isMatched: bestScore >= threshold,
+          isMatched: isSafeMatch,
         ),
       );
     }
@@ -85,19 +89,48 @@ class AutoMappingService {
     return text;
   }
 
+  static bool _isSafeBusinessNameMatch(String a, String b) {
+    final na = normalizePartyName(a);
+    final nb = normalizePartyName(b);
+
+    if (na.isEmpty || nb.isEmpty) return false;
+    if (na == nb) return true;
+
+    final aWords = na.split(' ').where((e) => e.isNotEmpty).toList();
+    final bWords = nb.split(' ').where((e) => e.isNotEmpty).toList();
+
+    if (aWords.isEmpty || bWords.isEmpty) return false;
+
+    if (aWords.first != bWords.first) return false;
+
+    final tailA = aWords.skip(1).join(' ');
+    final tailB = bWords.skip(1).join(' ');
+
+    if (tailA.isEmpty && tailB.isEmpty) return true;
+    if (tailA == tailB) return true;
+
+    if (_levenshteinDistance(tailA, tailB) <= 1) return true;
+
+    final commonWords = aWords.toSet().intersection(bWords.toSet()).length;
+    final minWords =
+    aWords.length < bWords.length ? aWords.length : bWords.length;
+
+    return minWords > 0 && commonWords >= (minWords - 1);
+  }
+
   static double _similarityScore(String a, String b) {
     final na = normalizePartyName(a);
     final nb = normalizePartyName(b);
 
-    if (na.isEmpty || nb.isEmpty) return 0;
-
+    if (na.isEmpty || nb.isEmpty) return 0.0;
     if (na == nb) return 1.0;
 
     final aWords = na.split(' ').where((e) => e.isNotEmpty).toSet();
     final bWords = nb.split(' ').where((e) => e.isNotEmpty).toSet();
 
     final commonWords = aWords.intersection(bWords).length;
-    final maxWords = aWords.length > bWords.length ? aWords.length : bWords.length;
+    final maxWords =
+    aWords.length > bWords.length ? aWords.length : bWords.length;
     final wordScore = maxWords == 0 ? 0.0 : commonWords / maxWords;
 
     final editScore = _levenshteinSimilarity(na, nb);
@@ -119,10 +152,7 @@ class AutoMappingService {
     if (m == 0) return n;
     if (n == 0) return m;
 
-    final dp = List.generate(
-      m + 1,
-          (_) => List<int>.filled(n + 1, 0),
-    );
+    final dp = List.generate(m + 1, (_) => List<int>.filled(n + 1, 0));
 
     for (int i = 0; i <= m; i++) {
       dp[i][0] = i;

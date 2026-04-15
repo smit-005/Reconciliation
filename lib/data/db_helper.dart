@@ -33,5 +33,16 @@ class DBHelper {
         pan TEXT NOT NULL UNIQUE
       )
     ''');
+    await db.execute('''
+CREATE TABLE seller_mappings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  buyer_name TEXT,
+  buyer_pan TEXT,
+  alias_name TEXT,
+  mapped_pan TEXT,
+  mapped_name TEXT,
+  created_at TEXT
+)
+''');
   }
 }

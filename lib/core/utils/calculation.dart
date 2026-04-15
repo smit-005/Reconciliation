@@ -1,12 +1,14 @@
+import '../../services/mapping_service.dart';
+
 class PurchaseRow {
   final String date;
   final String month;
   final String billNo;
-  final String partyName; // seller/vendor
+  final String partyName;
   final String gstNo;
   final String panNumber;
   final String productName;
-  final double basicAmount; // amount without GST
+  final double basicAmount;
   final double billAmount;
 
   PurchaseRow({
@@ -23,14 +25,17 @@ class PurchaseRow {
 
   factory PurchaseRow.fromMap(Map<String, dynamic> map) {
     final rawDate = _readAny(map, ['eom', 'date']) ?? '';
+    final rawGst = (_readAny(map, ['gst_no']) ?? '').trim().toUpperCase();
+    final rawPan = _normalizePan(_readAny(map, ['pan_number']) ?? '');
+    final finalPan = rawPan.isNotEmpty ? rawPan : _extractPanFromGstin(rawGst);
 
     return PurchaseRow(
       date: rawDate,
       month: _normalizeMonth(rawDate),
       billNo: (_readAny(map, ['bill_no']) ?? '').trim(),
       partyName: (_readAny(map, ['party_name']) ?? '').trim(),
-      gstNo: (_readAny(map, ['gst_no']) ?? '').trim(),
-      panNumber: _normalizePan(_readAny(map, ['pan_number']) ?? ''),
+      gstNo: rawGst,
+      panNumber: finalPan,
       productName: (_readAny(map, ['productname']) ?? '').trim(),
       basicAmount: _parseDouble(
         _readAny(map, ['basic_amount', 'product_amount', 'taxable_amount']),
@@ -44,10 +49,11 @@ class PurchaseRow {
 
 class Tds26QRow {
   final String month;
-  final String deducteeName; // seller/vendor
+  final String deducteeName;
   final String panNumber;
-  final double deductedAmount; // amount paid / credited
+  final double deductedAmount;
   final double tds;
+  final String section;
 
   Tds26QRow({
     required this.month,
@@ -55,6 +61,7 @@ class Tds26QRow {
     required this.panNumber,
     required this.deductedAmount,
     required this.tds,
+    required this.section,
   });
 
   factory Tds26QRow.fromMap(Map<String, dynamic> map) {
@@ -66,6 +73,7 @@ class Tds26QRow {
       panNumber: _normalizePan(_readAny(map, ['pan_number']) ?? ''),
       deductedAmount: _parseDouble(_readAny(map, ['deducted_amount'])),
       tds: _parseDouble(_readAny(map, ['tds'])),
+      section: _normalizeSection((_readAny(map, ['section']) ?? '').trim()),
     );
   }
 }
@@ -78,17 +86,18 @@ class ReconciliationRow {
 
   final String sellerName;
   final String sellerPan;
+  final String section;
 
   final double basicAmount;
   final double applicableAmount;
 
-  final double tds26QAmount; // amount paid/credited from 26Q
+  final double tds26QAmount;
   final double expectedTds;
   final double actualTds;
   final double tdsRateUsed;
 
-  final double amountDifference; // applicable - deductedAmount
-  final double tdsDifference; // expectedTds - actualTds
+  final double amountDifference;
+  final double tdsDifference;
 
   final String status;
   final String remarks;
@@ -107,6 +116,7 @@ class ReconciliationRow {
     required this.month,
     required this.sellerName,
     required this.sellerPan,
+    required this.section,
     required this.basicAmount,
     required this.applicableAmount,
     required this.tds26QAmount,
@@ -131,6 +141,7 @@ class ReconciliationRow {
     String? month,
     String? sellerName,
     String? sellerPan,
+    String? section,
     double? basicAmount,
     double? applicableAmount,
     double? tds26QAmount,
@@ -154,6 +165,7 @@ class ReconciliationRow {
       month: month ?? this.month,
       sellerName: sellerName ?? this.sellerName,
       sellerPan: sellerPan ?? this.sellerPan,
+      section: section ?? this.section,
       basicAmount: basicAmount ?? this.basicAmount,
       applicableAmount: applicableAmount ?? this.applicableAmount,
       tds26QAmount: tds26QAmount ?? this.tds26QAmount,
@@ -166,11 +178,9 @@ class ReconciliationRow {
       remarks: remarks ?? this.remarks,
       purchasePresent: purchasePresent ?? this.purchasePresent,
       tdsPresent: tdsPresent ?? this.tdsPresent,
-      openingTimingBalance:
-      openingTimingBalance ?? this.openingTimingBalance,
+      openingTimingBalance: openingTimingBalance ?? this.openingTimingBalance,
       monthTdsDifference: monthTdsDifference ?? this.monthTdsDifference,
-      closingTimingBalance:
-      closingTimingBalance ?? this.closingTimingBalance,
+      closingTimingBalance: closingTimingBalance ?? this.closingTimingBalance,
     );
   }
 
@@ -182,6 +192,7 @@ class ReconciliationRow {
       'Month': month,
       'Seller Name': sellerName,
       'Seller PAN': sellerPan,
+      'Section': section,
       'Basic Amount': basicAmount,
       'Applicable Amount': applicableAmount,
       '26Q Amount': tds26QAmount,
@@ -223,6 +234,7 @@ class _TdsGroup {
   final String sellerPan;
   final double deductedAmount;
   final double actualTds;
+  final String section;
 
   _TdsGroup({
     required this.financialYear,
@@ -231,6 +243,7 @@ class _TdsGroup {
     required this.sellerPan,
     required this.deductedAmount,
     required this.actualTds,
+    required this.section,
   });
 }
 
@@ -273,8 +286,8 @@ class _DisjointSet {
 }
 
 class CalculationService {
-  static const double threshold = 5000000.0; // 50 lakh
-  static const double fixedTdsRate = 0.001; // 0.1%
+  static const double threshold = 5000000.0;
+  static const double fixedTdsRate = 0.001;
   static const double tolerance = 1.0;
 
   static int compareMonthLabels(String a, String b) {
@@ -285,22 +298,29 @@ class CalculationService {
     return _monthKeyToDate(value);
   }
 
-
-  static List<ReconciliationRow> reconcile({
+  static Future<List<ReconciliationRow>> reconcile({
     required String buyerName,
     required String buyerPan,
     required List<PurchaseRow> purchaseRows,
     required List<Tds26QRow> tdsRows,
     Map<String, String>? nameMapping,
     bool includeAllRows = false,
-  }) {
+  }) async {
     final normalizedBuyerPan = _normalizePan(buyerPan);
     final normalizedMapping = _normalizeNameMapping(nameMapping ?? {});
+
+    final mappings = await MappingService.getAllMappings(normalizedBuyerPan);
+
+    final savedAliasToPan = <String, String>{
+      for (final m in mappings)
+        normalizeName(m.aliasName): _normalizePan(m.mappedPan),
+    };
 
     final sellerKeyResolver = _buildSellerKeyResolver(
       purchaseRows: purchaseRows,
       tdsRows: tdsRows,
       nameMapping: normalizedMapping,
+      savedAliasToPan: savedAliasToPan,
     );
 
     final purchaseGroups = _groupPurchaseRows(
@@ -308,6 +328,7 @@ class CalculationService {
       normalizedMapping,
       sellerKeyResolver,
     );
+
     final tdsGroups = _groupTdsRows(
       tdsRows,
       normalizedMapping,
@@ -315,10 +336,7 @@ class CalculationService {
     );
 
     final relevantSellerKeys = includeAllRows
-        ? <String>{
-      ...purchaseGroups.keys,
-      ...tdsGroups.keys,
-    }
+        ? <String>{...purchaseGroups.keys, ...tdsGroups.keys}
         : _getRelevantSellerKeys(
       purchaseGroups: purchaseGroups,
       tdsGroups: tdsGroups,
@@ -344,8 +362,7 @@ class CalculationService {
         final purchase = purchaseByFyMonth[fyMonthKey];
         final tds = tdsByFyMonth[fyMonthKey];
 
-        final financialYear =
-            purchase?.financialYear ?? tds?.financialYear ?? '';
+        final financialYear = purchase?.financialYear ?? tds?.financialYear ?? '';
         final month = purchase?.month ?? tds?.month ?? '';
 
         if (financialYear != currentFy) {
@@ -410,6 +427,7 @@ class CalculationService {
             month: month,
             sellerName: sellerName,
             sellerPan: sellerPan,
+            section: (tds?.section ?? '').trim(),
             basicAmount: basicAmount,
             applicableAmount: applicableAmount,
             tds26QAmount: deductedAmount,
@@ -454,6 +472,7 @@ class CalculationService {
     required List<PurchaseRow> purchaseRows,
     required List<Tds26QRow> tdsRows,
     required Map<String, String> nameMapping,
+    required Map<String, String> savedAliasToPan,
   }) {
     final identities = <_SellerIdentity>[];
 
@@ -463,7 +482,9 @@ class CalculationService {
         _SellerIdentity(
           originalName: row.partyName,
           mappedName: mappedName,
-          normalizedName: normalizeName(mappedName.isNotEmpty ? mappedName : row.partyName),
+          normalizedName: normalizeName(
+            mappedName.isNotEmpty ? mappedName : row.partyName,
+          ),
           sellerPan: _normalizePan(row.panNumber),
         ),
       );
@@ -475,15 +496,61 @@ class CalculationService {
         _SellerIdentity(
           originalName: row.deducteeName,
           mappedName: mappedName,
-          normalizedName: normalizeName(mappedName.isNotEmpty ? mappedName : row.deducteeName),
+          normalizedName: normalizeName(
+            mappedName.isNotEmpty ? mappedName : row.deducteeName,
+          ),
           sellerPan: _normalizePan(row.panNumber),
         ),
       );
     }
 
     final dsu = _DisjointSet();
-    final panNodeToPan = <String, String>{};
-    final nameNodeToName = <String, String>{};
+
+    for (final entry in nameMapping.entries) {
+      final rawPurchase = entry.key.trim().toUpperCase();
+      final rawTds = entry.value.trim().toUpperCase();
+
+      final normPurchase = normalizeName(entry.key);
+      final normTds = normalizeName(entry.value);
+
+      final nodes = [
+        'NAME:$rawPurchase',
+        'NAME:$rawTds',
+        'NAME:$normPurchase',
+        'NAME:$normTds',
+      ];
+
+      for (final n in nodes) {
+        if (n.replaceAll('NAME:', '').isEmpty) continue;
+        dsu.add(n);
+      }
+
+      for (int i = 0; i < nodes.length; i++) {
+        for (int j = i + 1; j < nodes.length; j++) {
+          dsu.union(nodes[i], nodes[j]);
+        }
+      }
+    }
+
+    for (final entry in savedAliasToPan.entries) {
+      final normAlias = normalizeName(entry.key);
+      final mappedPan = _normalizePan(entry.value);
+
+      final nameNode = 'NAME:$normAlias';
+      final panNode = 'PAN:$mappedPan';
+
+      if (normAlias.isNotEmpty) {
+        dsu.add(nameNode);
+      }
+
+      if (mappedPan.isNotEmpty) {
+        dsu.add(panNode);
+      }
+
+      if (normAlias.isNotEmpty && mappedPan.isNotEmpty) {
+        dsu.union(nameNode, panNode);
+      }
+    }
 
     for (final identity in identities) {
       final pan = identity.sellerPan;
@@ -495,13 +562,11 @@ class CalculationService {
       if (pan.isNotEmpty) {
         panNode = 'PAN:$pan';
         dsu.add(panNode);
-        panNodeToPan[panNode] = pan;
       }
 
       if (normName.isNotEmpty) {
         nameNode = 'NAME:$normName';
         dsu.add(nameNode);
-        nameNodeToName[nameNode] = normName;
       }
 
       if (panNode != null && nameNode != null) {
@@ -512,7 +577,7 @@ class CalculationService {
     final groups = <String, Set<String>>{};
     for (final node in dsu.values()) {
       final root = dsu.find(node);
-      groups.putIfAbsent(root, () => {}).add(node);
+      groups.putIfAbsent(root, () => <String>{}).add(node);
     }
 
     final rootToCanonicalKey = <String, String>{};
@@ -521,7 +586,8 @@ class CalculationService {
       final nodes = entry.value;
 
       final panNodes = nodes.where((e) => e.startsWith('PAN:')).toList()..sort();
-      final nameNodes = nodes.where((e) => e.startsWith('NAME:')).toList()..sort();
+      final nameNodes =
+      nodes.where((e) => e.startsWith('NAME:')).toList()..sort();
 
       if (panNodes.isNotEmpty) {
         rootToCanonicalKey[entry.key] = panNodes.first.substring(4);
@@ -562,14 +628,12 @@ class CalculationService {
       final monthMap = entry.value;
 
       final fyTotals = <String, double>{};
-
       for (final group in monthMap.values) {
         fyTotals[group.financialYear] =
             (fyTotals[group.financialYear] ?? 0.0) + group.basicAmount;
       }
 
       final crossedThreshold = fyTotals.values.any((total) => total > threshold);
-
       if (crossedThreshold) {
         relevant.add(sellerKey);
       }
@@ -640,11 +704,21 @@ class CalculationService {
         } else if (row.purchasePresent && !row.tdsPresent) {
           finalStatus = 'Purchase Only';
         } else if (row.purchasePresent && row.tdsPresent) {
+          final isPartialDeduction =
+              row.applicableAmount > tolerance &&
+                  row.tds26QAmount > tolerance &&
+                  row.tds26QAmount < (row.applicableAmount - tolerance);
+
+          final deductedBaseAlignedWithTds = row.actualTds > tolerance &&
+              (row.tds26QAmount * row.tdsRateUsed - row.actualTds).abs() <= 2.0;
+
           if (row.monthTdsDifference.abs() <= tolerance &&
               row.openingTimingBalance.abs() <= tolerance &&
               row.closingTimingBalance.abs() <= tolerance) {
             finalStatus = 'Matched';
           } else if (canBeTiming) {
+            finalStatus = 'Timing Difference';
+          } else if (isPartialDeduction && deductedBaseAlignedWithTds) {
             finalStatus = 'Timing Difference';
           } else {
             if (row.monthTdsDifference < -tolerance) {
@@ -775,6 +849,7 @@ class CalculationService {
           sellerPan: sellerPan,
           deductedAmount: row.deductedAmount,
           actualTds: row.tds,
+          section: row.section,
         );
       } else {
         monthMap[fyMonthKey] = _TdsGroup(
@@ -786,6 +861,7 @@ class CalculationService {
           existing.sellerPan.isNotEmpty ? existing.sellerPan : sellerPan,
           deductedAmount: existing.deductedAmount + row.deductedAmount,
           actualTds: existing.actualTds + row.tds,
+          section: existing.section.isNotEmpty ? existing.section : row.section,
         );
       }
     }
@@ -801,11 +877,9 @@ class CalculationService {
     if (sellerPan.isNotEmpty) {
       return resolver[sellerPan] ?? sellerPan;
     }
-
     if (normalizedSellerName.isNotEmpty) {
       return resolver[normalizedSellerName] ?? normalizedSellerName;
     }
-
     return '';
   }
 
@@ -816,13 +890,8 @@ class CalculationService {
   }) {
     final currentCumulative = previousCumulative + currentMonthBasic;
 
-    if (currentCumulative <= threshold) {
-      return 0.0;
-    }
-
-    if (previousCumulative >= threshold) {
-      return currentMonthBasic;
-    }
+    if (currentCumulative <= threshold) return 0.0;
+    if (previousCumulative >= threshold) return currentMonthBasic;
 
     return currentCumulative - threshold;
   }
@@ -853,16 +922,9 @@ class CalculationService {
   }) {
     final remarks = <String>[];
 
-    if (sellerPan.isEmpty) {
-      remarks.add('PAN missing');
-    }
-
-    if (purchaseMissing) {
-      remarks.add('Not found in purchase');
-    }
-    if (tdsMissing) {
-      remarks.add('Not found in 26Q');
-    }
+    if (sellerPan.isEmpty) remarks.add('PAN missing');
+    if (purchaseMissing) remarks.add('Not found in purchase');
+    if (tdsMissing) remarks.add('Not found in 26Q');
 
     if (!purchaseMissing && !tdsMissing) {
       if (amountDifference.abs() > tolerance) {
@@ -892,11 +954,29 @@ class CalculationService {
         .toList();
 
     parts.removeWhere(
-          (e) => e == 'TDS short' || e == 'TDS excess' || e == 'Timing adjusted',
+          (e) =>
+      e == 'TDS short' ||
+          e == 'TDS excess' ||
+          e == 'Timing adjusted' ||
+          e == 'Partial deduction / timing difference' ||
+          e.startsWith('Opening timing balance') ||
+          e.startsWith('Closing timing balance'),
     );
 
     if (finalStatus == 'Timing Difference') {
-      parts.add('Timing adjusted');
+      parts.add('Partial deduction / timing difference');
+
+      if (openingTimingBalance.abs() > tolerance) {
+        parts.add(
+          'Opening timing balance: ${openingTimingBalance.toStringAsFixed(2)}',
+        );
+      }
+
+      if (closingTimingBalance.abs() > tolerance) {
+        parts.add(
+          'Closing timing balance: ${closingTimingBalance.toStringAsFixed(2)}',
+        );
+      }
     } else if (finalStatus == 'Short Deduction') {
       parts.add('TDS short');
     } else if (finalStatus == 'Excess Deduction') {
@@ -910,8 +990,8 @@ class CalculationService {
     required String purchaseName,
     required String tdsName,
   }) {
-    if (purchaseName.trim().isNotEmpty) return purchaseName.trim();
     if (tdsName.trim().isNotEmpty) return tdsName.trim();
+    if (purchaseName.trim().isNotEmpty) return purchaseName.trim();
     return '';
   }
 
@@ -922,7 +1002,6 @@ class CalculationService {
   }) {
     if (purchasePan.trim().isNotEmpty) return purchasePan.trim();
     if (tdsPan.trim().isNotEmpty) return tdsPan.trim();
-
     if (_looksLikePan(fallbackKey)) return fallbackKey.trim();
     return '';
   }
@@ -996,10 +1075,31 @@ String _normalizePan(String value) {
   return value.trim().toUpperCase();
 }
 
+String _normalizeSection(String value) {
+  final text = value.trim().toUpperCase();
+
+  if (text.startsWith('194Q')) return '194Q';
+  if (text.startsWith('194C')) return '194C';
+  if (text.startsWith('194J')) return '194J';
+  if (text.startsWith('194H')) return '194H';
+
+  return text;
+}
+
 bool _looksLikePan(String value) {
   final text = value.trim().toUpperCase();
   final panRegex = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$');
   return panRegex.hasMatch(text);
+}
+
+String _extractPanFromGstin(String gstin) {
+  final clean = gstin.trim().toUpperCase();
+
+  if (clean.length != 15) return '';
+
+  final pan = clean.substring(2, 12);
+  final panRegex = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$');
+  return panRegex.hasMatch(pan) ? pan : '';
 }
 
 double _round2(double value) {

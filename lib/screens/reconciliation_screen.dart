@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/utils/calculation.dart';
 import '../services/excel_export_service.dart';
 import '../core/utils/auto_mapping.dart';
+import '../services/mapping_service.dart';
+import '../models/seller_mapping.dart';
 import 'manual_mapping_screen.dart';
 
 class ReconciliationScreen extends StatefulWidget {
@@ -30,12 +32,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   List<ReconciliationRow> allRows = [];
   List<ReconciliationRow> filteredRows = [];
 
-  List<String> sellerOptions = [];
-  List<String> financialYearOptions = [];
+  List<String> sellerOptions = ['All Sellers'];
+  List<String> financialYearOptions = ['All FY'];
 
   Map<String, String> manualNameMapping = {};
 
-  final List<String> statusOptions = [
+  final List<String> statusOptions = const [
     'All Status',
     'Mismatch Only',
     'Matched',
@@ -51,79 +53,171 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   String selectedSeller = 'All Sellers';
   String selectedFinancialYear = 'All FY';
   String selectedStatus = 'All Status';
+
   bool showAllRows = false;
   bool showSummaryPanel = false;
+  bool _isRecalculating = false;
+
   @override
   void initState() {
     super.initState();
-    _loadReconciliation();
+    _recalculateAll();
   }
 
-  void _loadReconciliation() {
-    final prevSeller = selectedSeller;
-    final prevFY = selectedFinancialYear;
-    final prevStatus = selectedStatus;
+  @override
+  void didUpdateWidget(covariant ReconciliationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    final purchaseNames = widget.purchaseRows.map((e) => e.partyName).toList();
-    final tdsNames = widget.tdsRows.map((e) => e.deducteeName).toList();
+    final purchaseChanged = oldWidget.purchaseRows != widget.purchaseRows;
+    final tdsChanged = oldWidget.tdsRows != widget.tdsRows;
+    final buyerChanged =
+        oldWidget.buyerName != widget.buyerName ||
+            oldWidget.buyerPan != widget.buyerPan ||
+            oldWidget.gstNo != widget.gstNo;
 
-    final mappingResults = AutoMappingService.autoMapParties(
-      purchaseParties: purchaseNames,
-      tdsParties: tdsNames,
-    );
+    if (purchaseChanged || tdsChanged || buyerChanged) {
+      _recalculateAll();
+    }
+  }
 
-    final autoNameMapping = <String, String>{
-      for (final m in mappingResults)
-        if (m.isMatched && m.matchedTdsParty != null)
-          m.purchaseParty.toUpperCase(): m.matchedTdsParty!,
-    };
-
-    final nameMapping = <String, String>{
-      ...autoNameMapping,
-      ...manualNameMapping,
-    };
-
-    final rows = CalculationService.reconcile(
-      buyerName: widget.buyerName,
-      buyerPan: widget.buyerPan,
-      purchaseRows: widget.purchaseRows,
-      tdsRows: widget.tdsRows,
-      nameMapping: nameMapping,
-      includeAllRows: showAllRows,
-    );
-
-    final sellers = rows
-        .map((e) => e.sellerName.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-
-    final financialYears = rows
-        .map((e) => e.financialYear.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+  Future<void> _recalculateAll() async {
+    if (_isRecalculating) return;
 
     setState(() {
-      allRows = rows;
-      sellerOptions = ['All Sellers', ...sellers];
-      financialYearOptions = ['All FY', ...financialYears];
-
-      selectedSeller =
-      sellerOptions.contains(prevSeller) ? prevSeller : 'All Sellers';
-      selectedFinancialYear =
-      financialYearOptions.contains(prevFY) ? prevFY : 'All FY';
-      selectedStatus =
-      statusOptions.contains(prevStatus) ? prevStatus : 'All Status';
+      _isRecalculating = true;
     });
 
-    _applyFilters();
+    try {
+      final prevSeller = selectedSeller;
+      final prevFY = selectedFinancialYear;
+      final prevStatus = selectedStatus;
+
+      final purchaseNames = widget.purchaseRows.map((e) => e.partyName).toList();
+      final tdsNames = widget.tdsRows.map((e) => e.deducteeName).toList();
+
+      final mappingResults = AutoMappingService.autoMapParties(
+        purchaseParties: purchaseNames,
+        tdsParties: tdsNames,
+        threshold: 0.80,
+      );
+
+      final nameMapping = <String, String>{};
+
+      for (final m in mappingResults) {
+        final p = m.purchaseParty.trim();
+        final t = m.matchedTdsParty?.trim();
+
+        if (p.isEmpty || t == null || t.isEmpty) continue;
+
+        // normal safe match
+        if (m.isMatched) {
+          nameMapping[p] = t;
+          debugPrint('SAFE AUTO MAP => $p -> $t | score=${m.score}');
+          continue;
+        }
+
+        // fallback for normalized exact match after typo cleanup
+        final pNorm = AutoMappingService.normalizePartyName(p);
+        final tNorm = AutoMappingService.normalizePartyName(t);
+
+        if (pNorm == tNorm) {
+          nameMapping[p] = t;
+          debugPrint('FALLBACK MAP => $p -> $t | score=${m.score}');
+        }
+      }
+
+// manual mapping override
+      for (final entry in manualNameMapping.entries) {
+        if (entry.key.trim().isEmpty || entry.value.trim().isEmpty) continue;
+        nameMapping[entry.key.trim()] = entry.value.trim();
+      }
+
+      final freshRows = await CalculationService.reconcile(
+        buyerName: widget.buyerName,
+        buyerPan: widget.buyerPan,
+        purchaseRows: List<PurchaseRow>.from(widget.purchaseRows),
+        tdsRows: List<Tds26QRow>.from(widget.tdsRows),
+        nameMapping: nameMapping,
+        includeAllRows: showAllRows,
+      );
+
+      final sellers = freshRows
+          .map((e) => e.sellerName.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      final financialYears = freshRows
+          .map((e) => e.financialYear.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      final nextSellerOptions = ['All Sellers', ...sellers];
+      final nextFinancialYearOptions = ['All FY', ...financialYears];
+
+      final nextSelectedSeller =
+      nextSellerOptions.contains(prevSeller) ? prevSeller : 'All Sellers';
+      final nextSelectedFinancialYear = nextFinancialYearOptions.contains(prevFY)
+          ? prevFY
+          : 'All FY';
+      final nextSelectedStatus =
+      statusOptions.contains(prevStatus) ? prevStatus : 'All Status';
+
+      final nextFilteredRows = _filterRows(
+        rows: freshRows,
+        selectedSellerValue: nextSelectedSeller,
+        selectedFinancialYearValue: nextSelectedFinancialYear,
+        selectedStatusValue: nextSelectedStatus,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        allRows = freshRows;
+        filteredRows = nextFilteredRows;
+
+        sellerOptions = nextSellerOptions;
+        financialYearOptions = nextFinancialYearOptions;
+
+        selectedSeller = nextSelectedSeller;
+        selectedFinancialYear = nextSelectedFinancialYear;
+        selectedStatus = nextSelectedStatus;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('Recalculation failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRecalculating = false;
+        });
+      }
+    }
   }
 
   void _applyFilters() {
-    var rows = List<ReconciliationRow>.from(allRows);
+    final nextFilteredRows = _filterRows(
+      rows: allRows,
+      selectedSellerValue: selectedSeller,
+      selectedFinancialYearValue: selectedFinancialYear,
+      selectedStatusValue: selectedStatus,
+    );
+
+    setState(() {
+      filteredRows = nextFilteredRows;
+    });
+  }
+
+  List<ReconciliationRow> _filterRows({
+    required List<ReconciliationRow> rows,
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedStatusValue,
+  }) {
+    var result = List<ReconciliationRow>.from(rows);
 
     String normalizePan(String pan) {
       final value = pan.trim().toUpperCase();
@@ -137,21 +231,23 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       return row.sellerName.trim().toUpperCase();
     }
 
-    if (selectedSeller != 'All Sellers') {
-      rows = rows
-          .where((row) => row.sellerName.trim() == selectedSeller.trim())
+    if (selectedSellerValue != 'All Sellers') {
+      result = result
+          .where((row) => row.sellerName.trim() == selectedSellerValue.trim())
           .toList();
     }
 
-    if (selectedFinancialYear != 'All FY') {
-      rows = rows
-          .where((row) => row.financialYear.trim() == selectedFinancialYear.trim())
+    if (selectedFinancialYearValue != 'All FY') {
+      result = result
+          .where(
+            (row) => row.financialYear.trim() == selectedFinancialYearValue.trim(),
+      )
           .toList();
     }
 
-    if (selectedStatus != 'All Status') {
-      if (selectedStatus == 'Mismatch Only') {
-        rows = rows
+    if (selectedStatusValue != 'All Status') {
+      if (selectedStatusValue == 'Mismatch Only') {
+        result = result
             .where(
               (row) =>
           row.status == 'Short Deduction' ||
@@ -160,8 +256,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
               row.status == '26Q Only',
         )
             .toList();
-      } else if (selectedStatus == 'Applicable but no 26Q') {
-        rows = rows
+      } else if (selectedStatusValue == 'Applicable but no 26Q') {
+        result = result
             .where(
               (row) =>
           row.applicableAmount > 0 &&
@@ -169,31 +265,32 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
               row.actualTds == 0,
         )
             .toList();
-      } else if (selectedStatus == 'Threshold Crossed Only') {
+      } else if (selectedStatusValue == 'Threshold Crossed Only') {
         final grouped = <String, double>{};
 
-        for (final row in rows) {
+        for (final row in result) {
           final key =
               '${buildSellerDisplayKey(row)}|${row.financialYear.trim()}';
           grouped[key] = (grouped[key] ?? 0.0) + row.basicAmount;
         }
 
-        rows = rows.where((row) {
+        result = result.where((row) {
           final key =
               '${buildSellerDisplayKey(row)}|${row.financialYear.trim()}';
           return (grouped[key] ?? 0.0) > 5000000;
         }).toList();
       } else {
-        rows = rows
-            .where((row) => row.status.trim() == selectedStatus.trim())
+        result = result
+            .where((row) => row.status.trim() == selectedStatusValue.trim())
             .toList();
       }
     }
 
-    rows.sort((a, b) {
-      final sellerCompare = a.sellerName.trim().toUpperCase().compareTo(
-        b.sellerName.trim().toUpperCase(),
-      );
+    result.sort((a, b) {
+      final sellerCompare = a.sellerName
+          .trim()
+          .toUpperCase()
+          .compareTo(b.sellerName.trim().toUpperCase());
       if (sellerCompare != 0) return sellerCompare;
 
       final panA = normalizePan(a.sellerPan);
@@ -201,15 +298,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final panCompare = panA.compareTo(panB);
       if (panCompare != 0) return panCompare;
 
-      final fyCompare = a.financialYear.trim().compareTo(b.financialYear.trim());
+      final fyCompare =
+      a.financialYear.trim().compareTo(b.financialYear.trim());
       if (fyCompare != 0) return fyCompare;
 
       return CalculationService.compareMonthLabels(a.month, b.month);
     });
 
-    setState(() {
-      filteredRows = rows;
-    });
+    return result;
   }
 
   double _sum(double Function(ReconciliationRow row) selector) {
@@ -295,16 +391,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       );
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Exported to: $filePath')));
+      _showSnackBar('Exported to: $filePath');
     } catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      _showSnackBar('Export failed: $e');
     }
   }
 
@@ -327,7 +417,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       setState(() {
         manualNameMapping = result;
       });
-      _loadReconciliation();
+      await _recalculateAll();
     }
   }
 
@@ -341,17 +431,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       );
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Pivot Exported to: $filePath')));
+      _showSnackBar('Pivot Exported to: $filePath');
     } catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Pivot export failed: $e')));
+      _showSnackBar('Pivot export failed: $e');
     }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   Color _statusColor(String status) {
@@ -474,10 +564,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       ),
       child: const Text(
         'Relevant sellers only: this report includes only sellers who are present in 26Q or whose total purchase crosses ₹50,00,000 in the financial year. Sellers below threshold and not present in 26Q are excluded to avoid false mismatches.',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -523,10 +610,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           _summaryTile('26Q Amount', _fmt(_sum((e) => e.tds26QAmount))),
           _summaryTile('Expected TDS', _fmt(_sum((e) => e.expectedTds))),
           _summaryTile('Actual TDS', _fmt(_sum((e) => e.actualTds))),
-          _summaryTile(
-            'TDS Difference',
-            _fmt(_sum((e) => e.tdsDifference)),
-          ),
+          _summaryTile('TDS Difference', _fmt(_sum((e) => e.tdsDifference))),
           _summaryTile(
             'Amount Difference',
             _fmt(_sum((e) => e.amountDifference)),
@@ -685,70 +769,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                 textColor: Colors.deepOrange.shade700,
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRowModeToggle() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.tune_rounded,
-            size: 18,
-            color: Colors.grey.shade700,
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Raw Data Mode',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Show all rows including below-threshold sellers.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            showAllRows ? 'On' : 'Off',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: showAllRows ? Colors.indigo.shade700 : Colors.grey.shade700,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Switch(
-            value: showAllRows,
-            onChanged: (value) {
-              setState(() {
-                showAllRows = value;
-              });
-              _loadReconciliation();
-            },
           ),
         ],
       ),
@@ -914,8 +934,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
               return CalculationService.compareMonthLabels(a.month, b.month);
             });
 
-          final sellerName =
-          rows.first.sellerName.trim().isEmpty ? '-' : rows.first.sellerName.trim();
+          final sellerName = rows.first.sellerName.trim().isEmpty
+              ? '-'
+              : rows.first.sellerName.trim();
           final sellerPan = resolveDisplayPan(rows);
 
           final totalBasic =
@@ -1015,13 +1036,16 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       String financialYear,
       List<ReconciliationRow> rows,
       ) {
-    final totalBasic = rows.fold<double>(0.0, (sum, row) => sum + row.basicAmount);
+    final totalBasic =
+    rows.fold<double>(0.0, (sum, row) => sum + row.basicAmount);
     final totalApplicable =
     rows.fold<double>(0.0, (sum, row) => sum + row.applicableAmount);
-    final total26Q = rows.fold<double>(0.0, (sum, row) => sum + row.tds26QAmount);
+    final total26Q =
+    rows.fold<double>(0.0, (sum, row) => sum + row.tds26QAmount);
     final totalExpected =
     rows.fold<double>(0.0, (sum, row) => sum + row.expectedTds);
-    final totalActual = rows.fold<double>(0.0, (sum, row) => sum + row.actualTds);
+    final totalActual =
+    rows.fold<double>(0.0, (sum, row) => sum + row.actualTds);
     final totalTdsDiff =
     rows.fold<double>(0.0, (sum, row) => sum + row.tdsDifference);
     final totalAmountDiff =
@@ -1071,16 +1095,66 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
               dataRowMaxHeight: 68,
               headingRowColor: WidgetStatePropertyAll(Colors.blue.shade100),
               columns: const [
-                DataColumn(label: Text('Month', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Basic Amount', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Applicable Amount', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('26Q Amount', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Expected TDS', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Actual TDS', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('TDS Diff', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Amt Diff', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(label: Text('Remarks', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(
+                  label: Text(
+                    'Month',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Basic Amount',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Applicable Amount',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    '26Q Amount',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Expected TDS',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Actual TDS',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'TDS Diff',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Amt Diff',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Status',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Remarks',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ],
               rows: [
                 ...rows.map(
@@ -1122,13 +1196,48 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    DataCell(Text(_fmt(totalBasic), style: const TextStyle(fontWeight: FontWeight.w800))),
-                    DataCell(Text(_fmt(totalApplicable), style: const TextStyle(fontWeight: FontWeight.w800))),
-                    DataCell(Text(_fmt(total26Q), style: const TextStyle(fontWeight: FontWeight.w800))),
-                    DataCell(Text(_fmt(totalExpected), style: const TextStyle(fontWeight: FontWeight.w800))),
-                    DataCell(Text(_fmt(totalActual), style: const TextStyle(fontWeight: FontWeight.w800))),
-                    DataCell(Text(_fmt(totalTdsDiff), style: const TextStyle(fontWeight: FontWeight.w800))),
-                    DataCell(Text(_fmt(totalAmountDiff), style: const TextStyle(fontWeight: FontWeight.w800))),
+                    DataCell(
+                      Text(
+                        _fmt(totalBasic),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _fmt(totalApplicable),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _fmt(total26Q),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _fmt(totalExpected),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _fmt(totalActual),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _fmt(totalTdsDiff),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        _fmt(totalAmountDiff),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
                     const DataCell(Text('')),
                     const DataCell(Text('')),
                   ],
@@ -1172,7 +1281,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       ),
     );
   }
-
 
   Widget _buildSummaryPanel() {
     return Container(
@@ -1250,6 +1358,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                 ),
               ),
             ),
+            if (_isRecalculating) ...[
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.indigo.shade700,
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
@@ -1268,15 +1387,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         border: Border.all(color: Colors.amber.shade200),
       ),
       child: const Text(
-        'Applicable but no 26Q means: Applicable Amount is greater than zero, so TDS should have been deducted, but no deducted amount / TDS is found in 26Q for that row. '
-            'Relevant seller logic used: only sellers present in 26Q or sellers whose financial year purchase crosses ₹50,00,000 are included. '
-            'Basic Amount is amount without GST. Applicable Amount starts only after cumulative ₹50,00,000 threshold in that FY. '
-            'TDS rate is 0.1%.',
+        'Applicable but no 26Q means: Applicable Amount is greater than zero, so TDS should have been deducted, but no deducted amount / TDS is found in 26Q for that row. Relevant seller logic used: only sellers present in 26Q or sellers whose financial year purchase crosses ₹50,00,000 are included. Basic Amount is amount without GST. Applicable Amount starts only after cumulative ₹50,00,000 threshold in that FY. TDS rate is 0.1%.',
         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -1290,7 +1405,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.75),
                     borderRadius: BorderRadius.circular(999),
@@ -1319,7 +1437,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.75),
                     borderRadius: BorderRadius.circular(999),
@@ -1337,11 +1458,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                       const SizedBox(width: 8),
                       Switch(
                         value: showAllRows,
-                        onChanged: (value) {
+                        onChanged: (value) async {
                           setState(() {
                             showAllRows = value;
                           });
-                          _loadReconciliation();
+                          await _recalculateAll();
                         },
                       ),
                     ],
@@ -1349,9 +1470,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: _loadReconciliation,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Recalculate'),
+                  onPressed: _isRecalculating ? null : _recalculateAll,
+                  icon: _isRecalculating
+                      ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : const Icon(Icons.refresh),
+                  label: Text(
+                    _isRecalculating ? 'Recalculating...' : 'Recalculate',
+                  ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
