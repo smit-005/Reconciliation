@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../core/utils/auto_mapping.dart';
+import '../services/auto_mapping_service.dart';
 
 class ManualMappingScreen extends StatefulWidget {
   final List<String> purchaseParties;

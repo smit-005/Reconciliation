@@ -1,6 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
-import '../core/utils/calculation.dart';
+
+import '../models/purchase_row.dart';
+import '../models/tds_26q_row.dart';
+import '../models/reconciliation_row.dart';
+import 'reconciliation_service.dart';
 
 class ExcelService {
   static List<Map<String, dynamic>> excelToMapList(
@@ -48,13 +52,14 @@ class ExcelService {
         if (header == null || header.isEmpty) continue;
 
         final value = j < row.length ? row[j] : null;
-        final textValue = value?.toString().trim() ?? '';
+        final normalizedValue = _normalizeCellValue(value);
+        final textValue = normalizedValue.toString().trim();
 
         if (textValue.isNotEmpty) {
           isEmptyRow = false;
         }
 
-        rowMap[header] = textValue;
+        rowMap[header] = normalizedValue;
       }
 
       if (!isEmptyRow) {
@@ -72,15 +77,15 @@ class ExcelService {
     );
 
     final parsed = mapList.map((row) => PurchaseRow.fromMap(row)).toList();
+    final deduped = _dedupePurchaseRows(parsed);
 
-    for (final row in parsed.take(10)) {
+    for (final row in deduped.take(10)) {
       debugPrint(
         'DEBUG PURCHASE => party=${row.partyName}, gst=${row.gstNo}, pan=${row.panNumber}, basic=${row.basicAmount}, bill=${row.billAmount}',
       );
     }
 
-
-    return parsed;
+    return deduped;
   }
 
   static List<Tds26QRow> parseTds26QRows(List<int> bytes) {
@@ -90,15 +95,16 @@ class ExcelService {
     );
 
     final parsed = mapList.map((row) => Tds26QRow.fromMap(row)).toList();
+    final deduped = _dedupeTdsRows(parsed);
 
-    for (final row in parsed.take(5)) {
+    for (final row in deduped.take(5)) {
       debugPrint(
         'DEBUG 26Q => month=${row.month}, party=${row.deducteeName}, '
-            'pan=${row.panNumber}, deducted=${row.deductedAmount}, tds=${row.tds}',
+            'pan=${row.panNumber}, deducted=${row.deductedAmount}, tds=${row.tds}, section=${row.section}',
       );
     }
 
-    return parsed;
+    return deduped;
   }
 
   static ExcelValidationResult validatePurchaseFile(List<int> bytes) {
@@ -227,6 +233,7 @@ class ExcelService {
       if (!presentHeaders.contains('pan_number')) 'PAN',
       if (!presentHeaders.contains('deducted_amount')) 'Deducted Amount',
       if (!presentHeaders.contains('tds')) 'TDS',
+      if (!presentHeaders.contains('section')) 'Section',
     ];
 
     if (missing.isNotEmpty) {
@@ -347,13 +354,20 @@ class ExcelService {
     return result.isValid;
   }
 
-  static ({String sheetName, int headerRowIndex, ExcelImportType detectedType})?
-  _findBestSheetAndHeader(
+  static ({
+  String sheetName,
+  int headerRowIndex,
+  ExcelImportType detectedType,
+  })? _findBestSheetAndHeader(
       SpreadsheetDecoder decoder, {
         ExcelImportType? forcedType,
       }) {
-    ({String sheetName, int headerRowIndex, ExcelImportType detectedType, int score})?
-    best;
+    ({
+    String sheetName,
+    int headerRowIndex,
+    ExcelImportType detectedType,
+    int score,
+    })? best;
 
     for (final entry in decoder.tables.entries) {
       final sheetName = entry.key;
@@ -364,13 +378,23 @@ class ExcelService {
       for (int i = 0; i < table.rows.length && i < 15; i++) {
         final row = table.rows[i];
 
-        final purchaseScore = _scoreHeaderRow(
+        int purchaseScore = _scoreHeaderRow(
           row,
           type: ExcelImportType.purchase,
         );
 
-        final tdsScore = _scoreHeaderRow(
+        int tdsScore = _scoreHeaderRow(
           row,
+          type: ExcelImportType.tds26q,
+        );
+
+        purchaseScore += _sheetNameBonus(
+          sheetName,
+          type: ExcelImportType.purchase,
+        );
+
+        tdsScore += _sheetNameBonus(
+          sheetName,
           type: ExcelImportType.tds26q,
         );
 
@@ -425,6 +449,31 @@ class ExcelService {
     );
   }
 
+  static int _sheetNameBonus(
+      String sheetName, {
+        required ExcelImportType type,
+      }) {
+    final name = sheetName.trim().toLowerCase();
+
+    if (type == ExcelImportType.purchase) {
+      int bonus = 0;
+      if (name.contains('purchase')) bonus += 20;
+      if (name.contains('register')) bonus += 10;
+      if (name.contains('sales')) bonus -= 30;
+      if (name.contains('deduction')) bonus -= 20;
+      if (name.contains('challan')) bonus -= 20;
+      return bonus;
+    }
+
+    int bonus = 0;
+    if (name.contains('deduction')) bonus += 30;
+    if (name.contains('deductee')) bonus += 10;
+    if (name.contains('26q')) bonus += 10;
+    if (name.contains('challan')) bonus -= 20;
+    if (name.contains('deductor')) bonus -= 15;
+    return bonus;
+  }
+
   static int _scoreHeaderRow(
       List<dynamic> row, {
         required ExcelImportType type,
@@ -444,6 +493,7 @@ class ExcelService {
       if (headers.contains('basic_amount')) score += 25;
       if (headers.contains('bill_amount')) score += 10;
       if (headers.contains('gst_no')) score += 5;
+      if (headers.contains('pan_number')) score += 5;
       return score;
     }
 
@@ -453,6 +503,7 @@ class ExcelService {
     if (headers.contains('deducted_amount')) score += 25;
     if (headers.contains('tds')) score += 25;
     if (headers.contains('party_name')) score += 10;
+    if (headers.contains('section')) score += 20;
     return score;
   }
 
@@ -615,6 +666,13 @@ class ExcelService {
       warnings.add('$missingDate purchase rows have unreadable Date / Month.');
     }
 
+    final invalidPan = rows
+        .where((e) => e.panNumber.trim().isNotEmpty && !_isValidPan(e.panNumber))
+        .length;
+    if (invalidPan > 0) {
+      warnings.add('$invalidPan purchase rows have invalid PAN format.');
+    }
+
     return warnings;
   }
 
@@ -624,6 +682,13 @@ class ExcelService {
     final missingPan = rows.where((e) => e.panNumber.trim().isEmpty).length;
     if (missingPan > 0) {
       warnings.add('$missingPan 26Q rows have missing PAN.');
+    }
+
+    final invalidPan = rows
+        .where((e) => e.panNumber.trim().isNotEmpty && !_isValidPan(e.panNumber))
+        .length;
+    if (invalidPan > 0) {
+      warnings.add('$invalidPan 26Q rows have invalid PAN format.');
     }
 
     final missingMonth = rows.where((e) => e.month.trim().isEmpty).length;
@@ -637,7 +702,94 @@ class ExcelService {
       warnings.add('$zeroAmounts 26Q rows have both Deducted Amount and TDS as zero.');
     }
 
+    final missingSection = rows.where((e) => e.section.trim().isEmpty).length;
+    if (missingSection > 0) {
+      warnings.add('$missingSection 26Q rows have missing Section.');
+    }
+
     return warnings;
+  }
+
+  static List<PurchaseRow> _dedupePurchaseRows(List<PurchaseRow> rows) {
+    final map = <String, PurchaseRow>{};
+
+    for (final row in rows) {
+      final key = [
+        row.date.trim(),
+        row.billNo.trim().toUpperCase(),
+        row.partyName.trim().toUpperCase(),
+        row.panNumber.trim().toUpperCase(),
+        row.basicAmount.toStringAsFixed(2),
+        row.billAmount.toStringAsFixed(2),
+      ].join('|');
+
+      map[key] = row;
+    }
+
+    return map.values.toList();
+  }
+
+  static List<Tds26QRow> _dedupeTdsRows(List<Tds26QRow> rows) {
+    final map = <String, Tds26QRow>{};
+
+    for (final row in rows) {
+      final key = [
+        row.month.trim().toUpperCase(),
+        row.deducteeName.trim().toUpperCase(),
+        row.panNumber.trim().toUpperCase(),
+        row.deductedAmount.toStringAsFixed(2),
+        row.tds.toStringAsFixed(2),
+        row.section.trim().toUpperCase(),
+      ].join('|');
+
+      map[key] = row;
+    }
+
+    return map.values.toList();
+  }
+
+  static dynamic _normalizeCellValue(dynamic value) {
+    if (value == null) return '';
+
+    if (value is DateTime) {
+      return _formatDate(value);
+    }
+
+    if (value is num) {
+      if (_looksLikeExcelDate(value)) {
+        final dt = _excelSerialToDate(value);
+        return _formatDate(dt);
+      }
+
+      if (value == value.roundToDouble()) {
+        return value.toInt().toString();
+      }
+
+      return value.toString();
+    }
+
+    return value.toString().trim();
+  }
+
+  static bool _looksLikeExcelDate(num value) {
+    return value >= 20000 && value <= 60000;
+  }
+
+  static DateTime _excelSerialToDate(num serial) {
+    final wholeDays = serial.floor();
+    return DateTime(1899, 12, 30).add(Duration(days: wholeDays));
+  }
+
+  static String _formatDate(DateTime date) {
+    final dd = date.day.toString().padLeft(2, '0');
+    final mm = date.month.toString().padLeft(2, '0');
+    final yyyy = date.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
+  static bool _isValidPan(String pan) {
+    final normalized = pan.trim().toUpperCase();
+    return RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(normalized);
   }
 
   static String _normalizeLooseText(String value) {
@@ -763,6 +915,14 @@ class ExcelService {
       'deducted deposited tax',
       'tds amount',
       'tax deducted',
+    ],
+    'section': [
+      'section',
+      'tds section',
+      'section code',
+      'sec',
+      'section no',
+      'nature of payment',
     ],
     'challan': [
       'challan',

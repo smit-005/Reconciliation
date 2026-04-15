@@ -2,8 +2,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../services/excel_service.dart';
-import '../../core/utils/calculation.dart';
+import '../services/reconciliation_service.dart';
+import '../models/purchase_row.dart';
+import '../models/tds_26q_row.dart';
 import 'reconciliation_screen.dart';
+import '../services/tds_26q_parser.dart';
 
 class ExcelUploadScreen extends StatefulWidget {
   final String selectedBuyerId;
@@ -132,48 +135,39 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
 
       if (result == null || result.files.isEmpty) {
-        setState(() {
-          isLoadingTds = false;
-        });
+        setState(() => isLoadingTds = false);
         return;
       }
 
       final pickedFile = result.files.single;
 
       if (pickedFile.bytes == null) {
-        setState(() {
-          isLoadingTds = false;
-        });
+        setState(() => isLoadingTds = false);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not read 26Q file bytes')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read 26Q file')),
+        );
         return;
       }
 
       final bytes = pickedFile.bytes!;
 
-      if (!ExcelService.isTds26QFormat(bytes)) {
-        setState(() {
-          isLoadingTds = false;
+      // ✅ NEW PARSER
+      final parserResult = Tds26QParser.parseBytes(bytes);
+      final rawRows = parserResult.rows;
+
+      final parsedTdsRows = rawRows.map((e) {
+        return Tds26QRow.fromMap({
+          'month': e.monthLabel,
+          'financial_year': e.fyLabel,
+          'deductee_name': e.partyName,
+          'pan': e.pan,
+          'amount': e.amountPaidCredited,
+          'tds': e.totalTaxDeducted,
+          'section': e.section,
+          'nature_of_payment': e.rawNatureOfPayment,
         });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid 26Q / TDS file format')),
-          );
-        }
-        return;
-      }
-
-      final parsedTdsRows = ExcelService.parseTds26QRows(bytes);
-
-      debugPrint('TDS rows count: ${parsedTdsRows.length}');
-      if (parsedTdsRows.isNotEmpty) {
-        debugPrint('First TDS party: ${parsedTdsRows.first.deducteeName}');
-      }
+      }).toList();
 
       setState(() {
         tdsFileName = pickedFile.name;
@@ -181,23 +175,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         isLoadingTds = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('26Q file uploaded: ${tdsRows.length} rows'),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('26Q uploaded: ${tdsRows.length} rows')),
+      );
     } catch (e) {
-      setState(() {
-        isLoadingTds = false;
-      });
+      setState(() => isLoadingTds = false);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('26Q upload error: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('26Q upload error: $e')),
+      );
     }
   }
 

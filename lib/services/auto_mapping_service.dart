@@ -54,7 +54,7 @@ class AutoMappingService {
       results.add(
         AutoMappingResult(
           purchaseParty: purchaseParty,
-          matchedTdsParty: bestMatch, // IMPORTANT: always keep best match
+          matchedTdsParty: bestMatch,
           score: bestScore,
           isMatched: isSafeMatch,
         ),
@@ -75,12 +75,6 @@ class AutoMappingService {
     text = text.replaceAll(RegExp(r'\bPRIVATE\b'), ' ');
     text = text.replaceAll(RegExp(r'\bLTD\b'), ' ');
     text = text.replaceAll(RegExp(r'\bLIMITED\b'), ' ');
-    text = text.replaceAll(RegExp(r'\bINDUSTRY\b'), ' ');
-    text = text.replaceAll(RegExp(r'\bINDUSTRIES\b'), ' ');
-    text = text.replaceAll(RegExp(r'\bTRADER\b'), ' ');
-    text = text.replaceAll(RegExp(r'\bTRADERS\b'), ' ');
-    text = text.replaceAll(RegExp(r'\bENTERPRISE\b'), ' ');
-    text = text.replaceAll(RegExp(r'\bENTERPRISES\b'), ' ');
     text = text.replaceAll(RegExp(r'\bCO\b'), ' ');
     text = text.replaceAll(RegExp(r'\bCOMPANY\b'), ' ');
     text = text.replaceAll(RegExp(r'\bTHE\b'), ' ');
@@ -101,7 +95,8 @@ class AutoMappingService {
 
     if (aWords.isEmpty || bWords.isEmpty) return false;
 
-    if (aWords.first != bWords.first) return false;
+    final commonWords = aWords.toSet().intersection(bWords.toSet()).length;
+    if (commonWords == 0) return false;
 
     final tailA = aWords.skip(1).join(' ');
     final tailB = bWords.skip(1).join(' ');
@@ -111,7 +106,6 @@ class AutoMappingService {
 
     if (_levenshteinDistance(tailA, tailB) <= 1) return true;
 
-    final commonWords = aWords.toSet().intersection(bWords.toSet()).length;
     final minWords =
     aWords.length < bWords.length ? aWords.length : bWords.length;
 
