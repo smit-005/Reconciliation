@@ -203,6 +203,7 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
           tdsPan: tds?.sellerPan ?? '',
           fallbackKey: sellerKey,
         );
+        final isLowConfidenceMatch = sellerPan.trim().isEmpty;
 
         final sellerName = _chooseSellerName(
           purchaseName: purchase?.sellerName ?? '',
@@ -226,6 +227,12 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
           status: status,
           hasValidSection: hasValidSection,
         );
+        final finalRemarks = isLowConfidenceMatch
+            ? [
+                remarks,
+                'Low confidence match: matched using normalized name only',
+              ].where((e) => e.trim().isNotEmpty).join(', ')
+            : remarks;
 
         sellerRows.add(
           ReconciliationRow(
@@ -245,7 +252,7 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
             amountDifference: amountDifference,
             tdsDifference: tdsDifference,
             status: status,
-            remarks: remarks,
+            remarks: finalRemarks,
             calculationRemark: calculationRemark,
             purchasePresent: purchasePresent,
             tdsPresent: tdsPresent,
