@@ -5,6 +5,7 @@ import '../services/excel_service.dart';
 import '../services/reconciliation_service.dart';
 import '../models/purchase_row.dart';
 import '../models/tds_26q_row.dart';
+import '../models/normalized_transaction_row.dart';
 import 'reconciliation_screen.dart';
 import '../services/tds_26q_parser.dart';
 
@@ -33,6 +34,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   List<PurchaseRow> purchaseRows = [];
   List<Tds26QRow> tdsRows = [];
+  List<NormalizedTransactionRow> normalizedPurchaseRows = [];
+  List<NormalizedTransactionRow> normalizedTdsRows = [];
 
   String? detectedGstNo;
 
@@ -96,6 +99,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       setState(() {
         purchaseFileName = pickedFile.name;
         purchaseRows = parsedPurchaseRows;
+        normalizedPurchaseRows = parsedPurchaseRows
+            .map(NormalizedTransactionRow.fromPurchaseRow)
+            .toList();
         detectedGstNo = gstNo;
         isLoadingPurchase = false;
       });
@@ -172,6 +178,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       setState(() {
         tdsFileName = pickedFile.name;
         tdsRows = parsedTdsRows;
+        normalizedTdsRows = parsedTdsRows
+            .map(NormalizedTransactionRow.fromTds26QRow)
+            .toList();
         isLoadingTds = false;
       });
 

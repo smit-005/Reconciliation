@@ -141,10 +141,12 @@ class CalculationService {
 
         // Purchase rows without 26Q section should still use 194Q fallback
         // so cumulative threshold logic works correctly for purchase register data.
+
+        
         String effectiveSection = rawResolvedSection;
-        if (effectiveSection.isEmpty && purchasePresent) {
-          effectiveSection = 'UNKNOWN';
-        }
+if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePresent) {
+  effectiveSection = '194Q';
+}
 
         final hasValidSection = _isUsableSection(effectiveSection);
 
