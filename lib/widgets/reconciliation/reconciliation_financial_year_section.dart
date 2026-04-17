@@ -169,7 +169,17 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
                       DataCell(
                         SizedBox(
                           width: 280,
-                          child: Text(row.remarks.isEmpty ? '-' : row.remarks),
+                          child: Text(
+                            [
+                              row.remarks.trim(),
+                              row.calculationRemark.trim(),
+                            ].where((e) => e.isNotEmpty).join(', ').isEmpty
+                                ? '-'
+                                : [
+                                    row.remarks.trim(),
+                                    row.calculationRemark.trim(),
+                                  ].where((e) => e.isNotEmpty).join(', '),
+                          ),
                         ),
                       ),
                     ],

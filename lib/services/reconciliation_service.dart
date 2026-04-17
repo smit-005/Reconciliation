@@ -182,6 +182,15 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
         final applicableAmount = round2(ruleResult.applicableAmount);
         final expectedTds = round2(ruleResult.expectedTds);
         final tdsRateUsed = ruleResult.rate;
+        final normalizedEffectiveSection = effectiveSection.trim().toUpperCase();
+        final calculationRemark = purchasePresent &&
+                hasValidSection &&
+                ruleResult.rate == 0 &&
+                (normalizedEffectiveSection == '194C' ||
+                    normalizedEffectiveSection == '194J' ||
+                    normalizedEffectiveSection == '194I')
+            ? 'Expected TDS not calculated due to missing subtype/context'
+            : '';
 
         final deductedAmount = round2(tds?.deductedAmount ?? 0.0);
         final actualTds = round2(tds?.actualTds ?? 0.0);
@@ -237,6 +246,7 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
             tdsDifference: tdsDifference,
             status: status,
             remarks: remarks,
+            calculationRemark: calculationRemark,
             purchasePresent: purchasePresent,
             tdsPresent: tdsPresent,
             openingTimingBalance: 0.0,

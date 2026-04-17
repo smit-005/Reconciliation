@@ -21,6 +21,7 @@ class ReconciliationRow {
 
   final String status;
   final String remarks;
+  final String calculationRemark;
 
   final bool purchasePresent;
   final bool tdsPresent;
@@ -47,6 +48,7 @@ class ReconciliationRow {
     required this.tdsDifference,
     required this.status,
     required this.remarks,
+    this.calculationRemark = '',
     required this.purchasePresent,
     required this.tdsPresent,
     required this.openingTimingBalance,
@@ -72,6 +74,7 @@ class ReconciliationRow {
     double? tdsDifference,
     String? status,
     String? remarks,
+    String? calculationRemark,
     bool? purchasePresent,
     bool? tdsPresent,
     double? openingTimingBalance,
@@ -96,6 +99,7 @@ class ReconciliationRow {
       tdsDifference: tdsDifference ?? this.tdsDifference,
       status: status ?? this.status,
       remarks: remarks ?? this.remarks,
+      calculationRemark: calculationRemark ?? this.calculationRemark,
       purchasePresent: purchasePresent ?? this.purchasePresent,
       tdsPresent: tdsPresent ?? this.tdsPresent,
       openingTimingBalance: openingTimingBalance ?? this.openingTimingBalance,
@@ -125,6 +129,7 @@ class ReconciliationRow {
       'Closing Timing Balance': closingTimingBalance,
       'Status': status,
       'Remarks': remarks,
+      'Calculation Remark': calculationRemark,
     };
   }
 }

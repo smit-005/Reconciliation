@@ -83,16 +83,21 @@ class SectionRuleService {
       ) {
     const singleLimit = 30000.0;
     const yearlyLimit = 100000.0;
-    const rate = 0.02;
 
     final isApplicable =
         amount > singleLimit || sectionTotal > yearlyLimit;
 
     final applicable = isApplicable ? amount : 0.0;
 
+    // 194C may apply at different rates depending on payee type
+    // (for example individual/HUF vs others). Since party-type context
+    // is not available reliably here yet, do not hardcode a rate.
+    // Return zero expected TDS for now so this can be upgraded safely later.
+    const rate = 0.0;
+
     return SectionRuleResult(
       applicableAmount: applicable,
-      expectedTds: double.parse((applicable * rate).toStringAsFixed(2)),
+      expectedTds: applicable * rate,
       rate: rate,
     );
   }
@@ -103,10 +108,15 @@ class SectionRuleService {
       double sectionTotal,
       ) {
     const threshold = 30000.0;
-    const rate = 0.02;
 
     final isApplicable = amount > threshold || sectionTotal > threshold;
     final applicable = isApplicable ? amount : 0.0;
+
+    // 194J may apply at different rates depending on service subtype
+    // (for example technical vs professional). Since subtype context is
+    // not available reliably here yet, do not hardcode a rate. Return
+    // zero expected TDS for now so this can be upgraded safely later.
+    const rate = 0.0;
 
     return SectionRuleResult(
       applicableAmount: applicable,
