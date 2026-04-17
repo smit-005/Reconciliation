@@ -364,21 +364,10 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
       final pan = identity.sellerPan;
       final normName = identity.normalizedName;
 
-      String? panNode;
-      String? nameNode;
-
       if (pan.isNotEmpty) {
-        panNode = 'PAN:$pan';
-        dsu.add(panNode);
-      }
-
-      if (normName.isNotEmpty) {
-        nameNode = 'NAME:$normName';
-        dsu.add(nameNode);
-      }
-
-      if (panNode != null && nameNode != null) {
-        dsu.union(panNode, nameNode);
+        dsu.add('PAN:$pan');
+      } else if (normName.isNotEmpty) {
+        dsu.add('NAME:$normName');
       }
     }
 
