@@ -121,10 +121,14 @@ class SectionRuleService {
       double sectionTotal,
       ) {
     const threshold = 240000.0;
-    const rate = 0.10;
-
     final isApplicable = sectionTotal > threshold;
     final applicable = isApplicable ? amount : 0.0;
+
+    // 194I may apply at different rates depending on rent subtype
+    // (for example plant/machinery vs land/building). Since subtype is
+    // not available reliably here yet, do not hardcode a rate. Return
+    // zero expected TDS for now so this can be upgraded safely later.
+    const rate = 0.0;
 
     return SectionRuleResult(
       applicableAmount: applicable,
