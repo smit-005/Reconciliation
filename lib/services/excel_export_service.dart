@@ -73,11 +73,15 @@ class ExcelExportService {
       final sortedSections = sectionGrouped.keys.toList()..sort();
       for (final section in sortedSections) {
         final sectionRows = sectionGrouped[section]!;
-        final safeName = _safeSheetName(section);
+        final cleanSection = section.trim().toUpperCase();
+
+        if (cleanSection == 'NO SECTION') continue;
+
+        final safeName = _safeSheetName(cleanSection);
 
         final sheet = workbook.worksheets.addWithName(safeName);
 
-        _writeTitle(sheet, 'SECTION - $section');
+        _writeTitle(sheet, 'SECTION: $section');
         _writeSummarySection(
           sheet,
           rows: sectionRows,
@@ -133,9 +137,30 @@ class ExcelExportService {
       _writePivotSummarySheet(
         pivotSheet,
         rows: rows,
+        title: 'PIVOT SUMMARY: ${buyerName.toUpperCase()}',
       );
 
       final sectionGrouped = _groupBySection(rows);
+
+      final sortedSections = sectionGrouped.keys.toList()..sort();
+
+      for (final section in sortedSections) {
+        final sectionRows = sectionGrouped[section]!;
+
+        final cleanSection = section.trim().toUpperCase();
+        if (cleanSection == 'NO SECTION') continue;
+
+        final safeName = _safeSheetName(cleanSection);
+
+        final sheet = workbook.worksheets.addWithName(safeName);
+
+        _writePivotSummarySheet(
+          sheet,
+          rows: sectionRows,
+          title: 'SECTION $cleanSection - ${buyerName.toUpperCase()}',
+        );
+      }
+
       final sectionSummarySheet =
       workbook.worksheets.addWithName('Section Summary');
 
@@ -666,6 +691,7 @@ class ExcelExportService {
   static void _writePivotSummarySheet(
       xlsio.Worksheet sheet, {
         required List<ReconciliationRow> rows,
+        String? title,
       }) {
     final sortedRows = List<ReconciliationRow>.from(rows)
       ..sort((a, b) {
@@ -682,14 +708,28 @@ class ExcelExportService {
 
     sheet.getRangeByName('A1:J1').merge();
     sheet.getRangeByName('A1').setText(
-      rows.isNotEmpty ? rows.first.buyerName.toUpperCase() : 'PIVOT SUMMARY',
+      title ??
+          (rows.isNotEmpty
+              ? rows.first.buyerName.toUpperCase()
+              : 'PIVOT SUMMARY'),
     );
     sheet.getRangeByName('A1').cellStyle.bold = true;
-    sheet.getRangeByName('A1').cellStyle.fontSize = 18;
+    sheet.getRangeByName('A1').cellStyle.fontSize = 20;
     sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
-    sheet.getRangeByName('A1').cellStyle.backColor = '#EDE7F6';
+    sheet.getRangeByName('A1').cellStyle.vAlign = xlsio.VAlignType.center;
+    sheet.getRangeByName('A1').cellStyle.backColor = '#D9E1F2';
 
-    int rowIndex = 3;
+    sheet.getRangeByName('A2:J2').merge();
+    sheet.getRangeByName('A2').setText(
+      'Generated on ${DateTime.now().day.toString().padLeft(2, '0')}-'
+          '${DateTime.now().month.toString().padLeft(2, '0')}-'
+          '${DateTime.now().year}',
+    );
+    sheet.getRangeByName('A2').cellStyle.hAlign = xlsio.HAlignType.center;
+    sheet.getRangeByName('A2').cellStyle.backColor = '#F3F4F6';
+    sheet.getRangeByName('A2').cellStyle.bold = true;
+
+    int rowIndex = 4;
 
     double grandBasic = 0;
     double grandApplicable = 0;
@@ -705,11 +745,13 @@ class ExcelExportService {
       sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).merge();
       sheet.getRangeByIndex(rowIndex, 1).setText(seller.toUpperCase());
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 14;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#D9EAD3';
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 15;
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign = xlsio.HAlignType.left;
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.vAlign = xlsio.VAlignType.center;
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#E2EFDA';
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
           xlsio.LineStyle.thin;
-      sheet.getRangeByIndex(rowIndex, 1).rowHeight = 22;
+      sheet.getRangeByIndex(rowIndex, 1).rowHeight = 24;
       rowIndex++;
 
       for (final fy in fyMap.keys) {
@@ -734,7 +776,9 @@ class ExcelExportService {
         sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).merge();
         sheet.getRangeByIndex(rowIndex, 1).setText('FY $fy');
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#EEEEEE';
+        sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 12;
+        sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign = xlsio.HAlignType.left;
+        sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#EDEDED';
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
             xlsio.LineStyle.thin;
         rowIndex++;
@@ -756,7 +800,7 @@ class ExcelExportService {
               .setText(r.remarks.trim().isEmpty ? '-' : r.remarks);
 
           final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
-
+          sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 20;
           if (r.status == 'Matched') {
             range.cellStyle.backColor = '#E2F0D9';
           } else if (r.status == 'Short Deduction') {
@@ -793,6 +837,11 @@ class ExcelExportService {
           } else if (r.tdsDifference > 0) {
             sheet.getRangeByIndex(rowIndex, 8).cellStyle.fontColor = '#008000';
           }
+          if (r.amountDifference < 0) {
+            sheet.getRangeByIndex(rowIndex, 5).cellStyle.fontColor = '#FF0000';
+          } else if (r.amountDifference > 0) {
+            sheet.getRangeByIndex(rowIndex, 5).cellStyle.fontColor = '#008000';
+          }
 
           rowIndex++;
         }
@@ -808,15 +857,17 @@ class ExcelExportService {
 
         final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
         totalRange.cellStyle.bold = true;
+        totalRange.cellStyle.fontSize = 11;
         totalRange.cellStyle.backColor = '#FFF2CC';
         totalRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 22;
 
         for (int col = 2; col <= 8; col++) {
           sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
               xlsio.HAlignType.right;
         }
 
-        rowIndex += 2;
+        rowIndex += 3;
       }
     }
 
@@ -831,8 +882,10 @@ class ExcelExportService {
 
     final grandRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
     grandRange.cellStyle.bold = true;
+    grandRange.cellStyle.fontSize = 12;
     grandRange.cellStyle.backColor = '#FFD966';
     grandRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+    sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 24;
 
     for (int col = 2; col <= 8; col++) {
       sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
@@ -841,6 +894,7 @@ class ExcelExportService {
 
     _applyNumberFormat(sheet, 1, rowIndex, [2, 3, 4, 5, 6, 7, 8]);
     _autoFitPivot(sheet);
+
   }
 
   static Map<String, Map<String, List<ReconciliationRow>>> _groupRowsForPivot(
@@ -875,26 +929,27 @@ class ExcelExportService {
       final cell = sheet.getRangeByIndex(row, i + 1);
       cell.setText(headers[i]);
       cell.cellStyle.bold = true;
-      cell.cellStyle.backColor = '#BDD7EE';
+      cell.cellStyle.fontSize = 11;
+      cell.cellStyle.backColor = '#9DC3E6';
       cell.cellStyle.hAlign = xlsio.HAlignType.center;
       cell.cellStyle.vAlign = xlsio.VAlignType.center;
       cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
     }
 
-    sheet.getRangeByIndex(row, 1, row, headers.length).rowHeight = 22;
+    sheet.getRangeByIndex(row, 1, row, headers.length).rowHeight = 24;
   }
 
   static void _autoFitPivot(xlsio.Worksheet sheet) {
-    sheet.setColumnWidthInPixels(1, 95);
-    sheet.setColumnWidthInPixels(2, 95);
-    sheet.setColumnWidthInPixels(3, 110);
-    sheet.setColumnWidthInPixels(4, 95);
-    sheet.setColumnWidthInPixels(5, 95);
-    sheet.setColumnWidthInPixels(6, 95);
-    sheet.setColumnWidthInPixels(7, 90);
-    sheet.setColumnWidthInPixels(8, 85);
-    sheet.setColumnWidthInPixels(9, 120);
-    sheet.setColumnWidthInPixels(10, 240);
+    sheet.setColumnWidthInPixels(1, 100);  // Month
+    sheet.setColumnWidthInPixels(2, 105);  // Basic
+    sheet.setColumnWidthInPixels(3, 115);  // Applicable
+    sheet.setColumnWidthInPixels(4, 100);  // 26Q
+    sheet.setColumnWidthInPixels(5, 95);   // Amt Diff
+    sheet.setColumnWidthInPixels(6, 100);  // Exp TDS
+    sheet.setColumnWidthInPixels(7, 95);   // Actual TDS
+    sheet.setColumnWidthInPixels(8, 90);   // TDS Diff
+    sheet.setColumnWidthInPixels(9, 130);  // Status
+    sheet.setColumnWidthInPixels(10, 280); // Remarks
   }
 
   static String getRiskLevel(String status) {

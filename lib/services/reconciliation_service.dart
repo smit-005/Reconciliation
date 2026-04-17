@@ -116,7 +116,7 @@ class CalculationService {
       }.toList()
         ..sort(compareFinancialYearMonthKeys);
 
-      double cumulativeBasic = 0.0;
+      final Map<String, double> sectionWiseCumulative = {};
       String currentFy = '';
       final sellerRows = <ReconciliationRow>[];
 
@@ -127,17 +127,15 @@ class CalculationService {
         final financialYear = purchase?.financialYear ?? tds?.financialYear ?? '';
         final month = purchase?.month ?? tds?.month ?? '';
 
-        if (financialYear != currentFy) {
-          currentFy = financialYear;
-          cumulativeBasic = 0.0;
-        }
-
         final purchasePresent = purchase != null;
         final tdsPresent = tds != null;
 
         final basicAmount = round2(purchase?.basicAmount ?? 0.0);
-        final previousCumulative = cumulativeBasic;
-        cumulativeBasic = round2(cumulativeBasic + basicAmount);
+
+        if (financialYear != currentFy) {
+          currentFy = financialYear;
+          sectionWiseCumulative.clear();
+        }
 
         final rawResolvedSection = _resolveSectionFromRaw(tds?.section);
 
@@ -145,18 +143,31 @@ class CalculationService {
         // so cumulative threshold logic works correctly for purchase register data.
         String effectiveSection = rawResolvedSection;
         if (effectiveSection.isEmpty && purchasePresent) {
-          effectiveSection = '194Q';
+          effectiveSection = 'UNKNOWN';
         }
 
         final hasValidSection = _isUsableSection(effectiveSection);
 
         SectionRuleResult ruleResult;
+
         if (purchasePresent && hasValidSection) {
+          final normalizedSection = effectiveSection.trim().toUpperCase();
+
+          final previousSectionCumulative =
+              sectionWiseCumulative[normalizedSection] ?? 0.0;
+
+          final currentSectionCumulative =
+          round2(previousSectionCumulative + basicAmount);
+
+          sectionWiseCumulative[normalizedSection] = currentSectionCumulative;
+
           ruleResult = SectionRuleService.applyRule(
             section: effectiveSection,
-            cumulativePurchase: cumulativeBasic,
-            previousCumulative: previousCumulative,
+            cumulativePurchase: currentSectionCumulative,
+            previousCumulative: previousSectionCumulative,
             currentAmount: basicAmount,
+            sectionCumulative: currentSectionCumulative,
+            previousSectionCumulative: previousSectionCumulative,
           );
         } else {
           ruleResult = SectionRuleResult(
@@ -173,7 +184,6 @@ class CalculationService {
         final deductedAmount = round2(tds?.deductedAmount ?? 0.0);
         final actualTds = round2(tds?.actualTds ?? 0.0);
 
-        // Amount diff should compare what was deductible/applicable vs what was reported in 26Q.
         final amountDifference = round2(applicableAmount - deductedAmount);
         final tdsDifference = round2(expectedTds - actualTds);
 
@@ -194,6 +204,7 @@ class CalculationService {
           tdsDifference: tdsDifference,
           hasValidSection: hasValidSection,
           applicableAmount: applicableAmount,
+          actualTds: actualTds,
         );
 
         final remarks = _buildRemarks(
@@ -232,7 +243,6 @@ class CalculationService {
           ),
         );
       }
-
       results.addAll(TimingService.applyTimingLogic(sellerRows));
     }
 
@@ -440,6 +450,7 @@ class CalculationService {
     required double tdsDifference,
     required bool hasValidSection,
     required double applicableAmount,
+    required double actualTds,
   }) {
     if (purchaseMissing && !tdsMissing) {
       return '26Q Only';
@@ -458,6 +469,10 @@ class CalculationService {
 
     if (tdsDifference.abs() <= tolerance) {
       return 'Matched';
+    }
+
+    if (applicableAmount == 0 && actualTds > 0) {
+      return 'Unnecessary Deduction';
     }
 
     if (tdsDifference > 0) {

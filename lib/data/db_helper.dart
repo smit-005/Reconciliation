@@ -4,7 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -21,8 +21,20 @@ class DBHelper {
       options: OpenDatabaseOptions(
         version: _dbVersion,
         onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
       ),
     );
+  }
+  static Future<void> _onUpgrade(
+      Database db,
+      int oldVersion,
+      int newVersion,
+      ) async {
+    if (oldVersion < 2) {
+      // Future schema updates here
+      // Example:
+      // await db.execute('ALTER TABLE seller_mappings ADD COLUMN note TEXT');
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {

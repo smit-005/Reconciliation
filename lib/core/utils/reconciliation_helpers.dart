@@ -1,28 +1,5 @@
 import '../../models/reconciliation_row.dart';
-
-String normalizeName(String name) {
-  return name
-      .trim()
-      .toUpperCase()
-      .replaceAll(RegExp(r'[^A-Z0-9 ]'), '')
-      .replaceAll(RegExp(r'\s+'), ' ');
-}
-
-String normalizePan(String pan) {
-  final value = pan.trim().toUpperCase();
-  if (value.isEmpty || value == '-' || value == 'NA' || value == 'N/A') {
-    return '';
-  }
-  return value;
-}
-
-String normalizeSection(String section) {
-  final value = section.trim().toUpperCase();
-  if (value.isEmpty || value == '-' || value == 'NA' || value == 'N/A') {
-    return 'No Section';
-  }
-  return value;
-}
+import '../../core/utils/normalize_utils.dart';
 
 void sortSections(List<String> sections) {
   const preferredOrder = ['194Q', '194C', '194J', '194I', '194H', 'No Section'];

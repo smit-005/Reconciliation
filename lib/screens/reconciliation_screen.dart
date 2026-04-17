@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/utils/normalize_utils.dart';
+
 import '../models/purchase_row.dart';
 import '../models/tds_26q_row.dart';
 import '../models/reconciliation_row.dart';
@@ -106,8 +108,19 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final prevSection = selectedSection;
       final prevStatus = selectedStatus;
 
-      final purchaseNames = widget.purchaseRows.map((e) => e.partyName).toList();
-      final tdsNames = widget.tdsRows.map((e) => e.deducteeName).toList();
+      final purchaseNames = widget.purchaseRows
+          .map((e) => e.partyName.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+
+      final tdsNames = widget.tdsRows
+          .map((e) => e.deducteeName.trim())
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
 
       final mappingResults = AutoMappingService.autoMapParties(
         purchaseParties: purchaseNames,
@@ -118,29 +131,34 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final nameMapping = <String, String>{};
 
       for (final m in mappingResults) {
-        final p = m.purchaseParty.trim();
-        final t = m.matchedTdsParty?.trim();
+        final purchaseRaw = m.purchaseParty.trim();
+        final tdsRaw = m.matchedTdsParty?.trim();
 
-        if (p.isEmpty || t == null || t.isEmpty) continue;
+        if (purchaseRaw.isEmpty || tdsRaw == null || tdsRaw.isEmpty) continue;
+
+        final purchaseKey = normalizeName(purchaseRaw);
+        if (purchaseKey.isEmpty) continue;
 
         if (m.isMatched) {
-          nameMapping[p] = t;
-          debugPrint('SAFE AUTO MAP => $p -> $t | score=${m.score}');
+          nameMapping[purchaseKey] = tdsRaw;
           continue;
         }
 
-        final pNorm = AutoMappingService.normalizePartyName(p);
-        final tNorm = AutoMappingService.normalizePartyName(t);
+        final pNorm = AutoMappingService.normalizePartyName(purchaseRaw);
+        final tNorm = AutoMappingService.normalizePartyName(tdsRaw);
 
         if (pNorm == tNorm) {
-          nameMapping[p] = t;
-          debugPrint('FALLBACK MAP => $p -> $t | score=${m.score}');
+          nameMapping[purchaseKey] = tdsRaw;
         }
       }
 
       for (final entry in manualNameMapping.entries) {
-        if (entry.key.trim().isEmpty || entry.value.trim().isEmpty) continue;
-        nameMapping[entry.key.trim()] = entry.value.trim();
+        final normalizedSource = normalizeName(entry.key);
+        final mappedTarget = entry.value.trim();
+
+        if (normalizedSource.isEmpty || mappedTarget.isEmpty) continue;
+
+        nameMapping[normalizedSource] = mappedTarget;
       }
 
       final freshRows = await CalculationService.reconcile(
@@ -519,8 +537,19 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   Future<void> _openManualMappingScreen() async {
-    final purchaseNames = widget.purchaseRows.map((e) => e.partyName).toList();
-    final tdsNames = widget.tdsRows.map((e) => e.deducteeName).toList();
+    final purchaseNames = widget.purchaseRows
+        .map((e) => e.partyName.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    final tdsNames = widget.tdsRows
+        .map((e) => e.deducteeName.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
 
     final result = await Navigator.push<Map<String, String>>(
       context,
@@ -543,7 +572,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
       if (aliasName.isEmpty || mappedName.isEmpty) continue;
 
-      cleanedResult[aliasName] = mappedName;
+      final normalizedAliasKey = normalizeName(aliasName);
+      if (normalizedAliasKey.isEmpty) continue;
+
+      cleanedResult[normalizedAliasKey] = mappedName;
 
       String mappedPan = '';
 
@@ -576,7 +608,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           SellerMapping(
             buyerName: widget.buyerName,
             buyerPan: widget.buyerPan.trim().toUpperCase(),
-            aliasName: aliasName,
+            aliasName: normalizedAliasKey,
             mappedPan: mappedPan,
             mappedName: mappedName,
           ),

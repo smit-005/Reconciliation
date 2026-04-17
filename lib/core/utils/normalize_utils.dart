@@ -17,7 +17,7 @@ String normalizeName(String name) {
   text = text.replaceAll(RegExp(r'\s+'), ' ');
   text = text.trim();
 
-  return text;
+  return text.replaceAll(' ', '');
 }
 
 String normalizePan(String value) {
@@ -33,7 +33,7 @@ String normalizeSection(String value) {
   if (text.startsWith('194I')) return '194I';
   if (text.startsWith('194H')) return '194H';
 
-  return text;
+  return text.replaceAll(' ', '');
 }
 
 bool looksLikePan(String value) {

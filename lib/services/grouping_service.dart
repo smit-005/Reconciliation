@@ -94,7 +94,7 @@ class GroupingService {
           financialYear: financialYear,
           month: month,
           sellerName:
-          existing.sellerName.isNotEmpty ? existing.sellerName : sellerName,
+          sellerName.isNotEmpty ? sellerName : existing.sellerName,
           sellerPan: existing.sellerPan.isNotEmpty
               ? existing.sellerPan
               : effectiveSellerPan,
@@ -156,7 +156,7 @@ class GroupingService {
           financialYear: financialYear,
           month: month,
           sellerName:
-          existing.sellerName.isNotEmpty ? existing.sellerName : sellerName,
+          sellerName.isNotEmpty ? sellerName : existing.sellerName,
           sellerPan:
           existing.sellerPan.isNotEmpty ? existing.sellerPan : sellerPan,
           deductedAmount: existing.deductedAmount + row.deductedAmount,
@@ -223,8 +223,14 @@ String applyNameMapping(String name, Map<String, String> mapping) {
   final trimmed = name.trim();
   if (trimmed.isEmpty) return '';
 
-  final normalized = normalizeName(trimmed);
-  return mapping[normalized] ?? trimmed;
+  final normalizedKey = normalizeName(trimmed);
+  final mapped = mapping[normalizedKey]?.trim();
+
+  if (mapped != null && mapped.isNotEmpty) {
+    return mapped;
+  }
+
+  return trimmed;
 }
 
 Map<String, String> normalizeNameMapping(Map<String, String> mapping) {
@@ -265,7 +271,7 @@ String normalizeMonthKey(String raw) {
     return _monthLabelFromDate(parsed);
   }
 
-  return value;
+  return '';
 }
 
 int _extractYear(String raw) {
