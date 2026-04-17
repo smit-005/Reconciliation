@@ -83,6 +83,36 @@ class CalculationService {
       nameMapping: normalizedMapping,
       savedAliasToPan: savedAliasToPan,
     );
+    final gstDerivedPanHints = <String, bool>{};
+
+    for (final row in purchaseRows) {
+      final sellerPan = normalizePan(row.panNumber);
+      final sellerName = applyNameMapping(row.partyName, normalizedMapping);
+      final normalizedSellerName =
+          normalizeName(sellerName.isNotEmpty ? sellerName : row.partyName);
+
+      final rawMonth = row.month;
+      final financialYear = financialYearFromMonthKey(rawMonth);
+      final month = normalizeMonthKey(rawMonth);
+
+      if (month.isEmpty || financialYear.isEmpty) continue;
+
+      final sellerKey = resolveSellerKey(
+        sellerPan: sellerPan,
+        normalizedSellerName: normalizedSellerName,
+        resolver: sellerKeyResolver,
+      );
+
+      if (sellerKey.isEmpty) continue;
+
+      final panDerivedFromGstin = row.panNumber.trim().isEmpty &&
+          row.gstNo.trim().isNotEmpty &&
+          sellerPan.isNotEmpty;
+
+      if (panDerivedFromGstin) {
+        gstDerivedPanHints['$sellerKey|$financialYear|$month'] = true;
+      }
+    }
 
     final purchaseGroups = GroupingService.groupPurchaseRows(
       purchaseRows,
@@ -204,6 +234,10 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
           fallbackKey: sellerKey,
         );
         final isLowConfidenceMatch = sellerPan.trim().isEmpty;
+        final panDerivedFromGstin =
+            (purchase?.sellerPan ?? '').trim().isEmpty &&
+            sellerPan.trim().isNotEmpty &&
+            (gstDerivedPanHints['$sellerKey|$financialYear|$month'] ?? false);
 
         final sellerName = _chooseSellerName(
           purchaseName: purchase?.sellerName ?? '',
@@ -233,6 +267,12 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
                 'Low confidence match: matched using normalized name only',
               ].where((e) => e.trim().isNotEmpty).join(', ')
             : remarks;
+        final finalRemarksWithPanSource = panDerivedFromGstin
+            ? [
+                finalRemarks,
+                'PAN derived from GSTIN; verify if seller PAN is correct',
+              ].where((e) => e.trim().isNotEmpty).join(', ')
+            : finalRemarks;
 
         sellerRows.add(
           ReconciliationRow(
@@ -252,7 +292,7 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
             amountDifference: amountDifference,
             tdsDifference: tdsDifference,
             status: status,
-            remarks: finalRemarks,
+            remarks: finalRemarksWithPanSource,
             calculationRemark: calculationRemark,
             purchasePresent: purchasePresent,
             tdsPresent: tdsPresent,
