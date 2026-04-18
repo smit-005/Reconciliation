@@ -25,15 +25,17 @@ String normalizePan(String value) {
 }
 
 String normalizeSection(String value) {
-  final text = value.trim().toUpperCase();
+  final text = value.trim().toUpperCase().replaceAll(' ', '');
 
-  if (text.startsWith('194Q')) return '194Q';
-  if (text.startsWith('194C')) return '194C';
-  if (text.startsWith('194J')) return '194J';
-  if (text.startsWith('194I')) return '194I';
-  if (text.startsWith('194H')) return '194H';
+  if (text.contains('194IB')) return '194IB';
+  if (text.contains('194Q')) return '194Q';
+  if (text.contains('194C')) return '194C';
+  if (text.contains('194H')) return '194H';
+  if (text.contains('194J')) return '194J';
+  if (text.contains('194I')) return '194I';
+  if (text.contains('194A')) return '194A';
 
-  return text.replaceAll(' ', '');
+  return text;
 }
 
 bool looksLikePan(String value) {

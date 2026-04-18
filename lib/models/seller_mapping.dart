@@ -1,3 +1,5 @@
+import '../core/utils/normalize_utils.dart';
+
 class SellerMapping {
   final int? id;
   final String buyerName;
@@ -20,7 +22,7 @@ class SellerMapping {
       'id': id,
       'buyer_name': buyerName,
       'buyer_pan': buyerPan.trim().toUpperCase(),
-      'alias_name': aliasName.trim().toLowerCase(),
+      'alias_name': normalizeName(aliasName.trim()),
       'mapped_pan': mappedPan.trim().toUpperCase(),
       'mapped_name': mappedName.trim(),
       'created_at': DateTime.now().toIso8601String(),

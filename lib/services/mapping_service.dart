@@ -1,6 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../data/db_helper.dart';
 import '../models/seller_mapping.dart';
+import '../core/utils/normalize_utils.dart';
 
 class MappingService {
   /// SAVE mapping (called when user manually maps)
@@ -22,7 +23,7 @@ class MappingService {
     final db = await DBHelper.database;
 
     final normalizedBuyerPan = buyerPan.trim().toUpperCase();
-    final normalizedAlias = aliasName.trim().toLowerCase();
+    final normalizedAlias = normalizeName(aliasName.trim());
 
     final result = await db.query(
       'seller_mappings',
@@ -62,7 +63,7 @@ class MappingService {
     final db = await DBHelper.database;
 
     final normalizedBuyerPan = buyerPan.trim().toUpperCase();
-    final normalizedAlias = aliasName.trim().toLowerCase();
+    final normalizedAlias = normalizeName(aliasName.trim());
 
     await db.delete(
       'seller_mappings',

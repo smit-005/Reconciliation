@@ -4,7 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 3;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -35,6 +35,21 @@ class DBHelper {
       // Example:
       // await db.execute('ALTER TABLE seller_mappings ADD COLUMN note TEXT');
     }
+    if (oldVersion < 3) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS import_format_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  buyer_id TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  sheet_name_pattern TEXT,
+  header_row_index INTEGER NOT NULL,
+  headers_trusted INTEGER NOT NULL DEFAULT 0,
+  column_mapping_json TEXT NOT NULL,
+  sample_signature TEXT,
+  last_used_at TEXT NOT NULL
+)
+''');
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -54,6 +69,19 @@ CREATE TABLE seller_mappings (
   mapped_pan TEXT,
   mapped_name TEXT,
   created_at TEXT
+)
+''');
+    await db.execute('''
+CREATE TABLE import_format_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  buyer_id TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  sheet_name_pattern TEXT,
+  header_row_index INTEGER NOT NULL,
+  headers_trusted INTEGER NOT NULL DEFAULT 0,
+  column_mapping_json TEXT NOT NULL,
+  sample_signature TEXT,
+  last_used_at TEXT NOT NULL
 )
 ''');
   }

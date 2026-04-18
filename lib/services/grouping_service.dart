@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/purchase_row.dart';
 import '../models/tds_26q_row.dart';
 import '../core/utils/normalize_utils.dart';
@@ -58,9 +60,37 @@ class GroupingService {
       final rawMonth = row.month;
       final financialYear = financialYearFromMonthKey(rawMonth);
       final month = normalizeMonthKey(rawMonth);
+      final debugPurchaseRow = _shouldDebugPurchaseRow(row.partyName);
+      final parsedDate = tryParseDate(row.date) ?? monthKeyToDate(month);
 
-      if (month.isEmpty || financialYear.isEmpty) continue;
-      if (sellerPan.isEmpty && normalizedSellerName.isEmpty) continue;
+      if (month.isEmpty || financialYear.isEmpty) {
+        if (debugPurchaseRow) {
+          debugPrint(
+            'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
+            'rawDate=${row.date}, '
+            'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
+            'monthKey=$month, '
+            'amountUsed=${row.basicAmount}, '
+            'skipped=true, '
+            'reason=missing month or financial year',
+          );
+        }
+        continue;
+      }
+      if (sellerPan.isEmpty && normalizedSellerName.isEmpty) {
+        if (debugPurchaseRow) {
+          debugPrint(
+            'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
+            'rawDate=${row.date}, '
+            'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
+            'monthKey=$month, '
+            'amountUsed=${row.basicAmount}, '
+            'skipped=true, '
+            'reason=missing seller identity',
+          );
+        }
+        continue;
+      }
 
       final sellerKey = resolveSellerKey(
         sellerPan: sellerPan,
@@ -68,13 +98,39 @@ class GroupingService {
         resolver: sellerKeyResolver,
       );
 
-      if (sellerKey.isEmpty) continue;
+      if (sellerKey.isEmpty) {
+        if (debugPurchaseRow) {
+          debugPrint(
+            'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
+            'rawDate=${row.date}, '
+            'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
+            'monthKey=$month, '
+            'amountUsed=${row.basicAmount}, '
+            'skipped=true, '
+            'reason=empty seller key',
+          );
+        }
+        continue;
+      }
 
       final resolvedPan = extractPanFromSellerKey(sellerKey);
       final effectiveSellerPan =
       resolvedPan.isNotEmpty ? resolvedPan : sellerPan;
 
       final fyMonthKey = '$financialYear|$month';
+
+      if (debugPurchaseRow) {
+        debugPrint(
+          'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
+          'rawDate=${row.date}, '
+          'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
+          'monthKey=$month, '
+          'amountUsed=${row.basicAmount}, '
+          'skipped=false, '
+          'sellerKey=$sellerKey, '
+          'fyMonthKey=$fyMonthKey',
+        );
+      }
 
       grouped.putIfAbsent(sellerKey, () => {});
       final monthMap = grouped[sellerKey]!;
@@ -198,6 +254,10 @@ class GroupingService {
 
     return relevant;
   }
+}
+
+bool _shouldDebugPurchaseRow(String sellerName) {
+  return normalizeName(sellerName.trim()) == normalizeName('Ganesh Cattle Feed');
 }
 
 String resolveSellerKey({

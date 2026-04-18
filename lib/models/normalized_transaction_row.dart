@@ -1,4 +1,5 @@
 import '../core/utils/date_utils.dart';
+import 'normalized_ledger_row.dart';
 import 'purchase_row.dart';
 import 'tds_26q_row.dart';
 
@@ -65,6 +66,26 @@ class NormalizedTransactionRow {
       amount: row.deductedAmount,
       taxableAmount: row.deductedAmount,
       tdsAmount: row.tds,
+      section: row.section,
+    );
+  }
+
+  factory NormalizedTransactionRow.fromNormalizedLedgerRow(
+    NormalizedLedgerRow row,
+  ) {
+    return NormalizedTransactionRow(
+      sourceType: row.sourceType,
+      transactionDateRaw: row.transactionDateRaw,
+      month: row.month,
+      financialYear: row.financialYear,
+      partyName: row.partyName,
+      panNumber: row.panNumber,
+      gstNo: row.gstNo,
+      documentNo: row.documentNo,
+      description: row.description,
+      amount: row.amount,
+      taxableAmount: row.taxableAmount,
+      tdsAmount: row.tdsAmount,
       section: row.section,
     );
   }

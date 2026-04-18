@@ -25,7 +25,7 @@ class PurchaseRow {
   });
 
   factory PurchaseRow.fromMap(Map<String, dynamic> map) {
-    final rawDate = readAny(map, ['eom', 'date']) ?? '';
+    final rawDate = readAny(map, ['date', 'eom']) ?? '';
     final rawGst = (readAny(map, ['gst_no']) ?? '').trim().toUpperCase();
     final rawPan = normalizePan(readAny(map, ['pan_number']) ?? '');
     final finalPan = rawPan.isNotEmpty ? rawPan : extractPanFromGstin(rawGst);
@@ -39,7 +39,7 @@ class PurchaseRow {
       panNumber: finalPan,
       productName: (readAny(map, ['productname']) ?? '').trim(),
       basicAmount: parseDouble(
-        readAny(map, ['basic_amount', 'product_amount', 'taxable_amount']),
+        readAny(map, ['product_amount', 'basic_amount']),
       ),
       billAmount: parseDouble(
         readAny(map, ['bill_amount', 'total_amount', 'gross_amount']),
