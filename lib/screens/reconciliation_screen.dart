@@ -74,6 +74,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   bool showAllRows = false;
   bool showSummaryPanel = false;
   bool _isRecalculating = false;
+  final Map<String, List<ReconciliationRow>> _filterRowsCache = {};
+  final Map<String, List<String>> _sectionOptionsCache = {};
+  List<ReconciliationRow>? _activeSummaryRowsRef;
+  String? _activeSummaryScopeKey;
+  ReconciliationSummary? _activeSummaryCache;
 
   final List<String> statusOptions = const [
     'All Status',
@@ -228,7 +233,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final nextSellerOptions = ['All Sellers', ...sellers];
       final nextFinancialYearOptions = ['All FY', ...financialYears];
 
-      final normalizedPrevSection = normalizeSection(prevSection);
+      final normalizedPrevSection = prevSection.trim();
 
       final nextSelectedSeller =
       nextSellerOptions.contains(prevSeller) ? prevSeller : 'All Sellers';
@@ -263,6 +268,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       if (!mounted) return;
 
       setState(() {
+        _filterRowsCache.clear();
+        _sectionOptionsCache.clear();
+        _activeSummaryRowsRef = null;
+        _activeSummaryScopeKey = null;
+        _activeSummaryCache = null;
         allRows = freshRows;
         filteredRows = nextFilteredRows;
         manualNameMapping = latestManualMappings;
@@ -299,7 +309,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: selectedFinancialYear,
       selectedStatusValue: selectedStatus,
     );
-    final normalizedSelectedSection = normalizeSection(selectedSection);
+    final normalizedSelectedSection = selectedSection.trim();
     final nextSelectedSection =
         nextSectionOptions.contains(normalizedSelectedSection) ||
                 _isSupportedSectionTab(normalizedSelectedSection)
@@ -336,7 +346,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   String _sectionScopeValue(String section) {
-    return section == 'All' ? 'All Sections' : normalizeSection(section);
+    return section == 'All' ? 'All Sections' : section;
   }
 
   List<ReconciliationRow> _rowsForScopedSection(String section) {
@@ -355,6 +365,53 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedFinancialYearValue,
     required String selectedStatusValue,
   }) {
+    if (identical(rows, allRows)) {
+      final cacheKey = _sectionOptionsCacheKey(
+        selectedSellerValue: selectedSellerValue,
+        selectedFinancialYearValue: selectedFinancialYearValue,
+        selectedStatusValue: selectedStatusValue,
+      );
+      final cachedOptions = _sectionOptionsCache[cacheKey];
+      if (cachedOptions != null) {
+        return cachedOptions;
+      }
+
+      final computedOptions = _computeSectionOptions(
+        rows: rows,
+        selectedSellerValue: selectedSellerValue,
+        selectedFinancialYearValue: selectedFinancialYearValue,
+        selectedStatusValue: selectedStatusValue,
+      );
+      _sectionOptionsCache[cacheKey] = computedOptions;
+      return computedOptions;
+    }
+
+    return _computeSectionOptions(
+      rows: rows,
+      selectedSellerValue: selectedSellerValue,
+      selectedFinancialYearValue: selectedFinancialYearValue,
+      selectedStatusValue: selectedStatusValue,
+    );
+  }
+
+  String _sectionOptionsCacheKey({
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedStatusValue,
+  }) {
+    return [
+      selectedSellerValue,
+      selectedFinancialYearValue,
+      selectedStatusValue,
+    ].join('\u0001');
+  }
+
+  List<String> _computeSectionOptions({
+    required List<ReconciliationRow> rows,
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedStatusValue,
+  }) {
     final scopedRows = _filterRows(
       rows: rows,
       selectedSellerValue: selectedSellerValue,
@@ -364,7 +421,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     );
 
     final sections = scopedRows
-        .map((e) => normalizeSection(e.section))
+        .map((e) => e.section.trim())
         .where(_isSupportedSectionTab)
         .toSet()
         .toList();
@@ -374,6 +431,59 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   List<ReconciliationRow> _filterRows({
+    required List<ReconciliationRow> rows,
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedSectionValue,
+    required String selectedStatusValue,
+  }) {
+    if (identical(rows, allRows)) {
+      final cacheKey = _filterRowsCacheKey(
+        selectedSellerValue: selectedSellerValue,
+        selectedFinancialYearValue: selectedFinancialYearValue,
+        selectedSectionValue: selectedSectionValue,
+        selectedStatusValue: selectedStatusValue,
+      );
+      final cachedRows = _filterRowsCache[cacheKey];
+      if (cachedRows != null) {
+        return cachedRows;
+      }
+
+      final computedRows = _computeFilteredRows(
+        rows: rows,
+        selectedSellerValue: selectedSellerValue,
+        selectedFinancialYearValue: selectedFinancialYearValue,
+        selectedSectionValue: selectedSectionValue,
+        selectedStatusValue: selectedStatusValue,
+      );
+      _filterRowsCache[cacheKey] = computedRows;
+      return computedRows;
+    }
+
+    return _computeFilteredRows(
+      rows: rows,
+      selectedSellerValue: selectedSellerValue,
+      selectedFinancialYearValue: selectedFinancialYearValue,
+      selectedSectionValue: selectedSectionValue,
+      selectedStatusValue: selectedStatusValue,
+    );
+  }
+
+  String _filterRowsCacheKey({
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedSectionValue,
+    required String selectedStatusValue,
+  }) {
+    return [
+      selectedSellerValue,
+      selectedFinancialYearValue,
+      selectedSectionValue,
+      selectedStatusValue,
+    ].join('\u0001');
+  }
+
+  List<ReconciliationRow> _computeFilteredRows({
     required List<ReconciliationRow> rows,
     required String selectedSellerValue,
     required String selectedFinancialYearValue,
@@ -399,7 +509,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     if (selectedSectionValue != 'All Sections') {
       result = result
-          .where((row) => normalizeSection(row.section) == selectedSectionValue)
+          .where((row) => row.section.trim() == selectedSectionValue)
           .toList();
     }
 
@@ -565,46 +675,64 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   ReconciliationSummary? _activeSummary() {
+    final scopeKey = _activeSummaryCacheKey();
+    if (identical(filteredRows, _activeSummaryRowsRef) &&
+        scopeKey == _activeSummaryScopeKey) {
+      return _activeSummaryCache;
+    }
+
     final scopedRows = filteredRows;
-    if (scopedRows.isEmpty &&
+    final summary = scopedRows.isEmpty &&
         activeSectionTab == 'All' &&
         combinedSummary != null &&
         selectedSeller == 'All Sellers' &&
         selectedFinancialYear == 'All FY' &&
-        selectedStatus == 'All Status') {
-      return combinedSummary;
-    }
+        selectedStatus == 'All Status'
+        ? combinedSummary
+        : ReconciliationSummary(
+          section: activeSectionTab == 'All' ? 'ALL' : activeSectionTab,
+          totalRows: scopedRows.length,
+          matchedRows: scopedRows.where((row) => row.status == 'Matched').length,
+          mismatchRows: scopedRows
+              .where((row) => row.status.trim().toUpperCase() != 'MATCHED')
+              .length,
+          purchaseOnlyRows:
+              scopedRows.where((row) => row.status == 'Purchase Only').length,
+          only26QRows: scopedRows.where((row) => row.status == '26Q Only').length,
+          applicableButNo26QRows: scopedRows
+              .where(
+                (row) =>
+                    row.applicableAmount > 0 &&
+                    row.tds26QAmount == 0 &&
+                    row.actualTds == 0,
+              )
+              .length,
+          sourceAmount: scopedRows.fold(0.0, (sum, row) => sum + row.basicAmount),
+          applicableAmount:
+              scopedRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
+          tds26QAmount:
+              scopedRows.fold(0.0, (sum, row) => sum + row.tds26QAmount),
+          expectedTds: scopedRows.fold(0.0, (sum, row) => sum + row.expectedTds),
+          actualTds: scopedRows.fold(0.0, (sum, row) => sum + row.actualTds),
+          amountDifference:
+              scopedRows.fold(0.0, (sum, row) => sum + row.amountDifference),
+          tdsDifference:
+              scopedRows.fold(0.0, (sum, row) => sum + row.tdsDifference),
+        );
 
-    return ReconciliationSummary(
-      section: activeSectionTab == 'All' ? 'ALL' : activeSectionTab,
-      totalRows: scopedRows.length,
-      matchedRows: scopedRows.where((row) => row.status == 'Matched').length,
-      mismatchRows: scopedRows
-          .where((row) => row.status.trim().toUpperCase() != 'MATCHED')
-          .length,
-      purchaseOnlyRows:
-          scopedRows.where((row) => row.status == 'Purchase Only').length,
-      only26QRows: scopedRows.where((row) => row.status == '26Q Only').length,
-      applicableButNo26QRows: scopedRows
-          .where(
-            (row) =>
-                row.applicableAmount > 0 &&
-                row.tds26QAmount == 0 &&
-                row.actualTds == 0,
-          )
-          .length,
-      sourceAmount: scopedRows.fold(0.0, (sum, row) => sum + row.basicAmount),
-      applicableAmount:
-          scopedRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
-      tds26QAmount:
-          scopedRows.fold(0.0, (sum, row) => sum + row.tds26QAmount),
-      expectedTds: scopedRows.fold(0.0, (sum, row) => sum + row.expectedTds),
-      actualTds: scopedRows.fold(0.0, (sum, row) => sum + row.actualTds),
-      amountDifference:
-          scopedRows.fold(0.0, (sum, row) => sum + row.amountDifference),
-      tdsDifference:
-          scopedRows.fold(0.0, (sum, row) => sum + row.tdsDifference),
-    );
+    _activeSummaryRowsRef = filteredRows;
+    _activeSummaryScopeKey = scopeKey;
+    _activeSummaryCache = summary;
+    return summary;
+  }
+
+  String _activeSummaryCacheKey() {
+    return [
+      activeSectionTab,
+      selectedSeller,
+      selectedFinancialYear,
+      selectedStatus,
+    ].join('\u0001');
   }
 
   int _mismatchCountForSection(String section) {
@@ -666,7 +794,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   List<String> _unsupportedSectionsInActiveScope() {
     final unsupported = filteredRows
-        .map((row) => normalizeSection(row.section))
+        .map((row) => row.section.trim())
         .where(
           (section) =>
               section.isNotEmpty &&
@@ -944,14 +1072,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   int _totalSections() {
-    return filteredRows.map((e) => normalizeSection(e.section)).toSet().length;
+    return filteredRows.map((e) => e.section.trim()).toSet().length;
   }
 
   Map<String, int> _sectionCounts() {
     final map = <String, int>{};
 
     for (final row in filteredRows) {
-      final sec = normalizeSection(row.section);
+      final sec = row.section.trim();
       map[sec] = (map[sec] ?? 0) + 1;
     }
 
@@ -967,7 +1095,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     for (final row in filteredRows) {
       if (row.status == 'Matched') continue;
 
-      final sec = normalizeSection(row.section);
+      final sec = row.section.trim();
       map[sec] = (map[sec] ?? 0) + 1;
     }
 

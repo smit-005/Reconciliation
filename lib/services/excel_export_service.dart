@@ -201,7 +201,7 @@ class ExcelExportService {
     final grouped = <String, List<ReconciliationRow>>{};
 
     for (final row in rows) {
-      final section = _normalizeSection(row.section);
+      final section = row.section.trim().isEmpty ? 'No Section' : row.section;
       grouped.putIfAbsent(section, () => []);
       grouped[section]!.add(row);
     }
@@ -345,7 +345,10 @@ class ExcelExportService {
       sheet.getRangeByIndex(rowIndex, 2).setText(row.buyerPan);
       sheet.getRangeByIndex(rowIndex, 3).setText(row.financialYear);
       sheet.getRangeByIndex(rowIndex, 4).setText(row.month);
-      sheet.getRangeByIndex(rowIndex, 5).setText(_normalizeSection(row.section));
+      sheet.getRangeByIndex(
+        rowIndex,
+        5,
+      ).setText(row.section.trim().isEmpty ? 'No Section' : row.section);
       sheet.getRangeByIndex(rowIndex, 6).setText(row.sellerName);
       sheet.getRangeByIndex(rowIndex, 7).setText(row.sellerPan);
       sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(row.basicAmount));
@@ -972,7 +975,7 @@ class ExcelExportService {
 
   static List<String> getUniqueSections(List<ReconciliationRow> rows) {
     final sections = rows
-        .map((e) => _normalizeSection(e.section))
+        .map((e) => e.section.trim().isEmpty ? 'No Section' : e.section)
         .where((e) => e.isNotEmpty && e.toUpperCase() != 'NO SECTION')
         .toSet()
         .toList()

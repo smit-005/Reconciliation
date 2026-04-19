@@ -11,6 +11,7 @@ import '../core/utils/normalize_utils.dart';
 import '../core/utils/parse_utils.dart';
 import 'timing_service.dart';
 import 'section_rule_service.dart';
+import 'reconciliation_engine.dart';
 
 class _SellerIdentity {
   final String originalName;
@@ -182,8 +183,7 @@ class CalculationService {
     final supportedTdsRowsBySection = <String, List<Tds26QRow>>{};
     final unsupportedTdsRowsBySection = <String, List<Tds26QRow>>{};
     for (final row in tdsRows) {
-      final supportedSection =
-          _normalizeSupportedSection(_resolveSectionFromRaw(row.section));
+      final supportedSection = _normalizeSupportedSection(row.section);
       if (supportedSection.isNotEmpty) {
         supportedTdsRowsBySection.putIfAbsent(
           supportedSection,
@@ -279,7 +279,7 @@ class CalculationService {
 
     for (final section in rowsBySection.keys) {
       final scopedRows = mergedRows
-          .where((row) => _normalizeSupportedSection(row.section) == section)
+          .where((row) => row.section.trim() == section)
           .toList();
       if (scopedRows.isNotEmpty) {
         mergedRowsBySection[section] = scopedRows;
@@ -287,7 +287,12 @@ class CalculationService {
       }
 
       final unknownRows = mergedRows
-          .where((row) => _unknownSectionLabel(row.section) == section)
+          .where(
+            (row) =>
+                section == 'UNKNOWN' &&
+                (row.section.trim().isEmpty ||
+                    row.section.trim().toUpperCase() == 'NO SECTION'),
+          )
           .toList();
       if (unknownRows.isNotEmpty) {
         mergedRowsBySection[section] = unknownRows;
@@ -433,16 +438,9 @@ class CalculationService {
           fyPurchaseCumulative = 0.0;
         }
 
-        final rawResolvedSection = _resolveSectionFromRaw(tds?.section);
-
         // Purchase rows without 26Q section should still use 194Q fallback
         // so cumulative threshold logic works correctly for purchase register data.
-
-        
-        String effectiveSection = rawResolvedSection;
-if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePresent) {
-  effectiveSection = '194Q';
-}
+        final effectiveSection = _resolveEffectiveSection(tds?.section);
 
         final hasValidSection = _isUsableSection(effectiveSection);
 
@@ -483,8 +481,14 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
           );
         }
 
-        final applicableAmount = round2(ruleResult.applicableAmount);
-        final expectedTds = round2(ruleResult.expectedTds);
+        final computedAmounts = ReconciliationEngine.buildComputedAmounts(
+          rawApplicableAmount: ruleResult.applicableAmount,
+          rawExpectedTds: ruleResult.expectedTds,
+          rawDeductedAmount: tds?.deductedAmount ?? 0.0,
+          rawActualTds: tds?.actualTds ?? 0.0,
+        );
+        final applicableAmount = computedAmounts.applicableAmount;
+        final expectedTds = computedAmounts.expectedTds;
         final tdsRateUsed = ruleResult.rate;
         final normalizedEffectiveSection = effectiveSection.trim().toUpperCase();
         final calculationRemark = purchasePresent &&
@@ -496,11 +500,9 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
             ? 'Expected TDS not calculated due to missing subtype/context'
             : '';
 
-        final deductedAmount = round2(tds?.deductedAmount ?? 0.0);
-        final actualTds = round2(tds?.actualTds ?? 0.0);
-
-        final amountDifference = round2(applicableAmount - deductedAmount);
-        final tdsDifference = round2(expectedTds - actualTds);
+        final actualTds = computedAmounts.actualTds;
+        final amountDifference = computedAmounts.amountDifference;
+        final tdsDifference = computedAmounts.tdsDifference;
 
         final sellerPan = _chooseSellerPan(
           purchasePan: purchase?.sellerPan ?? '',
@@ -518,45 +520,23 @@ if ((effectiveSection.isEmpty || effectiveSection == 'UNKNOWN') && purchasePrese
           tdsName: tds?.sellerName ?? '',
         );
 
-final status = _buildBaseStatus(
-  purchaseMissing: !purchasePresent,
-  tdsMissing: !tdsPresent,
-  basicAmount: basicAmount,
-  amountDifference: amountDifference,
-  tdsDifference: tdsDifference,
-  hasValidSection: hasValidSection,
-  applicableAmount: applicableAmount,
-  expectedTds: expectedTds,
-  actualTds: actualTds,
-);
-
-final remarks = _buildRemarks(
-  sellerPan: sellerPan,
-  purchaseMissing: !purchasePresent,
-  tdsMissing: !tdsPresent,
-  basicAmount: basicAmount,
-  applicableAmount: applicableAmount,
-  amountDifference: amountDifference,
-  expectedTds: expectedTds,
-  actualTds: actualTds,
-  tdsDifference: tdsDifference,
-  hasValidSection: hasValidSection,
-);
-        final finalRemarks = isLowConfidenceMatch
-            ? [
-                remarks,
-                'Low confidence match: matched using normalized name only',
-              ].where((e) => e.trim().isNotEmpty).join(', ')
-            : remarks;
-        final finalRemarksWithPanSource = panDerivedFromGstin
-            ? [
-                finalRemarks,
-                'PAN derived from GSTIN; verify if seller PAN is correct',
-              ].where((e) => e.trim().isNotEmpty).join(', ')
-            : finalRemarks;
+        final statusAndRemarks = _buildStatusAndRemarks(
+          sellerPan: sellerPan,
+          purchaseMissing: !purchasePresent,
+          tdsMissing: !tdsPresent,
+          basicAmount: basicAmount,
+          applicableAmount: applicableAmount,
+          amountDifference: amountDifference,
+          expectedTds: expectedTds,
+          actualTds: actualTds,
+          tdsDifference: tdsDifference,
+          hasValidSection: hasValidSection,
+          isLowConfidenceMatch: isLowConfidenceMatch,
+          panDerivedFromGstin: panDerivedFromGstin,
+        );
 
         sellerRows.add(
-          ReconciliationRow(
+          ReconciliationEngine.buildRow(
             buyerName: buyerName,
             buyerPan: normalizedBuyerPan,
             financialYear: financialYear,
@@ -565,21 +545,13 @@ final remarks = _buildRemarks(
             sellerPan: sellerPan,
             section: effectiveSection.isNotEmpty ? effectiveSection : 'No Section',
             basicAmount: basicAmount,
-            applicableAmount: applicableAmount,
-            tds26QAmount: deductedAmount,
-            expectedTds: expectedTds,
-            actualTds: actualTds,
+            computedAmounts: computedAmounts,
             tdsRateUsed: tdsRateUsed,
-            amountDifference: amountDifference,
-            tdsDifference: tdsDifference,
-            status: status,
-            remarks: finalRemarksWithPanSource,
+            status: statusAndRemarks.status,
+            remarks: statusAndRemarks.remarks,
             calculationRemark: calculationRemark,
             purchasePresent: purchasePresent,
             tdsPresent: tdsPresent,
-            openingTimingBalance: 0.0,
-            monthTdsDifference: round2(actualTds - expectedTds),
-            closingTimingBalance: 0.0,
           ),
         );
       }
@@ -1029,16 +1001,17 @@ final remarks = _buildRemarks(
     return '';
   }
 
+  static String _resolveEffectiveSection(String? rawSection) {
+    return (rawSection ?? '').trim();
+  }
+
   static String _normalizeSupportedSection(String value) {
-    final section = _resolveSectionFromRaw(value);
+    final section = value.trim();
     return supportedSections.contains(section) ? section : '';
   }
 
   static String _sourceSection(NormalizedTransactionRow row) {
-    final resolved = _normalizeSupportedSection(row.section);
-    if (resolved.isNotEmpty) return resolved;
-    if (row.sourceType.trim().toLowerCase() == 'purchase') return '194Q';
-    return '';
+    return row.section.trim();
   }
 
   static bool _isUsableSection(String value) {
@@ -1195,14 +1168,15 @@ final remarks = _buildRemarks(
         fyPurchaseCumulative = round2(previousOverallCumulative + basicAmount);
         sectionCumulative = round2(previousSectionCumulative + basicAmount);
 
-        final hasValidSection = _isUsableSection(section);
+        final effectiveSection = _resolveEffectiveSection(section);
+        final hasValidSection = _isUsableSection(effectiveSection);
         final ruleResult = purchasePresent && hasValidSection
             ? SectionRuleService.applyRule(
-                section: section,
-                cumulativePurchase: section == '194Q'
+                section: effectiveSection,
+                cumulativePurchase: effectiveSection == '194Q'
                     ? fyPurchaseCumulative
                     : sectionCumulative,
-                previousCumulative: section == '194Q'
+                previousCumulative: effectiveSection == '194Q'
                     ? previousOverallCumulative
                     : previousSectionCumulative,
                 currentAmount: basicAmount,
@@ -1215,12 +1189,17 @@ final remarks = _buildRemarks(
                 rate: 0.0,
               );
 
-        final applicableAmount = round2(ruleResult.applicableAmount);
-        final expectedTds = round2(ruleResult.expectedTds);
-        final deductedAmount = round2(tds?.deductedAmount ?? 0.0);
-        final actualTds = round2(tds?.actualTds ?? 0.0);
-        final amountDifference = round2(applicableAmount - deductedAmount);
-        final tdsDifference = round2(expectedTds - actualTds);
+        final computedAmounts = ReconciliationEngine.buildComputedAmounts(
+          rawApplicableAmount: ruleResult.applicableAmount,
+          rawExpectedTds: ruleResult.expectedTds,
+          rawDeductedAmount: tds?.deductedAmount ?? 0.0,
+          rawActualTds: tds?.actualTds ?? 0.0,
+        );
+        final applicableAmount = computedAmounts.applicableAmount;
+        final expectedTds = computedAmounts.expectedTds;
+        final actualTds = computedAmounts.actualTds;
+        final amountDifference = computedAmounts.amountDifference;
+        final tdsDifference = computedAmounts.tdsDifference;
         final sellerPan = _chooseSellerPan(
           purchasePan: purchase?.sellerPan ?? '',
           tdsPan: tds?.sellerPan ?? '',
@@ -1231,19 +1210,7 @@ final remarks = _buildRemarks(
           tdsName: tds?.sellerName ?? '',
         );
 
-        final status = _buildBaseStatus(
-          purchaseMissing: !purchasePresent,
-          tdsMissing: !tdsPresent,
-          basicAmount: basicAmount,
-          amountDifference: amountDifference,
-          tdsDifference: tdsDifference,
-          hasValidSection: hasValidSection,
-          applicableAmount: applicableAmount,
-          expectedTds: expectedTds,
-          actualTds: actualTds,
-        );
-
-        final remarks = _buildRemarks(
+        final statusAndRemarks = _buildStatusAndRemarks(
           sellerPan: sellerPan,
           purchaseMissing: !purchasePresent,
           tdsMissing: !tdsPresent,
@@ -1257,29 +1224,21 @@ final remarks = _buildRemarks(
         );
 
         sellerRows.add(
-          ReconciliationRow(
+          ReconciliationEngine.buildRow(
             buyerName: buyerName,
             buyerPan: buyerPan,
             financialYear: financialYear,
             month: month,
             sellerName: sellerName,
             sellerPan: sellerPan,
-            section: section,
+            section: effectiveSection.isNotEmpty ? effectiveSection : 'No Section',
             basicAmount: basicAmount,
-            applicableAmount: applicableAmount,
-            tds26QAmount: deductedAmount,
-            expectedTds: expectedTds,
-            actualTds: actualTds,
+            computedAmounts: computedAmounts,
             tdsRateUsed: ruleResult.rate,
-            amountDifference: amountDifference,
-            tdsDifference: tdsDifference,
-            status: status,
-            remarks: remarks,
+            status: statusAndRemarks.status,
+            remarks: statusAndRemarks.remarks,
             purchasePresent: purchasePresent,
             tdsPresent: tdsPresent,
-            openingTimingBalance: 0.0,
-            monthTdsDifference: round2(actualTds - expectedTds),
-            closingTimingBalance: 0.0,
           ),
         );
       }
@@ -1294,66 +1253,7 @@ final remarks = _buildRemarks(
     return results;
   }
 
-static String _buildBaseStatus({
-  required bool purchaseMissing,
-  required bool tdsMissing,
-  required double basicAmount,
-  required double amountDifference,
-  required double tdsDifference,
-  required bool hasValidSection,
-  required double applicableAmount,
-  required double expectedTds,
-  required double actualTds,
-}) {
-  if (purchaseMissing && !tdsMissing) {
-    return 'Only in 26Q';
-  }
-
-if (!purchaseMissing && tdsMissing) {
-  if (applicableAmount.abs() <= amountTolerance &&
-      expectedTds.abs() <= tdsTolerance &&
-      actualTds.abs() <= tdsTolerance) {
-    return 'Below Threshold';
-  }
-  return 'Applicable but no 26Q';
-}
-
-  if (purchaseMissing && tdsMissing) {
-    return 'No Data';
-  }
-
-  if (!hasValidSection) {
-    return 'Section Missing';
-  }
-
-  final amountDiffAbs = amountDifference.abs();
-  final tdsDiffAbs = tdsDifference.abs();
-
-  if (applicableAmount.abs() <= amountTolerance &&
-      actualTds.abs() <= tdsTolerance) {
-    return 'No Deduction Required';
-  }
-
-  if (amountDiffAbs > amountTolerance) {
-    return 'Amount Mismatch';
-  }
-
-  if (tdsDiffAbs <= tdsTolerance) {
-    return 'Matched';
-  }
-
-  if (tdsDiffAbs <= minorTdsTolerance) {
-    return 'Matched';
-  }
-
-  if (tdsDifference > minorTdsTolerance) {
-    return 'Short Deduction';
-  }
-
-  return 'Excess Deduction';
-}
-
-static String _buildRemarks({
+static ReconciliationStatusRemarks _buildStatusAndRemarks({
   required String sellerPan,
   required bool purchaseMissing,
   required bool tdsMissing,
@@ -1364,65 +1264,36 @@ static String _buildRemarks({
   required double actualTds,
   required double tdsDifference,
   required bool hasValidSection,
+  bool isLowConfidenceMatch = false,
+  bool panDerivedFromGstin = false,
 }) {
-  final remarks = <String>{};
-
-  final isBelowThresholdPurchase = !purchaseMissing &&
-      tdsMissing &&
-      applicableAmount.abs() <= amountTolerance &&
-      expectedTds.abs() <= tdsTolerance &&
-      actualTds.abs() <= tdsTolerance;
-
-  if (isBelowThresholdPurchase) {
-    remarks.add('TDS not applicable yet under 194Q threshold');
-    return remarks.join(', ');
-  }
-
-  if (sellerPan.trim().isEmpty) {
-    remarks.add('PAN missing -> high TDS risk');
-  }
-
-  if (purchaseMissing && !tdsMissing) {
-    remarks.add('Only in 26Q');
-    return remarks.join(', ');
-  }
-
-  if (!purchaseMissing && tdsMissing) {
-    if (amountDifference > amountTolerance) {
-      remarks.add('No 26Q entry');
-    } else {
-      remarks.add('TDS not required');
-    }
-    return remarks.join(', ');
-  }
-
-  if (!hasValidSection) {
-    remarks.add('Section missing');
-  }
-
-  final amountDiffAbs = amountDifference.abs();
-  final tdsDiffAbs = tdsDifference.abs();
-
-  if (amountDiffAbs > amountTolerance) {
-    remarks.add('Purchase vs 26Q amount mismatch');
-  } else if (tdsDiffAbs > tdsTolerance) {
-    if (tdsDiffAbs <= minorTdsTolerance) {
-      remarks.add('Minor rounding difference');
-    } else {
-      remarks.add('Rate mismatch');
-    }
-  }
-
-  return remarks.join(', ');
+  return ReconciliationEngine.buildStatusAndRemarks(
+    sellerPan: sellerPan,
+    purchaseMissing: purchaseMissing,
+    tdsMissing: tdsMissing,
+    basicAmount: basicAmount,
+    applicableAmount: applicableAmount,
+    amountDifference: amountDifference,
+    expectedTds: expectedTds,
+    actualTds: actualTds,
+    tdsDifference: tdsDifference,
+    hasValidSection: hasValidSection,
+    amountTolerance: amountTolerance,
+    tdsTolerance: tdsTolerance,
+    minorTdsTolerance: minorTdsTolerance,
+    isLowConfidenceMatch: isLowConfidenceMatch,
+    panDerivedFromGstin: panDerivedFromGstin,
+  );
 }
 
   static String _chooseSellerName({
     required String purchaseName,
     required String tdsName,
   }) {
-    if (tdsName.trim().isNotEmpty) return tdsName.trim();
-    if (purchaseName.trim().isNotEmpty) return purchaseName.trim();
-    return '';
+    return ReconciliationEngine.chooseSellerName(
+      purchaseName: purchaseName,
+      tdsName: tdsName,
+    );
   }
 
   static String _chooseSellerPan({
@@ -1430,10 +1301,11 @@ static String _buildRemarks({
     required String tdsPan,
     required String fallbackKey,
   }) {
-    if (tdsPan.trim().isNotEmpty) return tdsPan.trim();
-    if (purchasePan.trim().isNotEmpty) return purchasePan.trim();
-    if (looksLikePan(fallbackKey)) return fallbackKey.trim();
-    return '';
+    return ReconciliationEngine.chooseSellerPan(
+      purchasePan: purchasePan,
+      tdsPan: tdsPan,
+      fallbackKey: fallbackKey,
+    );
   }
 
   static List<ReconciliationRow> _applyResolvedSellerNames(
@@ -1461,20 +1333,10 @@ static String _buildRemarks({
   static ReconciliationRow _applyBelowThresholdClassification(
     ReconciliationRow row,
   ) {
-    final isBelowThreshold = row.applicableAmount.abs() <= amountTolerance &&
-        row.expectedTds.abs() <= tdsTolerance &&
-        row.actualTds.abs() <= tdsTolerance &&
-        row.tds26QAmount.abs() <= amountTolerance &&
-        row.purchasePresent &&
-        !row.tdsPresent;
-
-    if (!isBelowThreshold) {
-      return row;
-    }
-
-    return row.copyWith(
-      status: 'Below Threshold',
-      remarks: 'TDS not applicable yet under 194Q threshold',
+    return ReconciliationEngine.applyBelowThresholdClassification(
+      row,
+      amountTolerance: amountTolerance,
+      tdsTolerance: tdsTolerance,
     );
   }
 

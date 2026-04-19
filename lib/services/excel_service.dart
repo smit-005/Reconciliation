@@ -426,122 +426,119 @@ class ExcelService {
     double? confidenceScore,
   }) {
     final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
-    try {
-      if (sheetName.isEmpty) return null;
-      final table = decoder.tables[sheetName];
-      if (table == null || table.rows.isEmpty) return null;
-      if (headerRowIndex < 0 || headerRowIndex >= table.rows.length) {
-        return null;
-      }
-
-      final rawHeaderRow = table.rows[headerRowIndex];
-      final mappedHeaders = _buildMappedHeadersFromProfile(
-        rawHeaderRow: rawHeaderRow,
-        columnMapping: _normalizeCanonicalColumnMappingByType(
-          columnMapping,
-          type: fileType,
-      );
-      final presentHeaders = mappedHeaders.whereType<String>().toSet();
-      final previewConfidence = confidenceScore ??
-          _headerConfidenceScore(
-            presentHeaders,
-            type: fileType,
-          );
-
-      final columnKeys = <String>[];
-      final columnLabels = <String, String>{};
-      final suggestedMappings = <String, String>{};
-      final normalizedInitialMapping = _normalizeCanonicalColumnMappingByType(
-        _normalizeProfileColumnMapping(columnMapping),
-        type: fileType,
-      );
-
-      for (int i = 0; i < mappedHeaders.length; i++) {
-        final columnKey = 'COL_$i';
-        final rawLabel = i < rawHeaderRow.length
-            ? rawHeaderRow[i]?.toString().trim() ?? ''
-            : '';
-        final displayLabel = headersTrusted && rawLabel.isNotEmpty
-            ? rawLabel
-            : 'Column ${i + 1}';
-
-        columnKeys.add(columnKey);
-        columnLabels[columnKey] = displayLabel;
-
-        final canonical = i < mappedHeaders.length ? mappedHeaders[i] : null;
-        if (canonical != null && canonical.isNotEmpty) {
-          suggestedMappings[columnKey] = canonical;
-        }
-      }
-
-      for (final entry in normalizedInitialMapping.entries) {
-        final canonical = entry.key.trim();
-        final rawKey = entry.value.trim();
-        if (canonical.isEmpty || rawKey.isEmpty) continue;
-
-        if (rawKey.startsWith('COL_') && columnLabels.containsKey(rawKey)) {
-          suggestedMappings[rawKey] = canonical;
-          continue;
-        }
-
-        final matchedEntry = columnLabels.entries.firstWhere(
-          (item) => item.value == rawKey,
-          orElse: () => const MapEntry('', ''),
-        );
-        if (matchedEntry.key.isNotEmpty) {
-          suggestedMappings[matchedEntry.key] = canonical;
-        }
-      }
-
-      final dataStartIndex =
-          headersTrusted ? headerRowIndex + 1 : headerRowIndex;
-      final sampleRows = <Map<String, String>>[];
-
-      for (int i = dataStartIndex;
-          i < table.rows.length && sampleRows.length < 8;
-          i++) {
-        final row = table.rows[i];
-        final sampleRow = <String, String>{};
-        bool hasValue = false;
-
-        for (int j = 0; j < columnKeys.length; j++) {
-          final value = j < row.length ? _normalizeCellValue(row[j]) : '';
-          final text = value.toString().trim();
-          if (text.isNotEmpty) {
-            hasValue = true;
-          }
-          sampleRow[columnKeys[j]] = text;
-        }
-
-        if (hasValue) {
-          sampleRows.add(sampleRow);
-        }
-      }
-
-      final unmappedHeaders = headersTrusted
-          ? _extractUnmappedRawHeaders(rawHeaderRow, mappedHeaders)
-          : columnKeys
-              .where((key) => !suggestedMappings.containsKey(key))
-              .map((key) => columnLabels[key] ?? key)
-              .toList();
-
-      return ExcelPreviewData(
-        fileType: fileType.name,
-        fileName: fileName,
-        sheetName: sheetName,
-        headerRowIndex: headerRowIndex,
-        headersTrusted: headersTrusted,
-        confidenceScore: previewConfidence,
-        warnings: warnings,
-        unmappedRawHeaders: unmappedHeaders,
-        columnKeys: columnKeys,
-        columnLabels: columnLabels,
-        suggestedMappings: suggestedMappings,
-        sampleRows: sampleRows,
-      );
-    } finally {
-      decoder.dispose();
+    if (sheetName.isEmpty) return null;
+    final table = decoder.tables[sheetName];
+    if (table == null || table.rows.isEmpty) return null;
+    if (headerRowIndex < 0 || headerRowIndex >= table.rows.length) {
+      return null;
     }
+
+    final rawHeaderRow = table.rows[headerRowIndex];
+    final mappedHeaders = _buildMappedHeadersFromProfile(
+      rawHeaderRow: rawHeaderRow,
+      columnMapping: _normalizeCanonicalColumnMappingByType(
+        columnMapping,
+        type: fileType,
+      ),
+    );
+    final presentHeaders = mappedHeaders.whereType<String>().toSet();
+    final previewConfidence = confidenceScore ??
+        _headerConfidenceScore(
+          presentHeaders,
+          type: fileType,
+        );
+
+    final columnKeys = <String>[];
+    final columnLabels = <String, String>{};
+    final suggestedMappings = <String, String>{};
+    final normalizedInitialMapping = _normalizeCanonicalColumnMappingByType(
+      _normalizeProfileColumnMapping(columnMapping),
+      type: fileType,
+    );
+
+    for (int i = 0; i < mappedHeaders.length; i++) {
+      final columnKey = 'COL_$i';
+      final rawLabel = i < rawHeaderRow.length
+          ? rawHeaderRow[i]?.toString().trim() ?? ''
+          : '';
+      final displayLabel = headersTrusted && rawLabel.isNotEmpty
+          ? rawLabel
+          : 'Column ${i + 1}';
+
+      columnKeys.add(columnKey);
+      columnLabels[columnKey] = displayLabel;
+
+      final canonical = i < mappedHeaders.length ? mappedHeaders[i] : null;
+      if (canonical != null && canonical.isNotEmpty) {
+        suggestedMappings[columnKey] = canonical;
+      }
+    }
+
+    for (final entry in normalizedInitialMapping.entries) {
+      final canonical = entry.key.trim();
+      final rawKey = entry.value.trim();
+      if (canonical.isEmpty || rawKey.isEmpty) continue;
+
+      if (rawKey.startsWith('COL_') && columnLabels.containsKey(rawKey)) {
+        suggestedMappings[rawKey] = canonical;
+        continue;
+      }
+
+      final matchedEntry = columnLabels.entries.firstWhere(
+        (item) => item.value == rawKey,
+        orElse: () => const MapEntry('', ''),
+      );
+      if (matchedEntry.key.isNotEmpty) {
+        suggestedMappings[matchedEntry.key] = canonical;
+      }
+    }
+
+    final dataStartIndex =
+        headersTrusted ? headerRowIndex + 1 : headerRowIndex;
+    final sampleRows = <Map<String, String>>[];
+
+    for (int i = dataStartIndex;
+        i < table.rows.length && sampleRows.length < 8;
+        i++) {
+      final row = table.rows[i];
+      final sampleRow = <String, String>{};
+      bool hasValue = false;
+
+      for (int j = 0; j < columnKeys.length; j++) {
+        final value = j < row.length ? _normalizeCellValue(row[j]) : '';
+        final text = value.toString().trim();
+        if (text.isNotEmpty) {
+          hasValue = true;
+        }
+        sampleRow[columnKeys[j]] = text;
+      }
+
+      if (hasValue) {
+        sampleRows.add(sampleRow);
+      }
+    }
+
+    final unmappedHeaders = headersTrusted
+        ? _extractUnmappedRawHeaders(rawHeaderRow, mappedHeaders)
+        : columnKeys
+            .where((key) => !suggestedMappings.containsKey(key))
+            .map((key) => columnLabels[key] ?? key)
+            .toList();
+
+    return ExcelPreviewData(
+      fileType: fileType.name,
+      fileName: fileName,
+      sheetName: sheetName,
+      headerRowIndex: headerRowIndex,
+      headersTrusted: headersTrusted,
+      confidenceScore: previewConfidence,
+      warnings: warnings,
+      unmappedRawHeaders: unmappedHeaders,
+      columnKeys: columnKeys,
+      columnLabels: columnLabels,
+      suggestedMappings: suggestedMappings,
+      sampleRows: sampleRows,
+    );
   }
 
   static List<Tds26QRow> parseTds26QRows(List<int> bytes) {

@@ -10,6 +10,7 @@ import '../models/normalized_transaction_row.dart';
 import '../models/purchase_row.dart';
 import '../models/tds_26q_row.dart';
 import '../services/excel_service.dart';
+import '../services/import_upload_flow_service.dart';
 import '../services/import_mapping_service.dart';
 import '../services/import_profile_service.dart';
 import 'manual_mapping_screen.dart';
@@ -43,6 +44,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   bool isLoadingTds = false;
   String? tdsFileName;
   List<int>? tdsFileBytes;
+  String _activeSectionCode = '194Q';
 
   final Set<String> selectedSections = {'194Q'};
   final Map<String, bool> sectionLoading = {
@@ -200,26 +202,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     required ExcelValidationResult validation,
     required ExcelImportType fileType,
   }) {
-    if (!validation.isValid &&
-        validation.message.toLowerCase().contains('missing required')) {
-      return true;
-    }
-
-    if (validation.requiresManualMapping) {
-      return true;
-    }
-
-    if (fileType == ExcelImportType.tds26q &&
-        validation.confidenceScore < 0.75) {
-      return true;
-    }
-
-    if (fileType == ExcelImportType.genericLedger &&
-        validation.confidenceScore < 0.75) {
-      return true;
-    }
-
-    return false;
+    return ImportUploadFlowService.shouldAutoOpenManualMapping(
+      validation: validation,
+      fileType: fileType,
+    );
   }
 
   void _showUploadSnackBar(String message) {
@@ -282,109 +268,35 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     Map<String, String> initialMappedColumns = const {},
     bool forceManualMapping = false,
   }) async {
-    final inspection = ExcelService.inspectExcelFile(
-      bytes,
-      forcedType: ExcelImportType.purchase,
+    final response = await ImportUploadFlowService.preparePurchaseImport(
+      buyerId: widget.selectedBuyerId,
+      bytes: bytes,
+      fileName: pickedFile.name,
+      openManualMapping: _openImportManualMapping,
+      initialMappedColumns: initialMappedColumns,
+      forceManualMapping: forceManualMapping,
     );
 
-    if (inspection == null) {
-      _showUploadSnackBar('Could not inspect 194Q source file');
+    if (response.isFailure) {
+      _showUploadSnackBar(response.errorMessage!);
       return null;
     }
 
-    final signature = ExcelService.buildSampleSignature(
-      inspection.sheetName,
-      inspection.rawHeaderRow,
-    );
+    final result = response.data;
+    if (result == null) {
+      return null;
+    }
 
-    final matchedProfile = await ExcelService.findMatchingProfile(
-      buyerId: widget.selectedBuyerId,
-      fileType: ImportMappingService.purchaseFileType,
-      sheetName: inspection.sheetName,
-      sampleSignature: signature,
-    );
-
-    late final List<PurchaseRow> parsedRows;
-    String mappingStatus = 'Auto detected';
-    bool wasManuallyMapped = false;
-    String? mappedSheetName = inspection.sheetName;
-    int? mappedHeaderRowIndex = null;
-    bool? mappedHeadersTrusted = null;
-    Map<String, String> mappedColumns = Map<String, String>.from(initialMappedColumns);
-
-    if (matchedProfile != null) {
-      parsedRows = ExcelService.parsePurchaseRowsWithProfile(
-        bytes,
-        sheetName: inspection.sheetName,
-        headerRowIndex: matchedProfile.headerRowIndex,
-        headersTrusted: matchedProfile.headersTrusted,
-        columnMapping: matchedProfile.columnMapping,
+    if (result.manualMappingResult != null) {
+      await _saveProfileFromManualResult(
+        result: result.manualMappingResult!,
+        sampleSignature: result.sampleSignature,
       );
-      mappingStatus = 'Saved profile';
-      mappedHeaderRowIndex = matchedProfile.headerRowIndex;
-      mappedHeadersTrusted = matchedProfile.headersTrusted;
-      mappedColumns = Map<String, String>.from(matchedProfile.columnMapping);
-    } else {
-      final validation = ExcelService.validatePurchaseFile(bytes);
-      final shouldOpenManualMapping = forceManualMapping ||
-          _shouldAutoOpenManualMapping(
-            validation: validation,
-            fileType: ExcelImportType.purchase,
-          );
-
-      if (shouldOpenManualMapping) {
-        final manualResult = await _openImportManualMapping(
-          bytes: bytes,
-          fileName: pickedFile.name,
-          fileType: ExcelImportType.purchase,
-          validation: ExcelValidationResult.valid(
-            detectedSheet: validation.detectedSheet ?? inspection.sheetName,
-            headerRowIndex:
-                validation.headerRowIndex ?? inspection.headerRowIndex,
-            detectedType: ExcelImportType.purchase,
-            mappedColumns: initialMappedColumns.isNotEmpty
-                ? initialMappedColumns
-                : validation.mappedColumns,
-            warnings: validation.warnings,
-            confidenceScore: validation.confidenceScore,
-            requiresManualMapping: true,
-          ),
-        );
-        if (manualResult == null) {
-          return null;
-        }
-
-        await _saveProfileFromManualResult(
-          result: manualResult,
-          sampleSignature: signature,
-        );
-        parsedRows = ExcelService.parsePurchaseRowsWithProfile(
-          bytes,
-          sheetName: manualResult.sheetName,
-          headerRowIndex: manualResult.headerRowIndex,
-          headersTrusted: manualResult.headersTrusted,
-          columnMapping: manualResult.columnMapping,
-        );
-        mappingStatus = 'Manual mapping';
-        wasManuallyMapped = true;
-        mappedSheetName = manualResult.sheetName;
-        mappedHeaderRowIndex = manualResult.headerRowIndex;
-        mappedHeadersTrusted = manualResult.headersTrusted;
-        mappedColumns = Map<String, String>.from(manualResult.columnMapping);
-      } else {
-        if (!validation.isValid) {
-          _showUploadSnackBar(validation.message);
-          return null;
-        }
-        parsedRows = ExcelService.parsePurchaseRows(bytes);
-        mappingStatus = 'Auto detected';
-        mappedHeaderRowIndex = validation.headerRowIndex;
-      }
     }
 
     final fileId =
         existingFileId ?? '194Q_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}';
-    final normalizedRows = parsedRows
+    final normalizedRows = result.parsedRows
         .map(
           (row) => NormalizedLedgerRow.fromPurchaseRow(
             row,
@@ -393,23 +305,23 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         )
         .toList();
 
-    purchaseRowsByFileId[fileId] = parsedRows;
+    purchaseRowsByFileId[fileId] = result.parsedRows;
 
     return LedgerUploadFile(
       id: fileId,
       sectionCode: '194Q',
       fileName: pickedFile.name,
       bytes: bytes,
-      rowCount: parsedRows.length,
+      rowCount: result.parsedRows.length,
       uploadedAt: DateTime.now(),
       parserType: 'purchase',
       rows: normalizedRows,
-      mappingStatus: mappingStatus,
-      wasManuallyMapped: wasManuallyMapped,
-      sheetName: mappedSheetName,
-      headerRowIndex: mappedHeaderRowIndex,
-      headersTrusted: mappedHeadersTrusted,
-      columnMapping: mappedColumns,
+      mappingStatus: result.mappingStatus,
+      wasManuallyMapped: result.wasManuallyMapped,
+      sheetName: result.sheetName,
+      headerRowIndex: result.headerRowIndex,
+      headersTrusted: result.headersTrusted,
+      columnMapping: result.columnMapping,
     );
   }
 
@@ -421,69 +333,23 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     Map<String, String> initialMappedColumns = const {},
     bool forceManualMapping = false,
   }) async {
-    final validation = ExcelService.validateGenericLedgerFile(bytes);
-    late final List<NormalizedLedgerRow> parsedRows;
-    String mappingStatus = 'Auto detected';
-    bool wasManuallyMapped = false;
-    String? mappedSheetName;
-    int? mappedHeaderRowIndex;
-    bool? mappedHeadersTrusted;
-    Map<String, String> mappedColumns = Map<String, String>.from(initialMappedColumns);
+    final response = await ImportUploadFlowService.prepareGenericLedgerImport(
+      sectionCode: sectionCode,
+      bytes: bytes,
+      fileName: pickedFile.name,
+      openManualMapping: _openImportManualMapping,
+      initialMappedColumns: initialMappedColumns,
+      forceManualMapping: forceManualMapping,
+    );
 
-    if (forceManualMapping ||
-        _shouldAutoOpenManualMapping(
-          validation: validation,
-          fileType: ExcelImportType.genericLedger,
-        )) {
-      final manualResult = await _openImportManualMapping(
-        bytes: bytes,
-        fileName: pickedFile.name,
-        fileType: ExcelImportType.genericLedger,
-        validation: ExcelValidationResult.valid(
-          detectedSheet: validation.detectedSheet ?? '',
-          headerRowIndex: validation.headerRowIndex ?? 0,
-          detectedType: ExcelImportType.genericLedger,
-          mappedColumns: initialMappedColumns.isNotEmpty
-              ? initialMappedColumns
-              : validation.mappedColumns,
-          warnings: validation.warnings,
-          confidenceScore: validation.confidenceScore,
-          requiresManualMapping: true,
-        ),
-      );
-      if (manualResult == null) {
-        return null;
-      }
+    if (response.isFailure) {
+      _showUploadSnackBar(response.errorMessage!);
+      return null;
+    }
 
-      parsedRows = ExcelService.parseGenericLedgerRowsWithProfile(
-        bytes,
-        sheetName: manualResult.sheetName,
-        headerRowIndex: manualResult.headerRowIndex,
-        headersTrusted: manualResult.headersTrusted,
-        columnMapping: manualResult.columnMapping,
-        defaultSection: sectionCode,
-        sourceFileName: pickedFile.name,
-      );
-      mappingStatus = 'Manual mapping';
-      wasManuallyMapped = true;
-      mappedSheetName = manualResult.sheetName;
-      mappedHeaderRowIndex = manualResult.headerRowIndex;
-      mappedHeadersTrusted = manualResult.headersTrusted;
-      mappedColumns = Map<String, String>.from(manualResult.columnMapping);
-    } else {
-      if (!validation.isValid) {
-        _showUploadSnackBar(validation.message);
-        return null;
-      }
-
-      parsedRows = ExcelService.parseGenericLedgerRows(
-        bytes,
-        defaultSection: sectionCode,
-        sourceFileName: pickedFile.name,
-      );
-      mappingStatus = 'Auto detected';
-      mappedSheetName = validation.detectedSheet;
-      mappedHeaderRowIndex = validation.headerRowIndex;
+    final result = response.data;
+    if (result == null) {
+      return null;
     }
 
     return LedgerUploadFile(
@@ -492,16 +358,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       sectionCode: sectionCode,
       fileName: pickedFile.name,
       bytes: bytes,
-      rowCount: parsedRows.length,
+      rowCount: result.parsedRows.length,
       uploadedAt: DateTime.now(),
       parserType: 'genericLedger',
-      rows: parsedRows,
-      mappingStatus: mappingStatus,
-      wasManuallyMapped: wasManuallyMapped,
-      sheetName: mappedSheetName,
-      headerRowIndex: mappedHeaderRowIndex,
-      headersTrusted: mappedHeadersTrusted,
-      columnMapping: mappedColumns,
+      rows: result.parsedRows,
+      mappingStatus: result.mappingStatus,
+      wasManuallyMapped: result.wasManuallyMapped,
+      sheetName: result.sheetName,
+      headerRowIndex: result.headerRowIndex,
+      headersTrusted: result.headersTrusted,
+      columnMapping: result.columnMapping,
     );
   }
 
@@ -514,93 +380,35 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
-      LedgerUploadFile? updatedFile;
-
-      if (sectionCode == '194Q') {
-        final inspection = ExcelService.inspectExcelFile(
-          file.bytes,
-          forcedType: ExcelImportType.purchase,
-          preferredSheetName: manualResult.sheetName,
-        );
-        if (inspection != null) {
-          final signature = ExcelService.buildSampleSignature(
-            inspection.sheetName,
-            inspection.rawHeaderRow,
-          );
-          await _saveProfileFromManualResult(
-            result: manualResult,
-            sampleSignature: signature,
-          );
-        }
-
-        final parsedRows = ExcelService.parsePurchaseRowsWithProfile(
-          file.bytes,
-          sheetName: manualResult.sheetName,
-          headerRowIndex: manualResult.headerRowIndex,
-          headersTrusted: manualResult.headersTrusted,
-          columnMapping: manualResult.columnMapping,
-        );
-        final normalizedRows = parsedRows
-            .map(
-              (row) => NormalizedLedgerRow.fromPurchaseRow(
-                row,
-                sourceFileName: file.fileName,
-              ),
-            )
-            .toList();
-
-        purchaseRowsByFileId[file.id] = parsedRows;
-
-        updatedFile = LedgerUploadFile(
-          id: file.id,
-          sectionCode: file.sectionCode,
-          fileName: file.fileName,
-          bytes: file.bytes,
-          rowCount: parsedRows.length,
-          uploadedAt: DateTime.now(),
-          parserType: file.parserType,
-          rows: normalizedRows,
-          mappingStatus: 'Manual mapping',
-          wasManuallyMapped: true,
-          sheetName: manualResult.sheetName,
-          headerRowIndex: manualResult.headerRowIndex,
-          headersTrusted: manualResult.headersTrusted,
-          columnMapping: Map<String, String>.from(manualResult.columnMapping),
-        );
-      } else {
-        final parsedRows = ExcelService.parseGenericLedgerRowsWithProfile(
-          file.bytes,
-          sheetName: manualResult.sheetName,
-          headerRowIndex: manualResult.headerRowIndex,
-          headersTrusted: manualResult.headersTrusted,
-          columnMapping: manualResult.columnMapping,
-          defaultSection: sectionCode,
-          sourceFileName: file.fileName,
-        );
-
-        updatedFile = LedgerUploadFile(
-          id: file.id,
-          sectionCode: file.sectionCode,
-          fileName: file.fileName,
-          bytes: file.bytes,
-          rowCount: parsedRows.length,
-          uploadedAt: DateTime.now(),
-          parserType: file.parserType,
-          rows: parsedRows,
-          mappingStatus: 'Manual mapping',
-          wasManuallyMapped: true,
-          sheetName: manualResult.sheetName,
-          headerRowIndex: manualResult.headerRowIndex,
-          headersTrusted: manualResult.headersTrusted,
-          columnMapping: Map<String, String>.from(manualResult.columnMapping),
-        );
+      final response = await ImportUploadFlowService.prepareSectionFileRemap(
+        file: file,
+        manualMappingResult: manualResult,
+      );
+      if (response.isFailure) {
+        _setSectionLoading(sectionCode, false);
+        _showUploadSnackBar('Remap failed for ${file.fileName}: ${response.errorMessage!}');
+        return;
       }
 
-      if (updatedFile == null) {
+      final result = response.data;
+      if (result == null) {
         _setSectionLoading(sectionCode, false);
         return;
       }
-      final resolvedUpdatedFile = updatedFile!;
+
+      if (sectionCode == '194Q') {
+        if (result.sampleSignature != null) {
+          await _saveProfileFromManualResult(
+            result: manualResult,
+            sampleSignature: result.sampleSignature!,
+          );
+        }
+        if (result.parsedPurchaseRows != null) {
+          purchaseRowsByFileId[file.id] = result.parsedPurchaseRows!;
+        }
+      }
+
+      final resolvedUpdatedFile = result.updatedFile;
 
       setState(() {
         sectionFiles[sectionCode] = sectionFiles[sectionCode]!
@@ -731,7 +539,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
-      final validation = ExcelService.validateTds26QFile(bytes);
+      final validation = ImportUploadFlowService.validateTds26QImport(bytes);
       String? preferredSheetName;
 
       if (validation.requiresUserSelection) {
@@ -746,63 +554,48 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         }
       }
 
-      late final List<Tds26QRow> parsedRows;
-
-      if (_shouldAutoOpenManualMapping(
+      final shouldOpenManualMapping = _shouldAutoOpenManualMapping(
         validation: validation,
         fileType: ExcelImportType.tds26q,
-      )) {
-        final selectedValidation = preferredSheetName == null
-            ? validation
-            : ExcelValidationResult.valid(
-                detectedSheet: preferredSheetName,
-                headerRowIndex: 0,
-                detectedType: ExcelImportType.tds26q,
-                mappedColumns: validation.mappedColumns,
-                warnings: validation.warnings,
-                confidenceScore: validation.confidenceScore,
-                requiresManualMapping: true,
-              );
+      );
+      if (shouldOpenManualMapping) {
         setState(() => isLoadingTds = false);
-        final manualResult = await _openImportManualMapping(
-          bytes: bytes,
-          fileName: pickedFile.name,
-          fileType: ExcelImportType.tds26q,
-          validation: selectedValidation,
-          preferredSheetName: preferredSheetName,
-        );
-        if (manualResult == null) {
-          return;
-        }
+      }
 
+      final response = await ImportUploadFlowService.prepareTds26QImport(
+        bytes: bytes,
+        fileName: pickedFile.name,
+        validation: validation,
+        openManualMapping: _openImportManualMapping,
+        preferredSheetName: preferredSheetName,
+      );
+
+      if (response.isFailure) {
+        setState(() => isLoadingTds = false);
+        _showUploadSnackBar(response.errorMessage!);
+        return;
+      }
+
+      final result = response.data;
+      if (result == null) {
+        return;
+      }
+
+      if (shouldOpenManualMapping) {
         setState(() => isLoadingTds = true);
-        parsedRows = ExcelService.parseTds26QRowsWithProfile(
-          bytes,
-          sheetName: manualResult.sheetName,
-          headerRowIndex: manualResult.headerRowIndex,
-          headersTrusted: manualResult.headersTrusted,
-          columnMapping: manualResult.columnMapping,
-        );
-      } else {
-        if (!validation.isValid) {
-          setState(() => isLoadingTds = false);
-          _showUploadSnackBar(validation.message);
-          return;
-        }
-        parsedRows = ExcelService.parseTds26QRows(bytes);
       }
 
       setState(() {
         tdsFileName = pickedFile.name;
         tdsFileBytes = bytes;
-        tdsRows = parsedRows;
-        normalizedTdsRows = parsedRows
+        tdsRows = result.parsedRows;
+        normalizedTdsRows = result.parsedRows
             .map(NormalizedTransactionRow.fromTds26QRow)
             .toList();
         isLoadingTds = false;
       });
 
-      _showUploadSnackBar('26Q uploaded: ${parsedRows.length} rows');
+      _showUploadSnackBar('26Q uploaded: ${result.parsedRows.length} rows');
     } catch (e) {
       setState(() => isLoadingTds = false);
       _showUploadSnackBar('26Q upload error: $e');
@@ -878,9 +671,22 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     setState(() {
       if (selectedSections.contains(sectionCode)) {
         selectedSections.remove(sectionCode);
+        if (_activeSectionCode == sectionCode) {
+          _activeSectionCode = selectedSections.isEmpty
+              ? sectionCode
+              : (selectedSections.toList()..sort()).first;
+        }
       } else {
         selectedSections.add(sectionCode);
+        _activeSectionCode = sectionCode;
       }
+    });
+  }
+
+  void _setActiveSection(String sectionCode) {
+    if (!selectedSections.contains(sectionCode)) return;
+    setState(() {
+      _activeSectionCode = sectionCode;
     });
   }
 
@@ -892,6 +698,63 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         (sum, files) =>
             sum + files.fold<int>(0, (inner, file) => inner + file.rowCount),
       );
+
+  bool get _has26QReady => tdsRows.isNotEmpty;
+
+  bool get canOpenReconciliation => _has26QReady && _buildSourceRowsBySection().isNotEmpty;
+
+  bool get _hasWorkspaceContent => _has26QReady || _totalSectionFiles > 0;
+
+  String get _workspaceStatusLabel {
+    if (canOpenReconciliation) return 'Ready';
+    if (_hasWorkspaceContent) return 'In Progress';
+    return 'Setup Required';
+  }
+
+  String get _workspaceStatusDetail {
+    if (canOpenReconciliation) {
+      return '26Q and source files are ready. Continue to reconciliation.';
+    }
+    if (!_has26QReady) {
+      return 'Upload the mandatory 26Q master file to unlock the workflow.';
+    }
+    return 'Add at least one source file in a selected section to continue.';
+  }
+
+  int _sectionFileCount(String sectionCode) => sectionFiles[sectionCode]?.length ?? 0;
+
+  int _sectionRowCount(String sectionCode) {
+    if (sectionCode == '194Q') return purchaseRows.length;
+    return ledgerRowsBySection[sectionCode]?.length ?? 0;
+  }
+
+  String _sectionDescription(String sectionCode) {
+    switch (sectionCode) {
+      case '194Q':
+        return 'Purchase parser workspace for buyer-side source files.';
+      case '194C':
+        return 'Generic ledger workspace for contractor payment ledgers.';
+      case '194H':
+        return 'Generic ledger workspace for commission or brokerage ledgers.';
+      case '194J':
+        return 'Generic ledger workspace for professional fee ledgers.';
+      case '194IB':
+        return 'Generic ledger workspace for rent deduction ledgers.';
+      default:
+        return 'Generic ledger workspace for the selected section.';
+    }
+  }
+
+  void _saveWorkspaceDraft() {
+    if (!_hasWorkspaceContent) {
+      _showUploadSnackBar('Add a 26Q file or source files before saving the workspace.');
+      return;
+    }
+
+    _showUploadSnackBar(
+      'Workspace staged successfully. Continue uploading or open reconciliation when ready.',
+    );
+  }
 
   Color _sectionAccent(String sectionCode) {
     switch (sectionCode) {
@@ -965,14 +828,185 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return '$date/$month/$year $hour:$minute';
   }
 
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: _panelDecoration(
+        borderColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF07111F),
+        shadows: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withOpacity(0.12),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton.filledTonal(
+                onPressed: () => Navigator.of(context).maybePop(),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFF111C31),
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Upload Workspace',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Prepare the 26Q master and section-wise source files before opening reconciliation.',
+                      style: TextStyle(
+                        color: Colors.blueGrey.shade100,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: canOpenReconciliation
+                      ? const Color(0xFF052E2B)
+                      : const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: canOpenReconciliation
+                        ? const Color(0xFF0F766E)
+                        : const Color(0xFF334155),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      canOpenReconciliation
+                          ? Icons.check_circle_rounded
+                          : Icons.hourglass_bottom_rounded,
+                      size: 16,
+                      color: canOpenReconciliation
+                          ? const Color(0xFF5EEAD4)
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _workspaceStatusLabel,
+                      style: TextStyle(
+                        color: canOpenReconciliation
+                            ? const Color(0xFFCCFBF1)
+                            : const Color(0xFFE2E8F0),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: canOpenReconciliation ? openReconciliationScreen : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  disabledBackgroundColor: const Color(0xFF1E293B),
+                  disabledForegroundColor: const Color(0xFF64748B),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text(
+                  'Open Reconciliation',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B1728),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFF1E293B)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1D4ED8).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.workspace_premium_rounded,
+                    color: Color(0xFF93C5FD),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    _workspaceStatusDetail,
+                    style: const TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTdsCard() {
     final uploaded = tdsRows.isNotEmpty;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: _panelDecoration(
         borderColor: const Color(0xFF1D4ED8).withOpacity(0.35),
         backgroundColor: const Color(0xFF0B1220),
+        shadows: [
+          BoxShadow(
+            color: const Color(0xFF1D4ED8).withOpacity(0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1018,36 +1052,103 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           const Text(
             '26Q Master File',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.w800,
               color: Colors.white,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            tdsFileName ?? 'No 26Q file uploaded yet',
+            'This file is mandatory and powers the reconciliation baseline.',
             style: TextStyle(
-              color: tdsFileName == null
-                  ? const Color(0xFF94A3B8)
-                  : Colors.white,
+              color: Colors.blueGrey.shade100,
               fontSize: 14,
+              height: 1.5,
             ),
           ),
-          if (uploaded) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${tdsRows.length} rows parsed',
-              style: const TextStyle(
-                color: Color(0xFF94A3B8),
-                fontSize: 13,
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF09101C),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: uploaded
+                    ? const Color(0xFF1D4ED8).withOpacity(0.45)
+                    : const Color(0xFF334155),
               ),
             ),
-          ],
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: isLoadingTds ? null : uploadTds26QFile,
-            icon: const Icon(Icons.upload_file),
-            label: Text(isLoadingTds ? 'Uploading...' : 'Upload 26Q'),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: uploaded
+                        ? const Color(0xFFDBEAFE).withOpacity(0.12)
+                        : const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    uploaded
+                        ? Icons.fact_check_rounded
+                        : Icons.upload_file_rounded,
+                    color: uploaded
+                        ? const Color(0xFF93C5FD)
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        uploaded
+                            ? (tdsFileName ?? '26Q uploaded')
+                            : 'No 26Q file uploaded yet',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        uploaded
+                            ? '${tdsRows.length} parsed rows ready for reconciliation'
+                            : 'Upload the statutory 26Q workbook to unlock reconciliation.',
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                FilledButton.icon(
+                  onPressed: isLoadingTds ? null : uploadTds26QFile,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    disabledBackgroundColor: const Color(0xFF1E293B),
+                    disabledForegroundColor: const Color(0xFF64748B),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: Icon(uploaded ? Icons.refresh_rounded : Icons.upload_rounded),
+                  label: Text(isLoadingTds ? 'Uploading...' : uploaded ? 'Replace 26Q' : 'Upload 26Q'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1057,7 +1158,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Widget _buildSectionSelector() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: _panelDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1084,20 +1185,80 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             runSpacing: 10,
             children: _availableSections.map((section) {
               final selected = selectedSections.contains(section);
+              final active = _activeSectionCode == section && selected;
               final accent = _sectionAccent(section);
-              return FilterChip(
-                selected: selected,
-                label: Text(section),
-                onSelected: (_) => _toggleSection(section),
-                selectedColor: accent.withOpacity(0.14),
-                checkmarkColor: accent,
-                backgroundColor: const Color(0xFF111827),
-                labelStyle: TextStyle(
-                  color: selected ? accent : const Color(0xFFE2E8F0),
-                  fontWeight: FontWeight.w700,
-                ),
-                side: BorderSide(
-                  color: selected ? accent : const Color(0xFF334155),
+              final fileCount = _sectionFileCount(section);
+              final rowCount = _sectionRowCount(section);
+              return InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: selected
+                    ? () => _setActiveSection(section)
+                    : () => _toggleSection(section),
+                onLongPress: selected ? () => _toggleSection(section) : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? accent.withOpacity(0.18)
+                        : selected
+                            ? const Color(0xFF111827)
+                            : const Color(0xFF0B1220),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: active
+                          ? accent
+                          : selected
+                              ? accent.withOpacity(0.55)
+                              : const Color(0xFF334155),
+                      width: active ? 1.6 : 1,
+                    ),
+                    boxShadow: active
+                        ? [
+                            BoxShadow(
+                              color: accent.withOpacity(0.18),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            section,
+                            style: TextStyle(
+                              color: selected ? Colors.white : const Color(0xFFE2E8F0),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: selected ? accent : const Color(0xFF475569),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$fileCount file${fileCount == 1 ? '' : 's'} | $rowCount rows',
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }).toList(),
@@ -1110,18 +1271,18 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Widget _buildSummaryCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: _panelDecoration(),
       child: Wrap(
-        spacing: 14,
-        runSpacing: 14,
+        spacing: 16,
+        runSpacing: 16,
         children: [
           _buildSummaryTile('Buyer', widget.selectedBuyerName),
           _buildSummaryTile('Buyer PAN', widget.selectedBuyerPan),
           _buildSummaryTile('26Q Rows', tdsRows.length.toString()),
           _buildSummaryTile('Section Files', _totalSectionFiles.toString()),
           _buildSummaryTile('Source Rows', _totalLedgerRows.toString()),
-          _buildSummaryTile('194Q Rows', purchaseRows.length.toString()),
+          _buildSummaryTile('Active Buckets', selectedSections.length.toString()),
         ],
       ),
     );
@@ -1129,48 +1290,91 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Widget _buildSummaryTile(String label, String value) {
     return Container(
-      width: 190,
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minWidth: 180, minHeight: 112),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF0B1220),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFF1F2937)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: const TextStyle(
               color: Color(0xFF94A3B8),
-              fontSize: 12,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 14),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
               color: Colors.white,
+              height: 1.1,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionCard(String sectionCode) {
+  Widget _buildSectionPanel() {
+    final visibleSections = selectedSections.toList()..sort();
+    if (visibleSections.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: _panelDecoration(),
+        child: const Text(
+          'Select one or more section buckets to start building the source-file workspace.',
+          style: TextStyle(
+            color: Color(0xFF94A3B8),
+            height: 1.5,
+          ),
+        ),
+      );
+    }
+
+    final sectionCode = selectedSections.contains(_activeSectionCode)
+        ? _activeSectionCode
+        : visibleSections.first;
     final accent = _sectionAccent(sectionCode);
     final files = sectionFiles[sectionCode]!;
     final isLoading = sectionLoading[sectionCode] ?? false;
 
+    return _buildSectionCard(
+      sectionCode: sectionCode,
+      files: files,
+      isLoading: isLoading,
+      accent: accent,
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String sectionCode,
+    required List<LedgerUploadFile> files,
+    required bool isLoading,
+    required Color accent,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: _panelDecoration(
         borderColor: accent.withOpacity(0.28),
         backgroundColor: const Color(0xFF0B1220),
         shadows: [
+          BoxShadow(
+            color: accent.withOpacity(0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
+          ),
           BoxShadow(
             color: Colors.black.withOpacity(0.16),
             blurRadius: 18,
@@ -1198,14 +1402,29 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                _parserLabel(sectionCode),
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _parserLabel(sectionCode),
+                      style: const TextStyle(
+                        color: Color(0xFFCBD5E1),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _sectionDescription(sectionCode),
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Spacer(),
               FilledButton.icon(
                 onPressed: isLoading
                     ? null
@@ -1221,206 +1440,330 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Text(
+                sectionCode,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111827),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Text(
+                  '${files.length} file${files.length == 1 ? '' : 's'} | ${_sectionRowCount(sectionCode)} rows',
+                  style: const TextStyle(
+                    color: Color(0xFFCBD5E1),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Text(
             files.isEmpty
-                ? 'No files added to this section yet.'
-                : '${files.length} file(s) in $sectionCode',
+                ? 'No files added to this bucket yet.'
+                : 'Review uploaded files for this section and adjust mapping if required.',
             style: const TextStyle(
               color: Color(0xFF94A3B8),
               fontSize: 13,
+              height: 1.5,
             ),
           ),
           const SizedBox(height: 14),
           if (files.isEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF111827),
-                borderRadius: BorderRadius.circular(16),
+                color: const Color(0xFF09101C),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: const Color(0xFF1F2937)),
               ),
-              child: Text(
-                sectionCode == '194Q'
-                    ? 'Use this bucket for purchase-parser source files.'
-                    : 'Use this bucket for generic ledger source files mapped to $sectionCode.',
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(Icons.folder_open_rounded, color: accent),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      sectionCode == '194Q'
+                          ? 'Use this bucket for purchase-parser source files. Add one or more files to stage buyer-side transactions.'
+                          : 'Use this bucket for generic ledger source files mapped to $sectionCode. Add files to complete this workspace.',
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             )
           else
-            ...files.map(
-              (file) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111827),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF1F2937)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
+            Column(
+              children: files
+                  .map(
+                    (file) => Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF09101C),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF1F2937)),
+                      ),
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            file.fileName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: accent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(
+                              Icons.description_outlined,
+                              color: accent,
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              Text(
-                                '${file.rowCount} rows',
-                                style: const TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                _formatTimestamp(file.uploadedAt),
-                                style: const TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _mappingStatusBackground(file),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  file.mappingStatus,
-                                  style: TextStyle(
-                                    color: _mappingStatusColor(file),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1F2937),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  file.parserType == 'purchase'
-                                      ? 'Purchase parser'
-                                      : 'Generic ledger parser',
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  file.fileName,
                                   style: const TextStyle(
-                                    color: Color(0xFFE2E8F0),
-                                    fontSize: 11,
                                     fontWeight: FontWeight.w700,
+                                    color: Colors.white,
                                   ),
                                 ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    Text(
+                                      '${file.rowCount} rows',
+                                      style: const TextStyle(
+                                        color: Color(0xFF94A3B8),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatTimestamp(file.uploadedAt),
+                                      style: const TextStyle(
+                                        color: Color(0xFF94A3B8),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _mappingStatusBackground(file),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        file.mappingStatus,
+                                        style: TextStyle(
+                                          color: _mappingStatusColor(file),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1F2937),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        file.parserType == 'purchase'
+                                            ? 'Purchase parser'
+                                            : 'Generic ledger parser',
+                                        style: const TextStyle(
+                                          color: Color(0xFFE2E8F0),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: isLoading
+                                    ? null
+                                    : () => _remapSectionFile(sectionCode, file),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: Color(0xFF334155)),
+                                ),
+                                icon: const Icon(Icons.tune, size: 16),
+                                label: const Text('Remap'),
+                              ),
+                              const SizedBox(height: 8),
+                              IconButton(
+                                onPressed: () => _removeSectionFile(sectionCode, file),
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: 'Remove file',
                               ),
                             ],
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Column(
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: isLoading
-                              ? null
-                              : () => _remapSectionFile(sectionCode, file),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Color(0xFF334155)),
-                          ),
-                          icon: const Icon(Icons.tune, size: 16),
-                          label: const Text('Remap'),
-                        ),
-                        const SizedBox(height: 8),
-                        IconButton(
-                          onPressed: () => _removeSectionFile(sectionCode, file),
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Remove file',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                  )
+                  .toList(),
             ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final visibleSections = selectedSections.toList()..sort();
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF020617),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF020617),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Upload Workspace'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+  Widget _buildBottomActionBar() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF07111F).withOpacity(0.98),
+          border: const Border(
+            top: BorderSide(color: Color(0xFF1E293B)),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.28),
+              blurRadius: 24,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: Row(
           children: [
-            Expanded(
-              child: ListView(
-                children: [
-                  _buildTdsCard(),
-                  const SizedBox(height: 16),
-                  _buildSectionSelector(),
-                  const SizedBox(height: 16),
-                  _buildSummaryCard(),
-                  const SizedBox(height: 16),
-                  if (visibleSections.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: _panelDecoration(),
-                      child: const Text(
-                        'Select one or more section buckets to start building the source-file workspace.',
-                        style: TextStyle(
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                    )
-                  else
-                    ...visibleSections.map(
-                      (section) => Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: _buildSectionCard(section),
-                      ),
-                    ),
-                ],
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFF334155)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Back'),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: _hasWorkspaceContent ? _saveWorkspaceDraft : null,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                disabledForegroundColor: const Color(0xFF64748B),
+                side: BorderSide(
+                  color: _hasWorkspaceContent
+                      ? const Color(0xFF334155)
+                      : const Color(0xFF1E293B),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Workspace'),
+            ),
+            const Spacer(),
+            FilledButton.icon(
+              onPressed: canOpenReconciliation ? openReconciliationScreen : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                disabledBackgroundColor: const Color(0xFF1E293B),
+                disabledForegroundColor: const Color(0xFF64748B),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: Text(
+                canOpenReconciliation
+                    ? 'Open Reconciliation'
+                    : 'Open Reconciliation',
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF020617),
+      bottomNavigationBar: _buildBottomActionBar(),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1320),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: ListView(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 18),
+                  _buildTdsCard(),
+                  const SizedBox(height: 18),
+                  _buildSectionSelector(),
+                  const SizedBox(height: 18),
+                  _buildSummaryCard(),
+                  const SizedBox(height: 18),
+                  _buildSectionPanel(),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

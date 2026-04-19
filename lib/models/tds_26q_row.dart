@@ -24,23 +24,25 @@ class Tds26QRow {
     String nature = (map['nature_of_payment'] ?? map['section'] ?? '').toString();
     final amountPaid = _toDouble(map['amount_paid'] ?? map['deducted_amount']);
     final tdsAmount = _toDouble(map['tds_amount'] ?? map['tds']);
-
-    String finalSection = rawSection;
-
-    if (finalSection.isEmpty || finalSection == '-' || finalSection == 'Unknown') {
-      finalSection = _extractSectionFromText(nature);
-    }
-
-    if (finalSection.isEmpty ||
-        finalSection == '-' ||
-        finalSection.toUpperCase() == 'UNKNOWN') {
-      finalSection = _inferSection(
-        amount: amountPaid,
-        tds: tdsAmount,
-        sectionHint: rawSection,
-        textHint: nature,
-      );
-    }
+    final explicitSection =
+        rawSection.trim().isNotEmpty &&
+            rawSection.trim() != '-' &&
+            rawSection.trim().toUpperCase() != 'UNKNOWN'
+        ? rawSection
+        : '';
+    final inferredSection = explicitSection.isEmpty
+        ? (_extractSectionFromText(nature).isNotEmpty
+              ? _extractSectionFromText(nature)
+              : _inferSection(
+                  amount: amountPaid,
+                  tds: tdsAmount,
+                  sectionHint: rawSection,
+                  textHint: nature,
+                ))
+        : '';
+    final resolvedSection = normalizeSection(
+      explicitSection.isNotEmpty ? explicitSection : inferredSection,
+    );
 
     return Tds26QRow(
       month: map['date_month']?.toString() ?? map['month']?.toString() ?? '',
@@ -50,19 +52,18 @@ class Tds26QRow {
       panNumber: map['pan_number']?.toString() ?? map['pan']?.toString() ?? '',
       deductedAmount: amountPaid,
       tds: tdsAmount,
-      section: normalizeSection(finalSection),
+      section: resolvedSection,
     );
   }
 
   static String _extractSectionFromText(String text) {
     final t = text.toUpperCase();
 
+    if (t.contains('194IB')) return '194IB';
     if (t.contains('194Q')) return '194Q';
     if (t.contains('194C')) return '194C';
-    if (t.contains('194J')) return '194J';
-    if (t.contains('194I')) return '194I';
-    if (t.contains('194A')) return '194A';
     if (t.contains('194H')) return '194H';
+    if (t.contains('194J')) return '194J';
 
     return '';
   }
@@ -73,40 +74,26 @@ class Tds26QRow {
     String? sectionHint,
     String? textHint,
   }) {
-    final normalizedHint = normalizeSection(sectionHint ?? '');
-    if (_isKnownSection(normalizedHint)) {
-      return normalizedHint;
+    final rawHint = (sectionHint ?? '').trim().toUpperCase();
+    if (_isKnownSection(rawHint)) {
+      return rawHint;
     }
 
-    final extractedHint = normalizeSection(_extractSectionFromText(textHint ?? ''));
+    final extractedHint = _extractSectionFromText(textHint ?? '');
     if (_isKnownSection(extractedHint)) {
       return extractedHint;
     }
 
-    if (amount <= 0 || tds <= 0) return 'UNKNOWN';
-
-    final rate = (tds / amount) * 100;
-
-    if (rate >= 0.05 && rate <= 0.2 && amount >= 10000) {
-      return '194Q';
-    }
-    if (rate >= 0.5 && rate <= 2.5 && amount >= 1000) {
-      return '194C';
-    }
-    if (rate >= 8 && rate <= 12 && amount >= 1000) {
-      return '194J';
-    }
-
-    return 'UNKNOWN';
+    // Rate-based section inference is intentionally disabled for CA safety.
+    return '';
   }
 
   static bool _isKnownSection(String value) {
     return value == '194Q' ||
         value == '194C' ||
+        value == '194H' ||
         value == '194J' ||
-        value == '194I' ||
-        value == '194A' ||
-        value == '194H';
+        value == '194IB';
   }
 
   static double _toDouble(dynamic value) {
