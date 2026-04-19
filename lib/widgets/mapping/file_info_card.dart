@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/excel_preview_data.dart';
+import '../../features/upload/models/excel_preview_data.dart';
 
 class FileInfoCard extends StatelessWidget {
   final ExcelPreviewData previewData;

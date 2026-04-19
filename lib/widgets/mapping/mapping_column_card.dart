@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/mapping_field_option.dart';
+import '../../features/upload/models/mapping_field_option.dart';
 
 class MappingColumnCard extends StatelessWidget {
   final String columnLabel;
