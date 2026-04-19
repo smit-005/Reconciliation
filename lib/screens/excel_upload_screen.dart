@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -91,6 +89,30 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       warnings: validation.warnings,
       confidenceScore: validation.confidenceScore,
       preferredSheetName: preferredSheetName,
+    );
+
+    if (previewData == null) {
+      _showUploadSnackBar('Could not build mapping preview for this file');
+      return null;
+    }
+
+    return showManualMappingScreen(previewData: previewData);
+  }
+
+  Future<ManualMappingResult?> _openStoredFileManualMapping({
+    required LedgerUploadFile file,
+  }) async {
+    final fileType = file.sectionCode == '194Q'
+        ? ExcelImportType.purchase
+        : ExcelImportType.genericLedger;
+    final previewData = ExcelService.buildPreviewDataWithProfile(
+      file.bytes,
+      fileType: fileType,
+      fileName: file.fileName,
+      sheetName: file.sheetName ?? '',
+      headerRowIndex: file.headerRowIndex ?? 0,
+      headersTrusted: file.headersTrusted ?? true,
+      columnMapping: file.columnMapping,
     );
 
     if (previewData == null) {
@@ -486,37 +508,105 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<void> _remapSectionFile(String sectionCode, LedgerUploadFile file) async {
     _setSectionLoading(sectionCode, true);
     try {
-      final pickedFile = PlatformFile(
-        name: file.fileName,
-        size: file.bytes.length,
-        bytes: Uint8List.fromList(file.bytes),
-      );
+      final manualResult = await _openStoredFileManualMapping(file: file);
+      if (manualResult == null) {
+        _setSectionLoading(sectionCode, false);
+        return;
+      }
 
-      final updatedFile = sectionCode == '194Q'
-          ? await _buildPurchaseUploadFile(
-              pickedFile: pickedFile,
-              bytes: file.bytes,
-              existingFileId: file.id,
-              initialMappedColumns: file.columnMapping,
-              forceManualMapping: true,
+      LedgerUploadFile? updatedFile;
+
+      if (sectionCode == '194Q') {
+        final inspection = ExcelService.inspectExcelFile(
+          file.bytes,
+          forcedType: ExcelImportType.purchase,
+          preferredSheetName: manualResult.sheetName,
+        );
+        if (inspection != null) {
+          final signature = ExcelService.buildSampleSignature(
+            inspection.sheetName,
+            inspection.rawHeaderRow,
+          );
+          await _saveProfileFromManualResult(
+            result: manualResult,
+            sampleSignature: signature,
+          );
+        }
+
+        final parsedRows = ExcelService.parsePurchaseRowsWithProfile(
+          file.bytes,
+          sheetName: manualResult.sheetName,
+          headerRowIndex: manualResult.headerRowIndex,
+          headersTrusted: manualResult.headersTrusted,
+          columnMapping: manualResult.columnMapping,
+        );
+        final normalizedRows = parsedRows
+            .map(
+              (row) => NormalizedLedgerRow.fromPurchaseRow(
+                row,
+                sourceFileName: file.fileName,
+              ),
             )
-          : await _buildGenericLedgerUploadFile(
-              sectionCode: sectionCode,
-              pickedFile: pickedFile,
-              bytes: file.bytes,
-              existingFileId: file.id,
-              initialMappedColumns: file.columnMapping,
-              forceManualMapping: true,
-            );
+            .toList();
+
+        purchaseRowsByFileId[file.id] = parsedRows;
+
+        updatedFile = LedgerUploadFile(
+          id: file.id,
+          sectionCode: file.sectionCode,
+          fileName: file.fileName,
+          bytes: file.bytes,
+          rowCount: parsedRows.length,
+          uploadedAt: DateTime.now(),
+          parserType: file.parserType,
+          rows: normalizedRows,
+          mappingStatus: 'Manual mapping',
+          wasManuallyMapped: true,
+          sheetName: manualResult.sheetName,
+          headerRowIndex: manualResult.headerRowIndex,
+          headersTrusted: manualResult.headersTrusted,
+          columnMapping: Map<String, String>.from(manualResult.columnMapping),
+        );
+      } else {
+        final parsedRows = ExcelService.parseGenericLedgerRowsWithProfile(
+          file.bytes,
+          sheetName: manualResult.sheetName,
+          headerRowIndex: manualResult.headerRowIndex,
+          headersTrusted: manualResult.headersTrusted,
+          columnMapping: manualResult.columnMapping,
+          defaultSection: sectionCode,
+          sourceFileName: file.fileName,
+        );
+
+        updatedFile = LedgerUploadFile(
+          id: file.id,
+          sectionCode: file.sectionCode,
+          fileName: file.fileName,
+          bytes: file.bytes,
+          rowCount: parsedRows.length,
+          uploadedAt: DateTime.now(),
+          parserType: file.parserType,
+          rows: parsedRows,
+          mappingStatus: 'Manual mapping',
+          wasManuallyMapped: true,
+          sheetName: manualResult.sheetName,
+          headerRowIndex: manualResult.headerRowIndex,
+          headersTrusted: manualResult.headersTrusted,
+          columnMapping: Map<String, String>.from(manualResult.columnMapping),
+        );
+      }
 
       if (updatedFile == null) {
         _setSectionLoading(sectionCode, false);
         return;
       }
+      final resolvedUpdatedFile = updatedFile!;
 
       setState(() {
         sectionFiles[sectionCode] = sectionFiles[sectionCode]!
-            .map((item) => item.id == file.id ? updatedFile : item)
+            .map<LedgerUploadFile>(
+              (item) => item.id == file.id ? resolvedUpdatedFile : item,
+            )
             .toList();
         if (sectionCode == '194Q') {
           _rebuildPurchaseState();
@@ -873,47 +963,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     final hour = value.hour.toString().padLeft(2, '0');
     final minute = value.minute.toString().padLeft(2, '0');
     return '$date/$month/$year $hour:$minute';
-  }
-
-  Widget _buildHeroCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFF0F172A),
-            Color(0xFF1E293B),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Multi-Section Upload Workspace',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Upload one mandatory 26Q file, then add as many section-wise source files as needed. '
-            '194Q continues to use the purchase parser; the other sections now flow through a generic ledger intake.',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white.withOpacity(0.78),
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildTdsCard() {
@@ -1325,45 +1374,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
   }
 
-  Widget _buildReconciliationCard() {
-    final ready = tdsRows.isNotEmpty && _buildSourceRowsBySection().isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Current Reconciliation Preview',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Open reconciliation using the uploaded 26Q file plus all available source rows grouped section-wise. '
-            'The reconciliation screen will combine the results and also keep section-level visibility.',
-            style: TextStyle(
-              color: Color(0xFF94A3B8),
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: ready ? openReconciliationScreen : null,
-              child: const Text('Open Reconciliation'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final visibleSections = selectedSections.toList()..sort();
@@ -1380,8 +1390,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildHeroCard(),
-            const SizedBox(height: 16),
             Expanded(
               child: ListView(
                 children: [
@@ -1409,7 +1417,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                         child: _buildSectionCard(section),
                       ),
                     ),
-                  _buildReconciliationCard(),
                 ],
               ),
             ),

@@ -1165,17 +1165,15 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
       cleanedResult[normalizedAliasKey] = mappedName;
 
-      if (mappedPan.isNotEmpty) {
-        await MappingService.saveMapping(
-          SellerMapping(
-            buyerName: widget.buyerName,
-            buyerPan: widget.buyerPan.trim().toUpperCase(),
-            aliasName: normalizedAliasKey,
-            mappedPan: mappedPan,
-            mappedName: mappedName,
-          ),
-        );
-      }
+      await MappingService.saveMapping(
+        SellerMapping(
+          buyerName: widget.buyerName,
+          buyerPan: widget.buyerPan.trim().toUpperCase(),
+          aliasName: normalizedAliasKey,
+          mappedPan: mappedPan,
+          mappedName: mappedName,
+        ),
+      );
     }
 
     for (final existing in existingMappings) {

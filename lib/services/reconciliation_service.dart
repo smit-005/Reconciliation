@@ -44,6 +44,16 @@ class _NormalizedSourceGroup {
   });
 }
 
+class _SellerNameChoice {
+  final String name;
+  final int priority;
+
+  const _SellerNameChoice({
+    required this.name,
+    required this.priority,
+  });
+}
+
 class ReconciliationSummary {
   final String section;
   final int totalRows;
@@ -205,6 +215,14 @@ class CalculationService {
       nameMapping: normalizedMapping,
       savedAliasToPan: savedAliasToPan,
     );
+    final resolvedSellerNameLookup = _buildResolvedSellerNameLookup(
+      identities: _collectNormalizedSellerIdentities(
+        sourceRows: sourceRows,
+        tdsRows: tdsRows,
+        nameMapping: normalizedMapping,
+      ),
+      sellerKeyResolver: sellerKeyResolver,
+    );
 
     final rowsBySection = <String, List<ReconciliationRow>>{};
     final allCombinedRows = <ReconciliationRow>[];
@@ -252,7 +270,11 @@ class CalculationService {
       allCombinedRows.addAll(sectionRows);
     }
 
-    final mergedRows = _mergeRowsWithUniquePanHints(allCombinedRows);
+    final mergedRows = _applyResolvedSellerNames(
+      _mergeRowsWithUniquePanHints(allCombinedRows),
+      sellerKeyResolver: sellerKeyResolver,
+      resolvedSellerNameLookup: resolvedSellerNameLookup,
+    );
     final mergedRowsBySection = <String, List<ReconciliationRow>>{};
 
     for (final section in rowsBySection.keys) {
@@ -316,6 +338,14 @@ class CalculationService {
       tdsRows: tdsRows,
       nameMapping: normalizedMapping,
       savedAliasToPan: savedAliasToPan,
+    );
+    final resolvedSellerNameLookup = _buildResolvedSellerNameLookup(
+      identities: _collectSellerIdentities(
+        purchaseRows: purchaseRows,
+        tdsRows: tdsRows,
+        nameMapping: normalizedMapping,
+      ),
+      sellerKeyResolver: sellerKeyResolver,
     );
     final gstDerivedPanHints = <String, bool>{};
 
@@ -559,7 +589,139 @@ final remarks = _buildRemarks(
       results.addAll(timedRows);
     }
 
-    return _mergeRowsWithUniquePanHints(results);
+    return _applyResolvedSellerNames(
+      _mergeRowsWithUniquePanHints(results),
+      sellerKeyResolver: sellerKeyResolver,
+      resolvedSellerNameLookup: resolvedSellerNameLookup,
+    );
+  }
+
+  static List<_SellerIdentity> _collectSellerIdentities({
+    required List<PurchaseRow> purchaseRows,
+    required List<Tds26QRow> tdsRows,
+    required Map<String, String> nameMapping,
+  }) {
+    final identities = <_SellerIdentity>[];
+
+    for (final row in purchaseRows) {
+      final mappedName = applyNameMapping(row.partyName, nameMapping);
+      identities.add(
+        _SellerIdentity(
+          originalName: row.partyName,
+          mappedName: mappedName,
+          normalizedName: normalizeName(
+            mappedName.isNotEmpty ? mappedName : row.partyName,
+          ),
+          sellerPan: normalizePan(row.panNumber),
+        ),
+      );
+    }
+
+    for (final row in tdsRows) {
+      final mappedName = applyNameMapping(row.deducteeName, nameMapping);
+      identities.add(
+        _SellerIdentity(
+          originalName: row.deducteeName,
+          mappedName: mappedName,
+          normalizedName: normalizeName(
+            mappedName.isNotEmpty ? mappedName : row.deducteeName,
+          ),
+          sellerPan: normalizePan(row.panNumber),
+        ),
+      );
+    }
+
+    return identities;
+  }
+
+  static List<_SellerIdentity> _collectNormalizedSellerIdentities({
+    required List<NormalizedTransactionRow> sourceRows,
+    required List<Tds26QRow> tdsRows,
+    required Map<String, String> nameMapping,
+  }) {
+    final identities = <_SellerIdentity>[];
+
+    for (final row in sourceRows) {
+      final mappedName = applyNameMapping(row.partyName, nameMapping);
+      identities.add(
+        _SellerIdentity(
+          originalName: row.partyName,
+          mappedName: mappedName,
+          normalizedName: normalizeName(
+            mappedName.isNotEmpty ? mappedName : row.partyName,
+          ),
+          sellerPan: normalizePan(row.panNumber),
+        ),
+      );
+    }
+
+    for (final row in tdsRows) {
+      final mappedName = applyNameMapping(row.deducteeName, nameMapping);
+      identities.add(
+        _SellerIdentity(
+          originalName: row.deducteeName,
+          mappedName: mappedName,
+          normalizedName: normalizeName(
+            mappedName.isNotEmpty ? mappedName : row.deducteeName,
+          ),
+          sellerPan: normalizePan(row.panNumber),
+        ),
+      );
+    }
+
+    return identities;
+  }
+
+  static Map<String, String> _buildResolvedSellerNameLookup({
+    required List<_SellerIdentity> identities,
+    required Map<String, String> sellerKeyResolver,
+  }) {
+    final choices = <String, _SellerNameChoice>{};
+
+    void consider({
+      required String sellerKey,
+      required String candidateName,
+      required int priority,
+    }) {
+      final trimmedName = candidateName.trim();
+      if (sellerKey.isEmpty || trimmedName.isEmpty) return;
+
+      final existing = choices[sellerKey];
+      if (existing == null ||
+          priority > existing.priority ||
+          (priority == existing.priority &&
+              trimmedName.length < existing.name.length)) {
+        choices[sellerKey] = _SellerNameChoice(
+          name: trimmedName,
+          priority: priority,
+        );
+      }
+    }
+
+    for (final identity in identities) {
+      final sellerKey = resolveSellerKey(
+        sellerPan: identity.sellerPan,
+        normalizedSellerName: identity.normalizedName,
+        resolver: sellerKeyResolver,
+      );
+      if (sellerKey.isEmpty) continue;
+
+      final originalName = identity.originalName.trim();
+      final mappedName = identity.mappedName.trim();
+      final resolvedName = mappedName.isNotEmpty ? mappedName : originalName;
+      final isExplicitMapping = mappedName.isNotEmpty &&
+          normalizeName(mappedName) != normalizeName(originalName);
+
+      consider(
+        sellerKey: sellerKey,
+        candidateName: resolvedName,
+        priority: isExplicitMapping ? 3 : 1,
+      );
+    }
+
+    return {
+      for (final entry in choices.entries) entry.key: entry.value.name,
+    };
   }
 
   static Map<String, String> _buildSellerKeyResolver({
@@ -1272,6 +1434,28 @@ static String _buildRemarks({
     if (purchasePan.trim().isNotEmpty) return purchasePan.trim();
     if (looksLikePan(fallbackKey)) return fallbackKey.trim();
     return '';
+  }
+
+  static List<ReconciliationRow> _applyResolvedSellerNames(
+    List<ReconciliationRow> rows, {
+    required Map<String, String> sellerKeyResolver,
+    required Map<String, String> resolvedSellerNameLookup,
+  }) {
+    return rows.map((row) {
+      final sellerKey = resolveSellerKey(
+        sellerPan: normalizePan(row.sellerPan),
+        normalizedSellerName: normalizeName(row.sellerName),
+        resolver: sellerKeyResolver,
+      );
+      final resolvedSellerName = resolvedSellerNameLookup[sellerKey]?.trim() ?? '';
+
+      if (resolvedSellerName.isEmpty ||
+          resolvedSellerName == row.sellerName.trim()) {
+        return row;
+      }
+
+      return row.copyWith(sellerName: resolvedSellerName);
+    }).toList();
   }
 
   static ReconciliationRow _applyBelowThresholdClassification(
