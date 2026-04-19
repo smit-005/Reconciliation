@@ -1,7 +1,7 @@
 # Graph Report - E:\reconciliation_app_codex  (2026-04-19)
 
 ## Corpus Check
-- 108 files · ~62,220 words
+- 108 files · ~62,244 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary

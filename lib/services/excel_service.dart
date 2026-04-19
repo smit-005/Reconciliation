@@ -284,6 +284,226 @@ class ExcelService {
     return _dedupePurchaseRows(parsed);
   }
 
+  static ({
+    String sheetName,
+    int headerRowIndex,
+    List<dynamic> rawHeaderRow,
+    bool headersTrusted,
+    ExcelValidationResult validation,
+    List<PurchaseRow>? parsedRows,
+  })? preparePurchaseUploadData(List<int> bytes) {
+    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+
+    if (decoder.tables.isEmpty) {
+      return null;
+    }
+
+    final sheetInfo = _findBestSheetAndHeader(
+      decoder,
+      forcedType: ExcelImportType.purchase,
+    );
+    if (sheetInfo == null) {
+      return null;
+    }
+
+    final table = decoder.tables[sheetInfo.sheetName];
+    if (table == null || table.rows.isEmpty) {
+      return null;
+    }
+
+    final rawHeaderRow = table.rows[sheetInfo.headerRowIndex];
+    final mappedHeaders = _resolveMappedHeaders(
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      forcedType: ExcelImportType.purchase,
+      headersTrusted: sheetInfo.headersTrusted,
+    );
+    final presentHeaders = mappedHeaders.whereType<String>().toSet();
+    final unmappedRawHeaders = _extractUnmappedRawHeaders(
+      rawHeaderRow,
+      mappedHeaders,
+    );
+    final confidenceScore = _headerConfidenceScore(
+      presentHeaders,
+      type: ExcelImportType.purchase,
+    );
+    final warnings = <String>[];
+    final mappedColumns = _headerPreviewMap(rawHeaderRow, mappedHeaders);
+
+    final hasPurchaseDate = _hasPurchaseDateColumn(presentHeaders);
+    final hasPurchaseAmount = _hasPurchaseAmountColumn(presentHeaders);
+
+    final missing = <String>[
+      if (!hasPurchaseDate) 'Date / EOM',
+      if (!presentHeaders.contains('party_name')) 'Party Name',
+      if (!presentHeaders.contains('bill_no')) 'Bill No',
+      if (!hasPurchaseAmount) 'Amount Column',
+    ];
+
+    if ((!sheetInfo.headersTrusted && confidenceScore < 0.60) ||
+        (sheetInfo.headersTrusted && confidenceScore < 0.70)) {
+      warnings.add(
+        'Header detection is weak. Manual mapping is required instead of auto-parsing.',
+      );
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: warnings,
+          confidenceScore: confidenceScore,
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
+    }
+
+    if (missing.isNotEmpty) {
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: [
+            ...warnings,
+            'Required purchase columns need confirmation: ${missing.join(', ')}.',
+          ],
+          confidenceScore: confidenceScore,
+          message:
+              'Required purchase columns need review before import: ${missing.join(', ')}',
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
+    }
+
+    final hasSuspiciousAmountCollision =
+        _hasSuspiciousAmountCollision(mappedHeaders, rawHeaderRow);
+
+    if (hasSuspiciousAmountCollision) {
+      warnings.add(
+        'Amount columns could not be clearly distinguished. Bill Amount will be used as the primary purchase amount.',
+      );
+    }
+
+    if (confidenceScore < 0.65) {
+      warnings.add(
+        'Low header-detection confidence. Review column mapping if imported values look incorrect.',
+      );
+    }
+
+    final parsed = _parsePurchaseRowsFromPreparedSheet(
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: sheetInfo.headersTrusted,
+    );
+
+    if (parsed.isEmpty) {
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: [
+            ...warnings,
+            'Auto-detected mapping produced no parsed purchase rows.',
+          ],
+          confidenceScore: confidenceScore,
+          message: 'Auto-detected mapping needs review before import.',
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
+    }
+
+    final validAmountRows = parsed.where((e) => e.basicAmount > 0).length;
+    if (validAmountRows == 0) {
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: [
+            ...warnings,
+            'Detected purchase amount column produced zero values for all parsed rows.',
+          ],
+          confidenceScore: confidenceScore,
+          message: 'Purchase amount mapping needs manual review before import.',
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
+    }
+
+    final billAmountSum = parsed.fold<double>(0.0, (s, e) => s + e.billAmount);
+    final basicAmountSum = parsed.fold<double>(0.0, (s, e) => s + e.basicAmount);
+    warnings.addAll(_buildPurchaseWarnings(parsed));
+
+    if (billAmountSum > 0 && (billAmountSum - basicAmountSum).abs() < 1) {
+      warnings.add(
+        'Single amount column detected (Bill Amount used as Basic Amount)',
+      );
+    }
+
+    if (hasSuspiciousAmountCollision) {
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: warnings,
+          confidenceScore: confidenceScore,
+          message: 'Purchase amount columns need manual review before import.',
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
+    }
+
+    return (
+      sheetName: sheetInfo.sheetName,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      rawHeaderRow: rawHeaderRow,
+      headersTrusted: sheetInfo.headersTrusted,
+      validation: ExcelValidationResult.valid(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: mappedColumns,
+        warnings: warnings,
+        confidenceScore: confidenceScore,
+        unmappedRawHeaders: unmappedRawHeaders,
+      ),
+      parsedRows: parsed,
+    );
+  }
+
   static ExcelPreviewData? buildPreviewData(
     List<int> bytes, {
     required ExcelImportType fileType,
@@ -695,30 +915,45 @@ class ExcelService {
       if (!hasPurchaseAmount) 'Amount Column',
     ];
 
+    final mappedColumns = _headerPreviewMap(rawHeaderRow, mappedHeaders);
+
     if ((!sheetInfo.headersTrusted && confidenceScore < 0.60) ||
         (sheetInfo.headersTrusted && confidenceScore < 0.70)) {
       warnings.add(
         'Header detection is weak. Manual mapping is required instead of auto-parsing.',
       );
-      return ExcelValidationResult.valid(
+      return ExcelValidationResult.manualReview(
         detectedSheet: sheetInfo.sheetName,
         headerRowIndex: sheetInfo.headerRowIndex,
         detectedType: sheetInfo.detectedType,
-        mappedColumns: _headerPreviewMap(rawHeaderRow, mappedHeaders),
+        mappedColumns: mappedColumns,
         warnings: warnings,
         confidenceScore: confidenceScore,
-        requiresManualMapping: true,
         unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
     if (missing.isNotEmpty) {
-      return ExcelValidationResult.invalid(
-        'Missing required purchase columns: ${missing.join(', ')}',
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: mappedColumns,
+        warnings: [
+          ...warnings,
+          'Required purchase columns need confirmation: ${missing.join(', ')}.',
+        ],
+        confidenceScore: confidenceScore,
+        message:
+            'Required purchase columns need review before import: ${missing.join(', ')}',
+        unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
-    if (_hasSuspiciousAmountCollision(mappedHeaders, rawHeaderRow)) {
+    final hasSuspiciousAmountCollision =
+        _hasSuspiciousAmountCollision(mappedHeaders, rawHeaderRow);
+
+    if (hasSuspiciousAmountCollision) {
       warnings.add(
         'Amount columns could not be clearly distinguished. Bill Amount will be used as the primary purchase amount.',
       );
@@ -733,15 +968,35 @@ class ExcelService {
     final parsed = parsePurchaseRows(bytes);
 
     if (parsed.isEmpty) {
-      return ExcelValidationResult.invalid(
-        'No valid purchase rows found after parsing.',
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: mappedColumns,
+        warnings: [
+          ...warnings,
+          'Auto-detected mapping produced no parsed purchase rows.',
+        ],
+        confidenceScore: confidenceScore,
+        message: 'Auto-detected mapping needs review before import.',
+        unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
     final validAmountRows = parsed.where((e) => e.basicAmount > 0).length;
     if (validAmountRows == 0) {
-      return ExcelValidationResult.invalid(
-        'Purchase amount column could not be read correctly. All values are zero.',
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: mappedColumns,
+        warnings: [
+          ...warnings,
+          'Detected purchase amount column produced zero values for all parsed rows.',
+        ],
+        confidenceScore: confidenceScore,
+        message: 'Purchase amount mapping needs manual review before import.',
+        unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
@@ -755,14 +1010,26 @@ class ExcelService {
       );
     }
 
-      return ExcelValidationResult.valid(
+    if (hasSuspiciousAmountCollision) {
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: mappedColumns,
+        warnings: warnings,
+        confidenceScore: confidenceScore,
+        message: 'Purchase amount columns need manual review before import.',
+        unmappedRawHeaders: unmappedRawHeaders,
+      );
+    }
+
+    return ExcelValidationResult.valid(
       detectedSheet: sheetInfo.sheetName,
       headerRowIndex: sheetInfo.headerRowIndex,
       detectedType: sheetInfo.detectedType,
-      mappedColumns: _headerPreviewMap(rawHeaderRow, mappedHeaders),
+      mappedColumns: mappedColumns,
       warnings: warnings,
       confidenceScore: confidenceScore,
-      requiresManualMapping: confidenceScore < 0.50,
       unmappedRawHeaders: unmappedRawHeaders,
     );
   }
@@ -2322,8 +2589,15 @@ class ExcelService {
     final normalized = _normalizeLooseText(raw);
     if (normalized.isEmpty) return null;
 
-    if (type == ExcelImportType.purchase && normalized == 'amount') {
-      return null;
+    if (type == ExcelImportType.purchase) {
+      if (_shouldIgnorePurchaseHeader(normalized)) {
+        return null;
+      }
+
+      // In many purchase exports a lone "Amount" column is the bill total.
+      if (normalized == 'amount' && !usedCanonical.contains('bill_amount')) {
+        return 'bill_amount';
+      }
     }
 
     final dictionary = type == ExcelImportType.purchase
@@ -2381,6 +2655,18 @@ class ExcelService {
     }
 
     return null;
+  }
+
+  static bool _shouldIgnorePurchaseHeader(String normalized) {
+    if (normalized.contains('tax amount') && !normalized.contains('taxable')) {
+      return true;
+    }
+
+    if (normalized.contains('tax amt') && !normalized.contains('taxable')) {
+      return true;
+    }
+
+    return false;
   }
 
   static int _headerSimilarityScore(String a, String b) {
@@ -2443,6 +2729,60 @@ class ExcelService {
 
       if (raw.isNotEmpty && mapped != null && mapped.isNotEmpty) {
         result[raw] = mapped;
+      }
+    }
+
+    return result;
+  }
+
+  static List<PurchaseRow> _parsePurchaseRowsFromPreparedSheet({
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required List<String?> mappedHeaders,
+    required bool headersTrusted,
+  }) {
+    final mapList = _buildRowMapsFromMappedHeaders(
+      rows: rows,
+      headerRowIndex: headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: headersTrusted,
+    );
+
+    final parsed = mapList.map((row) => PurchaseRow.fromMap(row)).toList();
+    return _dedupePurchaseRows(parsed);
+  }
+
+  static List<Map<String, dynamic>> _buildRowMapsFromMappedHeaders({
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required List<String?> mappedHeaders,
+    required bool headersTrusted,
+  }) {
+    final dataStartIndex = headersTrusted ? headerRowIndex + 1 : headerRowIndex;
+    final result = <Map<String, dynamic>>[];
+
+    for (int i = dataStartIndex; i < rows.length; i++) {
+      final row = rows[i];
+      bool isEmptyRow = true;
+      final rowMap = <String, dynamic>{};
+
+      for (int j = 0; j < mappedHeaders.length; j++) {
+        final header = mappedHeaders[j];
+        if (header == null || header.isEmpty) continue;
+
+        final value = j < row.length ? row[j] : null;
+        final normalizedValue = _normalizeCellValue(value);
+        final textValue = normalizedValue.toString().trim();
+
+        if (textValue.isNotEmpty) {
+          isEmptyRow = false;
+        }
+
+        rowMap[header] = normalizedValue;
+      }
+
+      if (!isEmptyRow) {
+        result.add(rowMap);
       }
     }
 
@@ -2680,6 +3020,8 @@ class ExcelService {
       'gst no.',
       'gst number',
       'gstin',
+      'gstin no',
+      'gstin number',
       'gst',
     ],
     'pan_number': [
@@ -2700,6 +3042,7 @@ class ExcelService {
       'basic amount',
       'product amount',
       'product_amount',
+      'item bill amount',
     ],
     'bill_amount': [
       'bill amount',
@@ -2866,6 +3209,7 @@ class ExcelValidationResult {
   final bool requiresUserSelection;
   final List<String> candidateSheets;
   final List<String> unmappedRawHeaders;
+  final ExcelImportDecision decision;
 
   ExcelValidationResult({
     required this.isValid,
@@ -2880,6 +3224,7 @@ class ExcelValidationResult {
     required this.requiresUserSelection,
     required this.candidateSheets,
     required this.unmappedRawHeaders,
+    required this.decision,
   });
 
   factory ExcelValidationResult.valid({
@@ -2907,6 +3252,36 @@ class ExcelValidationResult {
       requiresUserSelection: requiresUserSelection,
       candidateSheets: candidateSheets,
       unmappedRawHeaders: unmappedRawHeaders,
+      decision: requiresManualMapping
+          ? ExcelImportDecision.manualReview
+          : ExcelImportDecision.autoImport,
+    );
+  }
+
+  factory ExcelValidationResult.manualReview({
+    required String detectedSheet,
+    required int headerRowIndex,
+    required ExcelImportType detectedType,
+    required Map<String, String> mappedColumns,
+    List<String> warnings = const [],
+    double confidenceScore = 0.0,
+    String message = 'Manual mapping review is recommended before import.',
+    List<String> unmappedRawHeaders = const [],
+  }) {
+    return ExcelValidationResult(
+      isValid: true,
+      message: message,
+      detectedSheet: detectedSheet,
+      headerRowIndex: headerRowIndex,
+      detectedType: detectedType,
+      mappedColumns: mappedColumns,
+      warnings: warnings,
+      confidenceScore: confidenceScore,
+      requiresManualMapping: true,
+      requiresUserSelection: false,
+      candidateSheets: const [],
+      unmappedRawHeaders: unmappedRawHeaders,
+      decision: ExcelImportDecision.manualReview,
     );
   }
 
@@ -2927,6 +3302,7 @@ class ExcelValidationResult {
       requiresUserSelection: true,
       candidateSheets: candidateSheets,
       unmappedRawHeaders: const [],
+      decision: ExcelImportDecision.invalidMapping,
     );
   }
 
@@ -2944,6 +3320,13 @@ class ExcelValidationResult {
       requiresUserSelection: false,
       candidateSheets: const [],
       unmappedRawHeaders: const [],
+      decision: ExcelImportDecision.invalidMapping,
     );
   }
+}
+
+enum ExcelImportDecision {
+  autoImport,
+  manualReview,
+  invalidMapping,
 }
