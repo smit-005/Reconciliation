@@ -1,7 +1,7 @@
 # Graph Report - E:\reconciliation_app_codex  (2026-04-21)
 
 ## Corpus Check
-- 119 files · ~70,798 words
+- 119 files · ~68,025 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -97,16 +97,16 @@
 10. `../../../core/utils/parse_utils.dart` - 6 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `RegisterPlugins()` --calls--> `OnCreate()`  [INFERRED]
-  E:\reconciliation_app_codex\windows\flutter\generated_plugin_registrant.cc → E:\reconciliation_app_codex\windows\runner\flutter_window.cpp
+- `OnCreate()` --calls--> `RegisterPlugins()`  [INFERRED]
+  E:\reconciliation_app_codex\windows\runner\flutter_window.cpp → E:\reconciliation_app_codex\windows\flutter\generated_plugin_registrant.cc
 - `ResizeChannel()` --calls--> `GetInstance()`  [INFERRED]
   E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\core_implementations.cc → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\plugin_registrar.cc
 - `SetChannelWarnsOnOverflow()` --calls--> `GetInstance()`  [INFERRED]
   E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\core_implementations.cc → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\plugin_registrar.cc
-- `SetNextFrameCallback()` --calls--> `OnCreate()`  [INFERRED]
-  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\flutter_engine.cc → E:\reconciliation_app_codex\windows\runner\flutter_window.cpp
-- `ForceRedraw()` --calls--> `OnCreate()`  [INFERRED]
-  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\flutter_view_controller.cc → E:\reconciliation_app_codex\windows\runner\flutter_window.cpp
+- `OnCreate()` --calls--> `SetNextFrameCallback()`  [INFERRED]
+  E:\reconciliation_app_codex\windows\runner\flutter_window.cpp → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\flutter_engine.cc
+- `OnCreate()` --calls--> `ForceRedraw()`  [INFERRED]
+  E:\reconciliation_app_codex\windows\runner\flutter_window.cpp → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\flutter_view_controller.cc
 
 ## Communities
 
