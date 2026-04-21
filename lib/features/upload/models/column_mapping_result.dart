@@ -1,4 +1,4 @@
-class ManualMappingResult {
+class ColumnMappingResult {
   final String fileType;
   final String sheetName;
   final int headerRowIndex;
@@ -7,7 +7,7 @@ class ManualMappingResult {
   final Map<String, String> rawToCanonicalMapping;
   final Map<String, String> columnMapping;
 
-  const ManualMappingResult({
+  const ColumnMappingResult({
     required this.fileType,
     required this.sheetName,
     required this.headerRowIndex,

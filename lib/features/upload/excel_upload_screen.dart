@@ -1,10 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'models/excel_preview_data.dart';
+import 'models/column_mapping_result.dart';
 import 'models/import_format_profile.dart';
 import 'models/ledger_upload_file.dart';
-import 'models/manual_mapping_result.dart';
 import '../reconciliation/models/normalized_ledger_row.dart';
 import '../reconciliation/models/normalized_transaction_row.dart';
 import '../reconciliation/models/purchase_row.dart';
@@ -13,7 +15,7 @@ import 'services/excel_service.dart';
 import 'services/import_upload_flow_service.dart';
 import 'services/import_mapping_service.dart';
 import 'services/import_profile_service.dart';
-import '../manual_mapping/manual_mapping_screen.dart';
+import 'presentation/manual_mapping/column_mapping_screen.dart';
 import '../reconciliation/reconciliation_screen.dart';
 
 class ExcelUploadScreen extends StatefulWidget {
@@ -64,23 +66,24 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   List<NormalizedTransactionRow> normalizedTdsRows = [];
   String? detectedGstNo;
 
-  Future<ManualMappingResult?> showManualMappingScreen({
+  Future<ColumnMappingResult?> showColumnMappingScreen({
     required ExcelPreviewData previewData,
   }) async {
     if (!mounted) return null;
-    return Navigator.push<ManualMappingResult>(
+    return Navigator.push<ColumnMappingResult>(
       context,
       MaterialPageRoute(
-        builder: (_) => ManualMappingScreen(previewData: previewData),
+        builder: (_) => ColumnMappingScreen(previewData: previewData),
       ),
     );
   }
 
-  Future<ManualMappingResult?> _openImportManualMapping({
+  Future<ColumnMappingResult?> _openImportColumnMapping({
     required List<int> bytes,
     required String fileName,
     required ExcelImportType fileType,
     required ExcelValidationResult validation,
+    ImportSessionCache? sessionCache,
     String? preferredSheetName,
   }) async {
     final previewData = ExcelService.buildPreviewData(
@@ -91,6 +94,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       warnings: validation.warnings,
       confidenceScore: validation.confidenceScore,
       preferredSheetName: preferredSheetName,
+      sessionCache: sessionCache,
     );
 
     if (previewData == null) {
@@ -98,10 +102,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return null;
     }
 
-    return showManualMappingScreen(previewData: previewData);
+    return showColumnMappingScreen(previewData: previewData);
   }
 
-  Future<ManualMappingResult?> _openStoredFileManualMapping({
+  Future<ColumnMappingResult?> _openStoredFileColumnMapping({
     required LedgerUploadFile file,
   }) async {
     final fileType = file.sectionCode == '194Q'
@@ -115,6 +119,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       headerRowIndex: file.headerRowIndex ?? 0,
       headersTrusted: file.headersTrusted ?? true,
       columnMapping: file.columnMapping,
+      sessionCache: ImportSessionCache.fromBytes(file.bytes),
     );
 
     if (previewData == null) {
@@ -122,7 +127,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return null;
     }
 
-    return showManualMappingScreen(previewData: previewData);
+    return showColumnMappingScreen(previewData: previewData);
   }
 
   Future<String?> _show26QSheetSelectionDialog(List<String> sheets) async {
@@ -175,8 +180,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
   }
 
-  Future<void> _saveProfileFromManualResult({
-    required ManualMappingResult result,
+  Future<void> _saveProfileFromColumnMappingResult({
+    required ColumnMappingResult result,
     required String sampleSignature,
   }) async {
     if (!result.saveProfile ||
@@ -198,11 +203,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     await ImportProfileService.saveProfile(profile);
   }
 
-  bool _shouldAutoOpenManualMapping({
+  bool _shouldAutoOpenColumnMapping({
     required ExcelValidationResult validation,
     required ExcelImportType fileType,
   }) {
-    return ImportUploadFlowService.shouldAutoOpenManualMapping(
+    return ImportUploadFlowService.shouldAutoOpenColumnMapping(
       validation: validation,
       fileType: fileType,
     );
@@ -266,15 +271,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     required List<int> bytes,
     String? existingFileId,
     Map<String, String> initialMappedColumns = const {},
-    bool forceManualMapping = false,
+    bool forceColumnMapping = false,
   }) async {
     final response = await ImportUploadFlowService.preparePurchaseImport(
       buyerId: widget.selectedBuyerId,
       bytes: bytes,
       fileName: pickedFile.name,
-      openManualMapping: _openImportManualMapping,
+      openColumnMapping: _openImportColumnMapping,
       initialMappedColumns: initialMappedColumns,
-      forceManualMapping: forceManualMapping,
+      forceColumnMapping: forceColumnMapping,
     );
 
     if (response.isFailure) {
@@ -287,9 +292,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return null;
     }
 
-    if (result.manualMappingResult != null) {
-      await _saveProfileFromManualResult(
-        result: result.manualMappingResult!,
+    if (result.columnMappingResult != null) {
+      await _saveProfileFromColumnMappingResult(
+        result: result.columnMappingResult!,
         sampleSignature: result.sampleSignature,
       );
     }
@@ -331,15 +336,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     required List<int> bytes,
     String? existingFileId,
     Map<String, String> initialMappedColumns = const {},
-    bool forceManualMapping = false,
+    bool forceColumnMapping = false,
   }) async {
     final response = await ImportUploadFlowService.prepareGenericLedgerImport(
       sectionCode: sectionCode,
       bytes: bytes,
       fileName: pickedFile.name,
-      openManualMapping: _openImportManualMapping,
+      openColumnMapping: _openImportColumnMapping,
       initialMappedColumns: initialMappedColumns,
-      forceManualMapping: forceManualMapping,
+      forceColumnMapping: forceColumnMapping,
     );
 
     if (response.isFailure) {
@@ -374,15 +379,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<void> _remapSectionFile(String sectionCode, LedgerUploadFile file) async {
     _setSectionLoading(sectionCode, true);
     try {
-      final manualResult = await _openStoredFileManualMapping(file: file);
-      if (manualResult == null) {
+      final columnMappingResult = await _openStoredFileColumnMapping(file: file);
+      if (columnMappingResult == null) {
         _setSectionLoading(sectionCode, false);
         return;
       }
 
       final response = await ImportUploadFlowService.prepareSectionFileRemap(
         file: file,
-        manualMappingResult: manualResult,
+        columnMappingResult: columnMappingResult,
       );
       if (response.isFailure) {
         _setSectionLoading(sectionCode, false);
@@ -398,8 +403,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       if (sectionCode == '194Q') {
         if (result.sampleSignature != null) {
-          await _saveProfileFromManualResult(
-            result: manualResult,
+          await _saveProfileFromColumnMappingResult(
+            result: columnMappingResult,
             sampleSignature: result.sampleSignature!,
           );
         }
@@ -539,7 +544,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
-      final validation = ImportUploadFlowService.validateTds26QImport(bytes);
+      final validation = await ImportUploadFlowService.validateTds26QImport(
+        bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+      );
       String? preferredSheetName;
 
       if (validation.requiresUserSelection) {
@@ -547,18 +554,20 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         preferredSheetName = await _show26QSheetSelectionDialog(
           validation.candidateSheets.isNotEmpty
               ? validation.candidateSheets
-              : ExcelService.list26QSelectableSheets(bytes),
+              : await ExcelService.list26QSelectableSheetsInBackground(
+                  bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+                ),
         );
         if (preferredSheetName == null || preferredSheetName.trim().isEmpty) {
           return;
         }
       }
 
-      final shouldOpenManualMapping = _shouldAutoOpenManualMapping(
+      final shouldOpenColumnMapping = _shouldAutoOpenColumnMapping(
         validation: validation,
         fileType: ExcelImportType.tds26q,
       );
-      if (shouldOpenManualMapping) {
+      if (shouldOpenColumnMapping) {
         setState(() => isLoadingTds = false);
       }
 
@@ -566,7 +575,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         bytes: bytes,
         fileName: pickedFile.name,
         validation: validation,
-        openManualMapping: _openImportManualMapping,
+        openColumnMapping: _openImportColumnMapping,
         preferredSheetName: preferredSheetName,
       );
 
@@ -581,7 +590,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
-      if (shouldOpenManualMapping) {
+      if (shouldOpenColumnMapping) {
         setState(() => isLoadingTds = true);
       }
 
@@ -745,14 +754,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
   }
 
-  void _saveWorkspaceDraft() {
+  void _reviewWorkspaceStatus() {
     if (!_hasWorkspaceContent) {
-      _showUploadSnackBar('Add a 26Q file or source files before saving the workspace.');
+      _showUploadSnackBar(
+        'Add a 26Q file or source files to start building the workspace.',
+      );
       return;
     }
 
     _showUploadSnackBar(
-      'Workspace staged successfully. Continue uploading or open reconciliation when ready.',
+      'Workspace status: $_workspaceStatusLabel. $_workspaceStatusDetail',
     );
   }
 
@@ -779,7 +790,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Color _mappingStatusColor(LedgerUploadFile file) {
     switch (file.mappingStatus) {
-      case 'Manual mapping':
+      case 'Column mapping':
         return const Color(0xFFB45309);
       case 'Saved profile':
         return const Color(0xFF1D4ED8);
@@ -790,7 +801,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Color _mappingStatusBackground(LedgerUploadFile file) {
     switch (file.mappingStatus) {
-      case 'Manual mapping':
+      case 'Column mapping':
         return const Color(0xFFFEF3C7);
       case 'Saved profile':
         return const Color(0xFFDBEAFE);
@@ -1693,7 +1704,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: _hasWorkspaceContent ? _saveWorkspaceDraft : null,
+              onPressed: _hasWorkspaceContent ? _reviewWorkspaceStatus : null,
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 disabledForegroundColor: const Color(0xFF64748B),
@@ -1707,8 +1718,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save Workspace'),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Check Workspace'),
             ),
             const Spacer(),
             FilledButton.icon(

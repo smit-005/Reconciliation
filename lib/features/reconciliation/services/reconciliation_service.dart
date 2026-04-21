@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'mapping_service.dart';
+import '../models/reconciliation_status.dart';
 import 'grouping_service.dart';
 import '../models/normalized_transaction_row.dart';
 import '../models/purchase_row.dart';
@@ -316,7 +317,10 @@ class CalculationService {
 
     return SectionReconciliationResult(
       rows: mergedRows,
-      combinedSummary: _sumSectionSummaries(sectionSummaries),
+      combinedSummary: _buildSummary(
+        section: 'ALL',
+        rows: mergedRows,
+      ),
       sectionSummaries: sectionSummaries,
       rowsBySection: mergedRowsBySection,
     );
@@ -357,14 +361,14 @@ class CalculationService {
     final gstDerivedPanHints = <String, bool>{};
 
     for (final row in purchaseRows) {
-      final sellerPan = normalizePan(row.panNumber);
+      final sellerPan = row.normalizedPan;
       final sellerName = applyNameMapping(row.partyName, normalizedMapping);
       final normalizedSellerName =
-          normalizeName(sellerName.isNotEmpty ? sellerName : row.partyName);
+          sellerName.isNotEmpty ? normalizeName(sellerName) : row.normalizedName;
 
       final rawMonth = row.month;
       final financialYear = financialYearFromMonthKey(rawMonth);
-      final month = normalizeMonthKey(rawMonth);
+      final month = row.normalizedMonth;
 
       if (month.isEmpty || financialYear.isEmpty) continue;
 
@@ -583,10 +587,10 @@ class CalculationService {
         _SellerIdentity(
           originalName: row.partyName,
           mappedName: mappedName,
-          normalizedName: normalizeName(
-            mappedName.isNotEmpty ? mappedName : row.partyName,
-          ),
-          sellerPan: normalizePan(row.panNumber),
+          normalizedName: mappedName.isNotEmpty
+              ? normalizeName(mappedName)
+              : row.normalizedName,
+          sellerPan: row.normalizedPan,
         ),
       );
     }
@@ -597,10 +601,10 @@ class CalculationService {
         _SellerIdentity(
           originalName: row.deducteeName,
           mappedName: mappedName,
-          normalizedName: normalizeName(
-            mappedName.isNotEmpty ? mappedName : row.deducteeName,
-          ),
-          sellerPan: normalizePan(row.panNumber),
+          normalizedName: mappedName.isNotEmpty
+              ? normalizeName(mappedName)
+              : row.normalizedName,
+          sellerPan: row.normalizedPan,
         ),
       );
     }
@@ -1013,7 +1017,7 @@ class CalculationService {
   }
 
   static String _sourceSection(NormalizedTransactionRow row) {
-    return row.section.trim();
+    return row.normalizedSection.trim();
   }
 
   static bool _isUsableSection(String value) {
@@ -1032,14 +1036,14 @@ class CalculationService {
     final grouped = <String, Map<String, _NormalizedSourceGroup>>{};
 
     for (final row in rows) {
-      final sellerPan = normalizePan(row.panNumber);
+      final sellerPan = row.normalizedPan;
       final sellerName = applyNameMapping(row.partyName, nameMapping);
       final normalizedSellerName =
-          normalizeName(sellerName.isNotEmpty ? sellerName : row.partyName);
+          sellerName.isNotEmpty ? normalizeName(sellerName) : row.normalizedName;
       final rawMonth = row.month;
       final financialYear =
           row.financialYear.trim().isNotEmpty ? row.financialYear.trim() : financialYearFromMonthKey(rawMonth);
-      final month = normalizeMonthKey(rawMonth);
+      final month = row.normalizedMonth;
 
       if (month.isEmpty || financialYear.isEmpty) continue;
       if (sellerPan.isEmpty && normalizedSellerName.isEmpty) continue;
@@ -1411,10 +1415,15 @@ static ReconciliationStatusRemarks _buildStatusAndRemarks({
     return ReconciliationSummary(
       section: section,
       totalRows: rows.length,
-      matchedRows: rows.where((row) => row.status == 'Matched').length,
+      matchedRows:
+          rows.where((row) => row.status == ReconciliationStatus.matched).length,
       mismatchRows: mismatchRows,
-      purchaseOnlyRows: rows.where((row) => row.status == 'Purchase Only').length,
-      only26QRows: rows.where((row) => row.status == 'Only in 26Q').length,
+      purchaseOnlyRows: rows
+          .where((row) => row.status == ReconciliationStatus.purchaseOnly)
+          .length,
+      only26QRows: rows
+          .where((row) => row.status == ReconciliationStatus.onlyIn26Q)
+          .length,
       applicableButNo26QRows: applicableButNo26QRows,
       sourceAmount: rows.fold(0.0, (sum, row) => sum + row.basicAmount),
       applicableAmount: rows.fold(0.0, (sum, row) => sum + row.applicableAmount),

@@ -11,6 +11,10 @@ class PurchaseRow {
   final String productName;
   final double basicAmount;
   final double billAmount;
+  final String normalizedName;
+  final String normalizedPan;
+  final String normalizedMonth;
+  final String normalizedSection;
 
   PurchaseRow({
     required this.date,
@@ -22,7 +26,13 @@ class PurchaseRow {
     required this.productName,
     required this.basicAmount,
     required this.billAmount,
-  });
+    String? normalizedName,
+    String? normalizedPan,
+    String? normalizedMonth,
+    this.normalizedSection = '194Q',
+  }) : normalizedName = normalizedName ?? normalizeName(partyName),
+       normalizedPan = normalizedPan ?? normalizePan(panNumber),
+       normalizedMonth = normalizedMonth ?? month.trim();
 
   factory PurchaseRow.fromMap(Map<String, dynamic> map) {
     final rawDate = readAny(map, ['date', 'eom']) ?? '';

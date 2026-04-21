@@ -96,7 +96,7 @@ class MappingStatusBar extends StatelessWidget {
               backgroundColor: const Color(0xFF38BDF8),
               foregroundColor: const Color(0xFF082F49),
             ),
-            child: const Text('Save and Continue'),
+            child: const Text('Save Column Mapping'),
           ),
         ],
       ),

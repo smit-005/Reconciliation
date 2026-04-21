@@ -21,7 +21,7 @@ String normalizeName(String name) {
 }
 
 String normalizePan(String value) {
-  return value.trim().toUpperCase();
+  return value.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
 }
 
 String normalizeSection(String value) {
@@ -33,6 +33,7 @@ String normalizeSection(String value) {
   if (compact.isEmpty) return '';
 
   if (compact.contains('194IB')) return '194IB';
+  if (compact.contains('194I')) return '194I';
   if (compact.contains('194Q')) return '194Q';
   if (compact.contains('194C')) return '194C';
   if (compact.contains('194H')) return '194H';

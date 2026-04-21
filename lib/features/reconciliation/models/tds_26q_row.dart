@@ -1,4 +1,5 @@
 import '../../../core/utils/normalize_utils.dart';
+import '../../../core/utils/date_utils.dart';
 
 class Tds26QRow {
   final String month;
@@ -8,6 +9,10 @@ class Tds26QRow {
   final double deductedAmount;
   final double tds;
   final String section;
+  final String normalizedName;
+  final String normalizedPan;
+  final String normalizedMonth;
+  final String normalizedSection;
 
   Tds26QRow({
     required this.month,
@@ -17,7 +22,14 @@ class Tds26QRow {
     required this.deductedAmount,
     required this.tds,
     required this.section,
-  });
+    String? normalizedName,
+    String? normalizedPan,
+    String? normalizedMonth,
+    String? normalizedSection,
+  }) : normalizedName = normalizedName ?? normalizeName(deducteeName),
+       normalizedPan = normalizedPan ?? normalizePan(panNumber),
+       normalizedMonth = normalizedMonth ?? normalizeMonth(month),
+       normalizedSection = normalizedSection ?? normalizeSection(section);
 
   factory Tds26QRow.fromMap(Map<String, dynamic> map) {
     String rawSection = (map['section'] ?? '').toString();
@@ -60,6 +72,7 @@ class Tds26QRow {
     final t = text.toUpperCase();
 
     if (t.contains('194IB')) return '194IB';
+    if (t.contains('194I')) return '194I';
     if (t.contains('194Q')) return '194Q';
     if (t.contains('194C')) return '194C';
     if (t.contains('194H')) return '194H';
@@ -91,6 +104,7 @@ class Tds26QRow {
   static bool _isKnownSection(String value) {
     return value == '194Q' ||
         value == '194C' ||
+        value == '194I' ||
         value == '194H' ||
         value == '194J' ||
         value == '194IB';

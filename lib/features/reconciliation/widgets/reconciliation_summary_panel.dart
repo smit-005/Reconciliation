@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/reconciliation_status.dart';
 import 'reconciliation_common_widgets.dart';
 import 'reconciliation_analytics_panel.dart';
 
@@ -132,20 +133,38 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           summaryTile('Actual TDS', _fmt(actualTds)),
           summaryTile('TDS Difference', _fmt(tdsDifference)),
           summaryTile('Amount Difference', _fmt(amountDifference)),
-          summaryTile('Matched', matchedCount.toString()),
-          summaryTile('Timing Difference', timingDifferenceCount.toString()),
-          summaryTile('Short Deduction', shortDeductionCount.toString()),
-          summaryTile('Excess Deduction', excessDeductionCount.toString()),
-          summaryTile('Purchase Only', purchaseOnlyCount.toString()),
-          summaryTile('26Q Only', only26QCount.toString()),
-          summaryTile('Applicable but no 26Q', applicableButNo26QCount.toString()),
+          summaryTile(ReconciliationStatus.matched, matchedCount.toString()),
+          summaryTile(
+            ReconciliationStatus.timingDifference,
+            timingDifferenceCount.toString(),
+          ),
+          summaryTile(
+            ReconciliationStatus.shortDeduction,
+            shortDeductionCount.toString(),
+          ),
+          summaryTile(
+            ReconciliationStatus.excessDeduction,
+            excessDeductionCount.toString(),
+          ),
+          summaryTile(
+            ReconciliationStatus.purchaseOnly,
+            purchaseOnlyCount.toString(),
+          ),
+          summaryTile(
+            ReconciliationStatus.onlyIn26Q,
+            only26QCount.toString(),
+          ),
+          summaryTile(
+            ReconciliationStatus.applicableButNo26Q,
+            applicableButNo26QCount.toString(),
+          ),
           summaryTile('Short Deduction Amt', _fmt(shortDeductionAmount)),
           summaryTile('Excess Deduction Amt', _fmt(excessDeductionAmount)),
           summaryTile('Timing Difference Amt', _fmt(timingDifferenceAmount)),
           summaryTile('Purchase Only Amt', _fmt(purchaseOnlyAmount)),
-          summaryTile('26Q Only Amt', _fmt(only26QAmount)),
+          summaryTile('${ReconciliationStatus.onlyIn26Q} Amt', _fmt(only26QAmount)),
           summaryTile('Net Mismatch', _fmt(netMismatchAmount)),
-          summaryTile('Manual Mappings', manualMappingsCount.toString()),
+          summaryTile('Seller Mappings', manualMappingsCount.toString()),
         ],
       ),
     );
@@ -233,13 +252,13 @@ class ReconciliationSummaryPanel extends StatelessWidget {
                 textColor: Colors.teal.shade700,
               ),
               mismatchTile(
-                label: 'Purchase Only Rows',
+                label: '${ReconciliationStatus.purchaseOnly} Rows',
                 value: purchaseOnlyCount.toString(),
                 bgColor: Colors.blue.shade50,
                 textColor: Colors.blue.shade700,
               ),
               mismatchTile(
-                label: '26Q Only Rows',
+                label: '${ReconciliationStatus.onlyIn26Q} Rows',
                 value: only26QCount.toString(),
                 bgColor: Colors.purple.shade50,
                 textColor: Colors.purple.shade700,

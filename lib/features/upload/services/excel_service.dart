@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 
 import '../../../core/utils/normalize_utils.dart';
@@ -14,7 +17,34 @@ import '../../reconciliation/services/reconciliation_service.dart';
 
 part 'excel_preview_builder.dart';
 
+class ImportSessionCache {
+  final Uint8List bytes;
+  final SpreadsheetDecoder decoder;
+
+  ImportSessionCache._({
+    required this.bytes,
+    required this.decoder,
+  });
+
+  factory ImportSessionCache.fromBytes(List<int> sourceBytes) {
+    final bytes = sourceBytes is Uint8List
+        ? sourceBytes
+        : Uint8List.fromList(sourceBytes);
+    return ImportSessionCache._(
+      bytes: bytes,
+      decoder: SpreadsheetDecoder.decodeBytes(bytes, update: false),
+    );
+  }
+}
+
 class ExcelService {
+  static const bool _enableVerboseImportLogs = false;
+
+  static void _debugVerbose(String message) {
+    if (!_enableVerboseImportLogs) return;
+    debugPrint(message);
+  }
+
   static Future<List<ImportFormatProfile>> getBuyerImportProfiles({
     required String buyerId,
     required String fileType,
@@ -74,11 +104,297 @@ class ExcelService {
     }
   }
 
+  static Future<List<PurchaseRow>> parsePurchaseRowsInBackground(
+    Uint8List bytes,
+  ) async {
+    final payload = await compute(_parsePurchaseRowsInIsolate, bytes);
+    return _deserializePurchaseRowsForIsolate(payload);
+  }
+
+  static Future<List<Tds26QRow>> parseTds26QRowsInBackground(
+    Uint8List bytes, {
+    String? sheetName,
+  }) async {
+    final payload = await compute(_parseTds26QRowsInIsolate, <String, dynamic>{
+      'bytes': bytes,
+      'sheetName': sheetName,
+    });
+    return _deserializeTdsRowsForIsolate(payload);
+  }
+
+  static Future<ExcelValidationResult> validatePurchaseFileInBackground(
+    Uint8List bytes,
+  ) async {
+    final payload = await compute(_validatePurchaseFileInIsolate, bytes);
+    return _deserializeValidationForIsolate(payload);
+  }
+
+  static Future<ExcelValidationResult> validateTds26QFileInBackground(
+    Uint8List bytes, {
+    String? preferredSheetName,
+  }) async {
+    final payload = await compute(_validateTds26QFileInIsolate, <String, dynamic>{
+      'bytes': bytes,
+      'preferredSheetName': preferredSheetName,
+    });
+    return _deserializeValidationForIsolate(payload);
+  }
+
+  static Future<ExcelValidationResult> validateGenericLedgerFileInBackground(
+    Uint8List bytes,
+  ) async {
+    final payload = await compute(_validateGenericLedgerFileInIsolate, bytes);
+    return _deserializeValidationForIsolate(payload);
+  }
+
+  static Future<List<String>> list26QSelectableSheetsInBackground(
+    Uint8List bytes,
+  ) {
+    return compute(_list26QSelectableSheetsInIsolate, bytes);
+  }
+
+  static Future<List<NormalizedLedgerRow>> parseGenericLedgerRowsInBackground(
+    Uint8List bytes, {
+    required String defaultSection,
+    String sourceFileName = '',
+  }) async {
+    final payload = await compute(
+      _parseGenericLedgerRowsInIsolate,
+      <String, dynamic>{
+        'bytes': bytes,
+        'defaultSection': defaultSection,
+        'sourceFileName': sourceFileName,
+      },
+    );
+    return _deserializeNormalizedLedgerRowsForIsolate(payload);
+  }
+
+  static Future<List<NormalizedLedgerRow>>
+  parseGenericLedgerRowsWithProfileInBackground(
+    Uint8List bytes, {
+    required String sheetName,
+    required int headerRowIndex,
+    required bool headersTrusted,
+    required Map<String, String> columnMapping,
+    required String defaultSection,
+    String sourceFileName = '',
+  }) async {
+    final payload = await compute(
+      _parseGenericLedgerRowsWithProfileInIsolate,
+      <String, dynamic>{
+        'bytes': bytes,
+        'sheetName': sheetName,
+        'headerRowIndex': headerRowIndex,
+        'headersTrusted': headersTrusted,
+        'columnMapping': columnMapping,
+        'defaultSection': defaultSection,
+        'sourceFileName': sourceFileName,
+      },
+    );
+    return _deserializeNormalizedLedgerRowsForIsolate(payload);
+  }
+
+  static SpreadsheetDecoder _decoderFromCache(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
+    if (sessionCache != null) {
+      return sessionCache.decoder;
+    }
+    return SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  }
+
+  static List<Map<String, dynamic>> _serializePurchaseRowsForIsolate(
+    List<PurchaseRow> rows,
+  ) {
+    return rows
+        .map(
+          (row) => <String, dynamic>{
+            'date': row.date,
+            'month': row.month,
+            'billNo': row.billNo,
+            'partyName': row.partyName,
+            'gstNo': row.gstNo,
+            'panNumber': row.panNumber,
+            'productName': row.productName,
+            'basicAmount': row.basicAmount,
+            'billAmount': row.billAmount,
+          },
+        )
+        .toList();
+  }
+
+  static List<PurchaseRow> _deserializePurchaseRowsForIsolate(List payload) {
+    return payload
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .map(
+          (row) => PurchaseRow(
+            date: row['date'] as String? ?? '',
+            month: row['month'] as String? ?? '',
+            billNo: row['billNo'] as String? ?? '',
+            partyName: row['partyName'] as String? ?? '',
+            gstNo: row['gstNo'] as String? ?? '',
+            panNumber: row['panNumber'] as String? ?? '',
+            productName: row['productName'] as String? ?? '',
+            basicAmount: (row['basicAmount'] as num?)?.toDouble() ?? 0.0,
+            billAmount: (row['billAmount'] as num?)?.toDouble() ?? 0.0,
+          ),
+        )
+        .toList();
+  }
+
+  static List<Map<String, dynamic>> _serializeTdsRowsForIsolate(
+    List<Tds26QRow> rows,
+  ) {
+    return rows
+        .map(
+          (row) => <String, dynamic>{
+            'month': row.month,
+            'financialYear': row.financialYear,
+            'deducteeName': row.deducteeName,
+            'panNumber': row.panNumber,
+            'deductedAmount': row.deductedAmount,
+            'tds': row.tds,
+            'section': row.section,
+          },
+        )
+        .toList();
+  }
+
+  static List<Tds26QRow> _deserializeTdsRowsForIsolate(List payload) {
+    return payload
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .map(
+          (row) => Tds26QRow(
+            month: row['month'] as String? ?? '',
+            financialYear: row['financialYear'] as String? ?? '',
+            deducteeName: row['deducteeName'] as String? ?? '',
+            panNumber: row['panNumber'] as String? ?? '',
+            deductedAmount: (row['deductedAmount'] as num?)?.toDouble() ?? 0.0,
+            tds: (row['tds'] as num?)?.toDouble() ?? 0.0,
+            section: row['section'] as String? ?? '',
+          ),
+        )
+        .toList();
+  }
+
+  static List<Map<String, dynamic>> _serializeNormalizedLedgerRowsForIsolate(
+    List<NormalizedLedgerRow> rows,
+  ) {
+    return rows
+        .map(
+          (row) => <String, dynamic>{
+            'sourceType': row.sourceType,
+            'sourceFileName': row.sourceFileName,
+            'sectionCode': row.sectionCode,
+            'transactionDateRaw': row.transactionDateRaw,
+            'month': row.month,
+            'financialYear': row.financialYear,
+            'partyName': row.partyName,
+            'panNumber': row.panNumber,
+            'gstNo': row.gstNo,
+            'documentNo': row.documentNo,
+            'description': row.description,
+            'amount': row.amount,
+            'taxableAmount': row.taxableAmount,
+            'tdsAmount': row.tdsAmount,
+            'section': row.section,
+          },
+        )
+        .toList();
+  }
+
+  static List<NormalizedLedgerRow> _deserializeNormalizedLedgerRowsForIsolate(
+    List payload,
+  ) {
+    return payload
+        .map((entry) => Map<String, dynamic>.from(entry as Map))
+        .map(
+          (row) => NormalizedLedgerRow(
+            sourceType: row['sourceType'] as String? ?? '',
+            sourceFileName: row['sourceFileName'] as String? ?? '',
+            sectionCode: row['sectionCode'] as String? ?? '',
+            transactionDateRaw: row['transactionDateRaw'] as String? ?? '',
+            month: row['month'] as String? ?? '',
+            financialYear: row['financialYear'] as String? ?? '',
+            partyName: row['partyName'] as String? ?? '',
+            panNumber: row['panNumber'] as String? ?? '',
+            gstNo: row['gstNo'] as String? ?? '',
+            documentNo: row['documentNo'] as String? ?? '',
+            description: row['description'] as String? ?? '',
+            amount: (row['amount'] as num?)?.toDouble() ?? 0.0,
+            taxableAmount: (row['taxableAmount'] as num?)?.toDouble() ?? 0.0,
+            tdsAmount: (row['tdsAmount'] as num?)?.toDouble() ?? 0.0,
+            section: row['section'] as String? ?? '',
+          ),
+        )
+        .toList();
+  }
+
+  static Map<String, dynamic> _serializeValidationForIsolate(
+    ExcelValidationResult validation,
+  ) {
+    return {
+      'isValid': validation.isValid,
+      'message': validation.message,
+      'detectedSheet': validation.detectedSheet,
+      'headerRowIndex': validation.headerRowIndex,
+      'detectedType': validation.detectedType?.name,
+      'mappedColumns': validation.mappedColumns,
+      'warnings': validation.warnings,
+      'confidenceScore': validation.confidenceScore,
+      'requiresManualMapping': validation.requiresManualMapping,
+      'requiresUserSelection': validation.requiresUserSelection,
+      'candidateSheets': validation.candidateSheets,
+      'unmappedRawHeaders': validation.unmappedRawHeaders,
+      'decision': validation.decision.name,
+    };
+  }
+
+  static ExcelValidationResult _deserializeValidationForIsolate(
+    Map<String, dynamic> payload,
+  ) {
+    final detectedTypeName = payload['detectedType'] as String?;
+    final decisionName = payload['decision'] as String? ?? 'invalidMapping';
+
+    return ExcelValidationResult(
+      isValid: payload['isValid'] as bool? ?? false,
+      message: payload['message'] as String? ?? '',
+      detectedSheet: payload['detectedSheet'] as String?,
+      headerRowIndex: payload['headerRowIndex'] as int?,
+      detectedType: detectedTypeName == null
+          ? null
+          : ExcelImportType.values.firstWhere(
+              (value) => value.name == detectedTypeName,
+            ),
+      mappedColumns: Map<String, String>.from(
+        payload['mappedColumns'] as Map? ?? const {},
+      ),
+      warnings: List<String>.from(payload['warnings'] as List? ?? const []),
+      confidenceScore: (payload['confidenceScore'] as num?)?.toDouble() ?? 0.0,
+      requiresManualMapping: payload['requiresManualMapping'] as bool? ?? false,
+      requiresUserSelection:
+          payload['requiresUserSelection'] as bool? ?? false,
+      candidateSheets: List<String>.from(
+        payload['candidateSheets'] as List? ?? const [],
+      ),
+      unmappedRawHeaders: List<String>.from(
+        payload['unmappedRawHeaders'] as List? ?? const [],
+      ),
+      decision: ExcelImportDecision.values.firstWhere(
+        (value) => value.name == decisionName,
+        orElse: () => ExcelImportDecision.invalidMapping,
+      ),
+    );
+  }
+
   static List<Map<String, dynamic>> excelToMapList(
       List<int> bytes, {
         ExcelImportType? forcedType,
+        String? preferredSheetName,
+        ImportSessionCache? sessionCache,
       }) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
       return [];
@@ -87,6 +403,7 @@ class ExcelService {
     final sheetInfo = _findBestSheetAndHeader(
       decoder,
       forcedType: forcedType,
+      preferredSheetName: preferredSheetName,
     );
 
     if (sheetInfo == null) {
@@ -105,7 +422,7 @@ class ExcelService {
       forcedType: sheetInfo.detectedType,
       headersTrusted: sheetInfo.headersTrusted,
     );
-    debugPrint(
+    _debugVerbose(
       'FINAL CANONICAL MAPPING => type=${sheetInfo.detectedType.name} '
       'headers=${mappedHeaders.whereType<String>().toList()}',
     );
@@ -153,8 +470,9 @@ class ExcelService {
     List<int> bytes, {
     ExcelImportType? forcedType,
     String? preferredSheetName,
+    ImportSessionCache? sessionCache,
   }) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
     if (decoder.tables.isEmpty) return null;
 
     final sheetInfo = _findBestSheetAndHeader(
@@ -182,8 +500,9 @@ class ExcelService {
     required int headerRowIndex,
     required bool headersTrusted,
     required Map<String, String> columnMapping,
+    ImportSessionCache? sessionCache,
   }) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
     final table = decoder.tables[sheetName];
     if (table == null || table.rows.isEmpty) {
       return [];
@@ -193,7 +512,7 @@ class ExcelService {
       columnMapping,
       type: forcedType,
     );
-    debugPrint(
+    _debugVerbose(
       'FINAL CANONICAL MAPPING => type=${forcedType.name} mapping=$normalizedColumnMapping',
     );
 
@@ -232,17 +551,21 @@ class ExcelService {
     return rows;
   }
 
-  static List<PurchaseRow> parsePurchaseRows(List<int> bytes) {
+  static List<PurchaseRow> parsePurchaseRows(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
     final mapList = excelToMapList(
       bytes,
       forcedType: ExcelImportType.purchase,
+      sessionCache: sessionCache,
     );
 
     final parsed = mapList.map((row) {
       final parsedRow = PurchaseRow.fromMap(row);
 
       if (parsedRow.partyName.trim().toLowerCase() == 'ganesh cattle feed') {
-        debugPrint(
+        _debugVerbose(
           'DEBUG PURCHASE PARSE => seller=${parsedRow.partyName}, '
           'rawDate=${(readAny(row, ['date', 'eom']) ?? '').trim()}, '
           'dateCol=${(row['date'] ?? '').toString().trim()}, '
@@ -258,7 +581,7 @@ class ExcelService {
     final deduped = _dedupePurchaseRows(parsed);
 
     for (final row in deduped.take(10)) {
-      debugPrint(
+      _debugVerbose(
         'DEBUG PURCHASE => party=${row.partyName}, gst=${row.gstNo}, pan=${row.panNumber}, basic=${row.basicAmount}, bill=${row.billAmount}',
       );
     }
@@ -272,6 +595,7 @@ class ExcelService {
     required int headerRowIndex,
     required bool headersTrusted,
     required Map<String, String> columnMapping,
+    ImportSessionCache? sessionCache,
   }) {
     final mapList = excelToMapListWithProfile(
       bytes,
@@ -280,6 +604,7 @@ class ExcelService {
       headerRowIndex: headerRowIndex,
       headersTrusted: headersTrusted,
       columnMapping: columnMapping,
+      sessionCache: sessionCache,
     );
 
     final parsed = mapList.map((row) => PurchaseRow.fromMap(row)).toList();
@@ -293,8 +618,11 @@ class ExcelService {
     bool headersTrusted,
     ExcelValidationResult validation,
     List<PurchaseRow>? parsedRows,
-  })? preparePurchaseUploadData(List<int> bytes) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  })? preparePurchaseUploadData(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
       return null;
@@ -345,7 +673,7 @@ class ExcelService {
     if ((!sheetInfo.headersTrusted && confidenceScore < 0.60) ||
         (sheetInfo.headersTrusted && confidenceScore < 0.70)) {
       warnings.add(
-        'Header detection is weak. Manual mapping is required instead of auto-parsing.',
+        'Header detection is weak. Column mapping is required instead of auto-parsing.',
       );
       return (
         sheetName: sheetInfo.sheetName,
@@ -514,6 +842,7 @@ class ExcelService {
     List<String> warnings = const [],
     double? confidenceScore,
     String? preferredSheetName,
+    ImportSessionCache? sessionCache,
   }) {
     return _buildPreviewData(
       bytes,
@@ -523,6 +852,7 @@ class ExcelService {
       warnings: warnings,
       confidenceScore: confidenceScore,
       preferredSheetName: preferredSheetName,
+      sessionCache: sessionCache,
     );
   }
 
@@ -536,6 +866,7 @@ class ExcelService {
     required Map<String, String> columnMapping,
     List<String> warnings = const [],
     double? confidenceScore,
+    ImportSessionCache? sessionCache,
   }) {
     return _buildPreviewDataWithProfile(
       bytes,
@@ -547,20 +878,27 @@ class ExcelService {
       columnMapping: columnMapping,
       warnings: warnings,
       confidenceScore: confidenceScore,
+      sessionCache: sessionCache,
     );
   }
 
-  static List<Tds26QRow> parseTds26QRows(List<int> bytes) {
+  static List<Tds26QRow> parseTds26QRows(
+    List<int> bytes, {
+    String? sheetName,
+    ImportSessionCache? sessionCache,
+  }) {
     final mapList = excelToMapList(
       bytes,
       forcedType: ExcelImportType.tds26q,
+      preferredSheetName: sheetName,
+      sessionCache: sessionCache,
     );
 
     final parsed = mapList.map((row) => Tds26QRow.fromMap(row)).toList();
     final deduped = _dedupeTdsRows(parsed);
 
     for (final row in deduped.take(5)) {
-      debugPrint(
+      _debugVerbose(
         'DEBUG 26Q => month=${row.month}, party=${row.deducteeName}, '
             'pan=${row.panNumber}, deducted=${row.deductedAmount}, tds=${row.tds}, section=${row.section}',
       );
@@ -575,6 +913,7 @@ class ExcelService {
     required int headerRowIndex,
     required bool headersTrusted,
     required Map<String, String> columnMapping,
+    ImportSessionCache? sessionCache,
   }) {
     final mapList = excelToMapListWithProfile(
       bytes,
@@ -583,6 +922,7 @@ class ExcelService {
       headerRowIndex: headerRowIndex,
       headersTrusted: headersTrusted,
       columnMapping: columnMapping,
+      sessionCache: sessionCache,
     );
 
     final parsed = mapList.map((row) => Tds26QRow.fromMap(row)).toList();
@@ -593,10 +933,12 @@ class ExcelService {
     List<int> bytes, {
     required String defaultSection,
     String sourceFileName = '',
+    ImportSessionCache? sessionCache,
   }) {
     final mapList = excelToMapList(
       bytes,
       forcedType: ExcelImportType.genericLedger,
+      sessionCache: sessionCache,
     );
 
     final parsed = mapList
@@ -620,6 +962,7 @@ class ExcelService {
     required Map<String, String> columnMapping,
     required String defaultSection,
     String sourceFileName = '',
+    ImportSessionCache? sessionCache,
   }) {
     final mapList = excelToMapListWithProfile(
       bytes,
@@ -628,6 +971,7 @@ class ExcelService {
       headerRowIndex: headerRowIndex,
       headersTrusted: headersTrusted,
       columnMapping: columnMapping,
+      sessionCache: sessionCache,
     );
 
     final parsed = mapList
@@ -643,8 +987,11 @@ class ExcelService {
     return _dedupeNormalizedLedgerRows(parsed);
   }
 
-  static ExcelValidationResult validatePurchaseFile(List<int> bytes) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  static ExcelValidationResult validatePurchaseFile(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
       return ExcelValidationResult.invalid(
@@ -688,14 +1035,14 @@ class ExcelService {
     );
     final warnings = <String>[];
 
-    debugPrint('PURCHASE PRESENT HEADERS => $presentHeaders');
+    _debugVerbose('PURCHASE PRESENT HEADERS => $presentHeaders');
 
     final hasPurchaseDate = _hasPurchaseDateColumn(presentHeaders);
     final hasPurchaseAmount = _hasPurchaseAmountColumn(presentHeaders);
 
-    debugPrint('FINAL HEADERS => $presentHeaders');
-    debugPrint('HAS DATE => $hasPurchaseDate');
-    debugPrint('HAS AMOUNT => $hasPurchaseAmount');
+    _debugVerbose('FINAL HEADERS => $presentHeaders');
+    _debugVerbose('HAS DATE => $hasPurchaseDate');
+    _debugVerbose('HAS AMOUNT => $hasPurchaseAmount');
 
     final missing = <String>[
       if (!hasPurchaseDate) 'Date / EOM',
@@ -709,7 +1056,7 @@ class ExcelService {
     if ((!sheetInfo.headersTrusted && confidenceScore < 0.60) ||
         (sheetInfo.headersTrusted && confidenceScore < 0.70)) {
       warnings.add(
-        'Header detection is weak. Manual mapping is required instead of auto-parsing.',
+        'Header detection is weak. Column mapping is required instead of auto-parsing.',
       );
       return ExcelValidationResult.manualReview(
         detectedSheet: sheetInfo.sheetName,
@@ -754,7 +1101,12 @@ class ExcelService {
       );
     }
 
-    final parsed = parsePurchaseRows(bytes);
+    final parsed = _parsePurchaseRowsFromPreparedSheet(
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: sheetInfo.headersTrusted,
+    );
 
     if (parsed.isEmpty) {
       return ExcelValidationResult.manualReview(
@@ -823,8 +1175,12 @@ class ExcelService {
     );
   }
 
-  static ExcelValidationResult validateTds26QFile(List<int> bytes) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  static ExcelValidationResult validateTds26QFile(
+    List<int> bytes, {
+    String? preferredSheetName,
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
       return ExcelValidationResult.invalid(
@@ -833,11 +1189,13 @@ class ExcelService {
     }
 
     final selectableSheets = _list26QSelectableSheetsFromDecoder(decoder);
-    final preferred26QSheet = _detectBest26QSheet(
-      {
-        for (final entry in decoder.tables.entries) entry.key: entry.value.rows,
-      },
-    );
+    final preferred26QSheet = preferredSheetName ??
+        _detectBest26QSheet(
+          {
+            for (final entry in decoder.tables.entries)
+              entry.key: entry.value.rows,
+          },
+        );
 
     if (preferred26QSheet == null) {
       return ExcelValidationResult.selectionRequired(
@@ -896,7 +1254,7 @@ class ExcelService {
     if ((!sheetInfo.headersTrusted && confidenceScore < 0.60) ||
         (sheetInfo.headersTrusted && confidenceScore < 0.70)) {
       warnings.add(
-        'Header detection is weak. Manual mapping is required instead of auto-parsing.',
+        'Header detection is weak. Column mapping is required instead of auto-parsing.',
       );
       return ExcelValidationResult.valid(
         detectedSheet: sheetInfo.sheetName,
@@ -919,7 +1277,12 @@ class ExcelService {
       );
     }
 
-    final parsed = parseTds26QRows(bytes);
+    final parsed = _parseTdsRowsFromPreparedSheet(
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: sheetInfo.headersTrusted,
+    );
 
     if (parsed.isEmpty) {
       return ExcelValidationResult.invalid(
@@ -958,8 +1321,11 @@ class ExcelService {
     );
   }
 
-  static ExcelValidationResult validateGenericLedgerFile(List<int> bytes) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  static ExcelValidationResult validateGenericLedgerFile(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
       return ExcelValidationResult.invalid(
@@ -1015,7 +1381,7 @@ class ExcelService {
     if ((!sheetInfo.headersTrusted && confidenceScore < 0.60) ||
         (sheetInfo.headersTrusted && confidenceScore < 0.70)) {
       warnings.add(
-        'Header detection is weak. Manual mapping is required instead of auto-parsing.',
+        'Header detection is weak. Column mapping is required instead of auto-parsing.',
       );
       return ExcelValidationResult.valid(
         detectedSheet: sheetInfo.sheetName,
@@ -1341,7 +1707,7 @@ class ExcelService {
 
     if (_isLikely26QReferenceSheet(rows)) {
       score -= 80;
-      debugPrint(
+      _debugVerbose(
         '26Q SHEET SCORE => $sheetName treated as reference/master sheet',
       );
     }
@@ -1356,7 +1722,7 @@ class ExcelService {
 
     for (final entry in sheets.entries) {
       final score = _score26QSheet(entry.key, entry.value);
-      debugPrint(
+      _debugVerbose(
         '26Q SHEET SCORE => ${entry.key}: $score '
         '(PAN:${_containsPanPattern(entry.value)} '
         'SEC:${_containsSectionValues(entry.value)} '
@@ -1388,8 +1754,11 @@ class ExcelService {
     return bestSheet;
   }
 
-  static List<String> list26QSelectableSheets(List<int> bytes) {
-    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  static List<String> list26QSelectableSheets(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
     if (decoder.tables.isEmpty) return const [];
     return _list26QSelectableSheetsFromDecoder(decoder);
   }
@@ -1444,7 +1813,7 @@ class ExcelService {
         _containsTdsAmountColumn(rows);
 
     if (!hasTransactionSignals) {
-      debugPrint('Rejected ${headerRow.join(' | ')} as reference sheet');
+      _debugVerbose('Rejected ${headerRow.join(' | ')} as reference sheet');
     }
 
     return !hasTransactionSignals;
@@ -2026,7 +2395,7 @@ class ExcelService {
 
         final profile = _analyzeColumnProfile(samples);
         final scores = _scoreGenericLedgerColumn(samples, profile);
-        debugPrint(
+        _debugVerbose(
           'GENERIC LEDGER COLUMN SCORE => COL_$c '
           'samples=${samples.take(2).join(' | ')} '
           'scores=$scores',
@@ -2039,7 +2408,7 @@ class ExcelService {
         assigned.add(best.$1);
       }
 
-      debugPrint(
+      _debugVerbose(
         'GENERIC LEDGER INFERRED COLUMNS => '
         '${mapped.asMap().entries.where((e) => e.value != null).map((e) => 'COL_${e.key}:${e.value}').join(', ')}',
       );
@@ -2539,6 +2908,23 @@ class ExcelService {
 
     final parsed = mapList.map((row) => PurchaseRow.fromMap(row)).toList();
     return _dedupePurchaseRows(parsed);
+  }
+
+  static List<Tds26QRow> _parseTdsRowsFromPreparedSheet({
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required List<String?> mappedHeaders,
+    required bool headersTrusted,
+  }) {
+    final mapList = _buildRowMapsFromMappedHeaders(
+      rows: rows,
+      headerRowIndex: headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: headersTrusted,
+    );
+
+    final parsed = mapList.map((row) => Tds26QRow.fromMap(row)).toList();
+    return _dedupeTdsRows(parsed);
   }
 
   static List<Map<String, dynamic>> _buildRowMapsFromMappedHeaders({
@@ -3054,7 +3440,7 @@ class ExcelValidationResult {
     required Map<String, String> mappedColumns,
     List<String> warnings = const [],
     double confidenceScore = 0.0,
-    String message = 'Manual mapping review is recommended before import.',
+    String message = 'Column mapping review is recommended before import.',
     List<String> unmappedRawHeaders = const [],
   }) {
     return ExcelValidationResult(
@@ -3118,4 +3504,84 @@ enum ExcelImportDecision {
   autoImport,
   manualReview,
   invalidMapping,
+}
+
+Future<List<Map<String, dynamic>>> _parsePurchaseRowsInIsolate(
+  Uint8List bytes,
+) async {
+  return ExcelService._serializePurchaseRowsForIsolate(
+    ExcelService.parsePurchaseRows(bytes),
+  );
+}
+
+Future<List<Map<String, dynamic>>> _parseTds26QRowsInIsolate(
+  Map<String, dynamic> payload,
+) async {
+  return ExcelService._serializeTdsRowsForIsolate(
+    ExcelService.parseTds26QRows(
+      payload['bytes'] as Uint8List,
+      sheetName: payload['sheetName'] as String?,
+    ),
+  );
+}
+
+Future<List<Map<String, dynamic>>> _parseGenericLedgerRowsInIsolate(
+  Map<String, dynamic> payload,
+) async {
+  return ExcelService._serializeNormalizedLedgerRowsForIsolate(
+    ExcelService.parseGenericLedgerRows(
+      payload['bytes'] as Uint8List,
+      defaultSection: payload['defaultSection'] as String,
+      sourceFileName: payload['sourceFileName'] as String? ?? '',
+    ),
+  );
+}
+
+Future<List<Map<String, dynamic>>> _parseGenericLedgerRowsWithProfileInIsolate(
+  Map<String, dynamic> payload,
+) async {
+  return ExcelService._serializeNormalizedLedgerRowsForIsolate(
+    ExcelService.parseGenericLedgerRowsWithProfile(
+      payload['bytes'] as Uint8List,
+      sheetName: payload['sheetName'] as String,
+      headerRowIndex: payload['headerRowIndex'] as int,
+      headersTrusted: payload['headersTrusted'] as bool,
+      columnMapping: Map<String, String>.from(payload['columnMapping'] as Map),
+      defaultSection: payload['defaultSection'] as String,
+      sourceFileName: payload['sourceFileName'] as String? ?? '',
+    ),
+  );
+}
+
+Future<Map<String, dynamic>> _validatePurchaseFileInIsolate(
+  Uint8List bytes,
+) async {
+  return ExcelService._serializeValidationForIsolate(
+    ExcelService.validatePurchaseFile(bytes),
+  );
+}
+
+Future<Map<String, dynamic>> _validateTds26QFileInIsolate(
+  Map<String, dynamic> payload,
+) async {
+  return ExcelService._serializeValidationForIsolate(
+    ExcelService.validateTds26QFile(
+      payload['bytes'] as Uint8List,
+      preferredSheetName: payload['preferredSheetName'] as String?,
+    ),
+  );
+}
+
+Future<Map<String, dynamic>> _validateGenericLedgerFileInIsolate(
+  Uint8List bytes,
+) async {
+  return ExcelService._serializeValidationForIsolate(
+    ExcelService.validateGenericLedgerFile(bytes),
+  );
+}
+
+Future<List<String>> _list26QSelectableSheetsInIsolate(
+  Uint8List bytes,
+) async {
+  return ExcelService.list26QSelectableSheets(bytes);
 }

@@ -7,10 +7,11 @@ class MappingService {
   /// SAVE mapping (called when user manually maps)
   static Future<void> saveMapping(SellerMapping mapping) async {
     final db = await DBHelper.database;
+    final normalizedMap = mapping.toMap();
 
     await db.insert(
       'seller_mappings',
-      mapping.toMap(),
+      normalizedMap,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }

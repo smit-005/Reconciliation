@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
 import '../models/reconciliation_row.dart';
+import '../models/reconciliation_status.dart';
 import 'reconciliation_service.dart';
 
 class ExcelExportService {
@@ -367,17 +368,17 @@ class ExcelExportService {
       final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 17);
       rowRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
 
-      if (row.status == 'Matched') {
+      if (row.status == ReconciliationStatus.matched) {
         rowRange.cellStyle.backColor = '#E8F5E9';
-      } else if (row.status == 'Timing Difference') {
+      } else if (row.status == ReconciliationStatus.timingDifference) {
         rowRange.cellStyle.backColor = '#E3F2FD';
-      } else if (row.status == 'Short Deduction') {
+      } else if (row.status == ReconciliationStatus.shortDeduction) {
         rowRange.cellStyle.backColor = '#FFF3E0';
-      } else if (row.status == 'Excess Deduction') {
+      } else if (row.status == ReconciliationStatus.excessDeduction) {
         rowRange.cellStyle.backColor = '#FFEBEE';
-      } else if (row.status == 'Purchase Only') {
+      } else if (row.status == ReconciliationStatus.purchaseOnly) {
         rowRange.cellStyle.backColor = '#EAF3FF';
-      } else if (row.status == '26Q Only') {
+      } else if (row.status == ReconciliationStatus.onlyIn26Q) {
         rowRange.cellStyle.backColor = '#F3E5F5';
       } else {
         rowRange.cellStyle.backColor = '#FFF0F0';
@@ -473,13 +474,13 @@ class ExcelExportService {
       'Actual TDS',
       'TDS Difference',
       'Amount Difference',
-      'Matched Rows',
-      'Timing Difference Rows',
-      'Short Deduction Rows',
-      'Excess Deduction Rows',
-      'Purchase Only Rows',
-      '26Q Only Rows',
-      'Applicable but no 26Q',
+      '${ReconciliationStatus.matched} Rows',
+      '${ReconciliationStatus.timingDifference} Rows',
+      '${ReconciliationStatus.shortDeduction} Rows',
+      '${ReconciliationStatus.excessDeduction} Rows',
+      '${ReconciliationStatus.purchaseOnly} Rows',
+      '${ReconciliationStatus.onlyIn26Q} Rows',
+      ReconciliationStatus.applicableButNo26Q,
     ];
 
     final values = [
@@ -494,12 +495,27 @@ class ExcelExportService {
       totalActualTds.toStringAsFixed(2),
       totalTdsDifference.toStringAsFixed(2),
       totalAmountDifference.toStringAsFixed(2),
-      rows.where((e) => e.status == 'Matched').length.toString(),
-      rows.where((e) => e.status == 'Timing Difference').length.toString(),
-      rows.where((e) => e.status == 'Short Deduction').length.toString(),
-      rows.where((e) => e.status == 'Excess Deduction').length.toString(),
-      rows.where((e) => e.status == 'Purchase Only').length.toString(),
-      rows.where((e) => e.status == '26Q Only').length.toString(),
+      rows.where((e) => e.status == ReconciliationStatus.matched).length.toString(),
+      rows
+          .where((e) => e.status == ReconciliationStatus.timingDifference)
+          .length
+          .toString(),
+      rows
+          .where((e) => e.status == ReconciliationStatus.shortDeduction)
+          .length
+          .toString(),
+      rows
+          .where((e) => e.status == ReconciliationStatus.excessDeduction)
+          .length
+          .toString(),
+      rows
+          .where((e) => e.status == ReconciliationStatus.purchaseOnly)
+          .length
+          .toString(),
+      rows
+          .where((e) => e.status == ReconciliationStatus.onlyIn26Q)
+          .length
+          .toString(),
       rows
           .where(
             (e) =>
@@ -597,7 +613,7 @@ class ExcelExportService {
       sheet.getRangeByIndex(rowIndex, 9)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.amountDifference)));
       sheet.getRangeByIndex(rowIndex, 10).setNumber(
-        rows.where((e) => e.status != 'Matched').length.toDouble(),
+        rows.where((e) => e.status != ReconciliationStatus.matched).length.toDouble(),
       );
 
       final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
@@ -804,17 +820,17 @@ class ExcelExportService {
 
           final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
           sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 20;
-          if (r.status == 'Matched') {
+          if (r.status == ReconciliationStatus.matched) {
             range.cellStyle.backColor = '#E2F0D9';
-          } else if (r.status == 'Short Deduction') {
+          } else if (r.status == ReconciliationStatus.shortDeduction) {
             range.cellStyle.backColor = '#FCE4D6';
-          } else if (r.status == 'Excess Deduction') {
+          } else if (r.status == ReconciliationStatus.excessDeduction) {
             range.cellStyle.backColor = '#F4CCCC';
-          } else if (r.status == 'Timing Difference') {
+          } else if (r.status == ReconciliationStatus.timingDifference) {
             range.cellStyle.backColor = '#DDEBF7';
-          } else if (r.status == 'Purchase Only') {
+          } else if (r.status == ReconciliationStatus.purchaseOnly) {
             range.cellStyle.backColor = '#EAF3FF';
-          } else if (r.status == '26Q Only') {
+          } else if (r.status == ReconciliationStatus.onlyIn26Q) {
             range.cellStyle.backColor = '#F1E6FF';
           } else {
             range.cellStyle.backColor = '#F5F5F5';
@@ -957,17 +973,17 @@ class ExcelExportService {
 
   static String getRiskLevel(String status) {
     switch (status) {
-      case 'Applicable but no 26Q':
-      case 'Section Missing':
+      case ReconciliationStatus.applicableButNo26Q:
+      case ReconciliationStatus.sectionMissing:
         return 'HIGH';
-      case 'Short Deduction':
-      case '26Q Only':
-      case 'Purchase Only':
+      case ReconciliationStatus.shortDeduction:
+      case ReconciliationStatus.onlyIn26Q:
+      case ReconciliationStatus.purchaseOnly:
         return 'MEDIUM';
-      case 'Excess Deduction':
-      case 'Timing Difference':
+      case ReconciliationStatus.excessDeduction:
+      case ReconciliationStatus.timingDifference:
         return 'LOW';
-      case 'Matched':
+      case ReconciliationStatus.matched:
       default:
         return 'OK';
     }

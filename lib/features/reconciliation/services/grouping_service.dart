@@ -52,14 +52,15 @@ class GroupingService {
     final grouped = <String, Map<String, PurchaseGroup>>{};
 
     for (final row in rows) {
-      final sellerPan = normalizePan(row.panNumber);
+      final sellerPan = row.normalizedPan;
       final sellerName = applyNameMapping(row.partyName, nameMapping);
-      final normalizedSellerName =
-      normalizeName(sellerName.isNotEmpty ? sellerName : row.partyName);
+      final normalizedSellerName = sellerName.isNotEmpty
+          ? normalizeName(sellerName)
+          : row.normalizedName;
 
       final rawMonth = row.month;
       final financialYear = financialYearFromMonthKey(rawMonth);
-      final month = normalizeMonthKey(rawMonth);
+      final month = row.normalizedMonth;
       final debugPurchaseRow = _shouldDebugPurchaseRow(row.partyName);
       final parsedDate = tryParseDate(row.date) ?? monthKeyToDate(month);
 
@@ -171,14 +172,15 @@ class GroupingService {
     final grouped = <String, Map<String, TdsGroup>>{};
 
     for (final row in rows) {
-      final sellerPan = normalizePan(row.panNumber);
+      final sellerPan = row.normalizedPan;
       final sellerName = applyNameMapping(row.deducteeName, nameMapping);
-      final normalizedSellerName =
-      normalizeName(sellerName.isNotEmpty ? sellerName : row.deducteeName);
+      final normalizedSellerName = sellerName.isNotEmpty
+          ? normalizeName(sellerName)
+          : row.normalizedName;
 
       final rawMonth = row.month;
       final financialYear = financialYearFromMonthKey(rawMonth);
-      final month = normalizeMonthKey(rawMonth);
+      final month = row.normalizedMonth;
 
       if (month.isEmpty || financialYear.isEmpty) continue;
       if (sellerPan.isEmpty && normalizedSellerName.isEmpty) continue;
@@ -205,7 +207,9 @@ class GroupingService {
           sellerPan: sellerPan,
           deductedAmount: row.deductedAmount,
           actualTds: row.tds,
-          section: row.section,
+          section: row.normalizedSection.isNotEmpty
+              ? row.normalizedSection
+              : row.section,
         );
       } else {
         monthMap[fyMonthKey] = TdsGroup(
@@ -217,7 +221,11 @@ class GroupingService {
           existing.sellerPan.isNotEmpty ? existing.sellerPan : sellerPan,
           deductedAmount: existing.deductedAmount + row.deductedAmount,
           actualTds: existing.actualTds + row.tds,
-          section: existing.section.isNotEmpty ? existing.section : row.section,
+          section: existing.section.isNotEmpty
+              ? existing.section
+              : (row.normalizedSection.isNotEmpty
+                  ? row.normalizedSection
+                  : row.section),
         );
       }
     }
@@ -256,7 +264,12 @@ class GroupingService {
   }
 }
 
+const bool _enableVerboseGroupingLogs = false;
+
 bool _shouldDebugPurchaseRow(String sellerName) {
+  if (!_enableVerboseGroupingLogs) {
+    return false;
+  }
   return normalizeName(sellerName.trim()) == normalizeName('Ganesh Cattle Feed');
 }
 
@@ -312,19 +325,44 @@ String normalizeMonthKey(String raw) {
   if (value.isEmpty) return '';
 
   final normalized = value.toLowerCase();
+  final extractedYear = _extractYear(value);
 
-  if (normalized.contains('apr')) return 'Apr-${_extractYear(value)}';
-  if (normalized.contains('may')) return 'May-${_extractYear(value)}';
-  if (normalized.contains('jun')) return 'Jun-${_extractYear(value)}';
-  if (normalized.contains('jul')) return 'Jul-${_extractYear(value)}';
-  if (normalized.contains('aug')) return 'Aug-${_extractYear(value)}';
-  if (normalized.contains('sep')) return 'Sep-${_extractYear(value)}';
-  if (normalized.contains('oct')) return 'Oct-${_extractYear(value)}';
-  if (normalized.contains('nov')) return 'Nov-${_extractYear(value)}';
-  if (normalized.contains('dec')) return 'Dec-${_extractYear(value)}';
-  if (normalized.contains('jan')) return 'Jan-${_extractYear(value)}';
-  if (normalized.contains('feb')) return 'Feb-${_extractYear(value)}';
-  if (normalized.contains('mar')) return 'Mar-${_extractYear(value)}';
+  if (normalized.contains('apr') && extractedYear != null) {
+    return 'Apr-$extractedYear';
+  }
+  if (normalized.contains('may') && extractedYear != null) {
+    return 'May-$extractedYear';
+  }
+  if (normalized.contains('jun') && extractedYear != null) {
+    return 'Jun-$extractedYear';
+  }
+  if (normalized.contains('jul') && extractedYear != null) {
+    return 'Jul-$extractedYear';
+  }
+  if (normalized.contains('aug') && extractedYear != null) {
+    return 'Aug-$extractedYear';
+  }
+  if (normalized.contains('sep') && extractedYear != null) {
+    return 'Sep-$extractedYear';
+  }
+  if (normalized.contains('oct') && extractedYear != null) {
+    return 'Oct-$extractedYear';
+  }
+  if (normalized.contains('nov') && extractedYear != null) {
+    return 'Nov-$extractedYear';
+  }
+  if (normalized.contains('dec') && extractedYear != null) {
+    return 'Dec-$extractedYear';
+  }
+  if (normalized.contains('jan') && extractedYear != null) {
+    return 'Jan-$extractedYear';
+  }
+  if (normalized.contains('feb') && extractedYear != null) {
+    return 'Feb-$extractedYear';
+  }
+  if (normalized.contains('mar') && extractedYear != null) {
+    return 'Mar-$extractedYear';
+  }
 
   final parsed = _tryParseDate(value);
   if (parsed != null) {
@@ -334,7 +372,7 @@ String normalizeMonthKey(String raw) {
   return '';
 }
 
-int _extractYear(String raw) {
+int? _extractYear(String raw) {
   final match = RegExp(r'(20\d{2})').firstMatch(raw);
   if (match != null) {
     return int.parse(match.group(1)!);
@@ -345,7 +383,7 @@ int _extractYear(String raw) {
     return parsed.year;
   }
 
-  return DateTime.now().year;
+  return null;
 }
 
 DateTime? _tryParseDate(String raw) {

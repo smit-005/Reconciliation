@@ -8,8 +8,12 @@ ExcelPreviewData? _buildPreviewData(
   List<String> warnings = const [],
   double? confidenceScore,
   String? preferredSheetName,
+  ImportSessionCache? sessionCache,
 }) {
-  final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  final decoder = ExcelService._decoderFromCache(
+    bytes,
+    sessionCache: sessionCache,
+  );
   if (decoder.tables.isEmpty) return null;
 
   final sheetInfo = ExcelService._findBestSheetAndHeader(
@@ -140,8 +144,12 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   required Map<String, String> columnMapping,
   List<String> warnings = const [],
   double? confidenceScore,
+  ImportSessionCache? sessionCache,
 }) {
-  final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+  final decoder = ExcelService._decoderFromCache(
+    bytes,
+    sessionCache: sessionCache,
+  );
   if (sheetName.isEmpty) return null;
   final table = decoder.tables[sheetName];
   if (table == null || table.rows.isEmpty) return null;

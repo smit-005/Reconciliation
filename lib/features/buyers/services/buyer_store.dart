@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
 
-import '../../models/buyer.dart';
+import '../../../models/buyer.dart';
 import 'buyer_repository.dart';
 
 class BuyerStore {

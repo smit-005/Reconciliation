@@ -6,9 +6,20 @@ import '../models/import_format_profile.dart';
 class ImportProfileService {
   static Future<void> saveProfile(ImportFormatProfile profile) async {
     final db = await DBHelper.database;
+    final normalizedProfile = ImportFormatProfile(
+      id: profile.id,
+      buyerId: profile.buyerId.trim(),
+      fileType: profile.fileType.trim(),
+      sheetNamePattern: profile.sheetNamePattern.trim().toLowerCase(),
+      headerRowIndex: profile.headerRowIndex,
+      headersTrusted: profile.headersTrusted,
+      columnMapping: Map<String, String>.from(profile.columnMapping),
+      sampleSignature: _profileIdentitySignature(profile),
+      lastUsedAt: profile.lastUsedAt,
+    );
     await db.insert(
       'import_format_profiles',
-      profile.toMap(),
+      normalizedProfile.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -21,10 +32,19 @@ class ImportProfileService {
     final rows = await db.query(
       'import_format_profiles',
       where: 'buyer_id = ? AND file_type = ?',
-      whereArgs: [buyerId, fileType],
+      whereArgs: [buyerId.trim(), fileType.trim()],
       orderBy: 'last_used_at DESC',
     );
 
     return rows.map(ImportFormatProfile.fromMap).toList();
+  }
+
+  static String _profileIdentitySignature(ImportFormatProfile profile) {
+    final signature = profile.sampleSignature.trim();
+    if (signature.isNotEmpty) {
+      return signature;
+    }
+
+    return profile.sheetNamePattern.trim().toLowerCase();
   }
 }

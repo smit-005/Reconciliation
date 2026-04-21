@@ -1,6 +1,7 @@
 import '../../../core/utils/normalize_utils.dart';
 import '../../../core/utils/parse_utils.dart';
 import '../models/reconciliation_row.dart';
+import '../models/reconciliation_status.dart';
 
 class ReconciliationComputedAmounts {
   final double applicableAmount;
@@ -96,29 +97,29 @@ class ReconciliationEngine {
     required double minorTdsTolerance,
   }) {
     if (purchaseMissing && !tdsMissing) {
-      return 'Only in 26Q';
+      return ReconciliationStatus.onlyIn26Q;
     }
 
     if (!purchaseMissing && tdsMissing) {
       if (applicableAmount > amountTolerance) {
-        return 'Applicable but no 26Q';
+        return ReconciliationStatus.applicableButNo26Q;
       }
 
       if (applicableAmount.abs() <= amountTolerance &&
           expectedTds.abs() <= tdsTolerance &&
           actualTds.abs() <= tdsTolerance) {
-        return 'Below Threshold';
+        return ReconciliationStatus.belowThreshold;
       }
 
-      return 'Below Threshold';
+      return ReconciliationStatus.belowThreshold;
     }
 
     if (purchaseMissing && tdsMissing) {
-      return 'No Data';
+      return ReconciliationStatus.noData;
     }
 
     if (!hasValidSection) {
-      return 'Section Missing';
+      return ReconciliationStatus.sectionMissing;
     }
 
     final amountDiffAbs = amountDifference.abs();
@@ -126,26 +127,26 @@ class ReconciliationEngine {
 
     if (applicableAmount.abs() <= amountTolerance &&
         actualTds.abs() <= tdsTolerance) {
-      return 'No Deduction Required';
+      return ReconciliationStatus.noDeductionRequired;
     }
 
     if (amountDiffAbs > amountTolerance) {
-      return 'Amount Mismatch';
+      return ReconciliationStatus.amountMismatch;
     }
 
     if (tdsDiffAbs <= tdsTolerance) {
-      return 'Matched';
+      return ReconciliationStatus.matched;
     }
 
     if (tdsDiffAbs <= minorTdsTolerance) {
-      return 'Matched';
+      return ReconciliationStatus.matched;
     }
 
     if (tdsDifference > minorTdsTolerance) {
-      return 'Short Deduction';
+      return ReconciliationStatus.shortDeduction;
     }
 
-    return 'Excess Deduction';
+    return ReconciliationStatus.excessDeduction;
   }
 
   static String buildRemarks({
@@ -181,7 +182,7 @@ class ReconciliationEngine {
     }
 
     if (purchaseMissing && !tdsMissing) {
-      remarks.add('Only in 26Q');
+      remarks.add(ReconciliationStatus.onlyIn26Q);
       return remarks.join(', ');
     }
 
@@ -319,7 +320,7 @@ class ReconciliationEngine {
     }
 
     return row.copyWith(
-      status: 'Below Threshold',
+      status: ReconciliationStatus.belowThreshold,
       remarks: 'TDS not applicable yet under 194Q threshold',
     );
   }

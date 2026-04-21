@@ -1,4 +1,5 @@
 import '../../../core/utils/date_utils.dart';
+import '../../../core/utils/normalize_utils.dart';
 import 'normalized_ledger_row.dart';
 import 'purchase_row.dart';
 import 'tds_26q_row.dart';
@@ -17,8 +18,12 @@ class NormalizedTransactionRow {
   final double taxableAmount;
   final double tdsAmount;
   final String section;
+  final String normalizedName;
+  final String normalizedPan;
+  final String normalizedMonth;
+  final String normalizedSection;
 
-  const NormalizedTransactionRow({
+  NormalizedTransactionRow({
     required this.sourceType,
     required this.transactionDateRaw,
     required this.month,
@@ -32,7 +37,14 @@ class NormalizedTransactionRow {
     required this.taxableAmount,
     required this.tdsAmount,
     required this.section,
-  });
+    String? normalizedName,
+    String? normalizedPan,
+    String? normalizedMonth,
+    String? normalizedSection,
+  }) : normalizedName = normalizedName ?? normalizeName(partyName),
+       normalizedPan = normalizedPan ?? normalizePan(panNumber),
+       normalizedMonth = normalizedMonth ?? month.trim(),
+       normalizedSection = normalizedSection ?? normalizeSection(section);
 
   factory NormalizedTransactionRow.fromPurchaseRow(PurchaseRow row) {
     return NormalizedTransactionRow(
@@ -49,6 +61,10 @@ class NormalizedTransactionRow {
       taxableAmount: row.basicAmount,
       tdsAmount: 0.0,
       section: '',
+      normalizedName: row.normalizedName,
+      normalizedPan: row.normalizedPan,
+      normalizedMonth: row.normalizedMonth,
+      normalizedSection: row.normalizedSection,
     );
   }
 
@@ -67,6 +83,10 @@ class NormalizedTransactionRow {
       taxableAmount: row.deductedAmount,
       tdsAmount: row.tds,
       section: row.section,
+      normalizedName: row.normalizedName,
+      normalizedPan: row.normalizedPan,
+      normalizedMonth: row.normalizedMonth,
+      normalizedSection: row.normalizedSection,
     );
   }
 
@@ -87,6 +107,50 @@ class NormalizedTransactionRow {
       taxableAmount: row.taxableAmount,
       tdsAmount: row.tdsAmount,
       section: row.section,
+      normalizedName: normalizeName(row.partyName),
+      normalizedPan: normalizePan(row.panNumber),
+      normalizedMonth: row.month.trim(),
+      normalizedSection: normalizeSection(row.section),
+    );
+  }
+
+  NormalizedTransactionRow copyWith({
+    String? sourceType,
+    String? transactionDateRaw,
+    String? month,
+    String? financialYear,
+    String? partyName,
+    String? panNumber,
+    String? gstNo,
+    String? documentNo,
+    String? description,
+    double? amount,
+    double? taxableAmount,
+    double? tdsAmount,
+    String? section,
+    String? normalizedName,
+    String? normalizedPan,
+    String? normalizedMonth,
+    String? normalizedSection,
+  }) {
+    return NormalizedTransactionRow(
+      sourceType: sourceType ?? this.sourceType,
+      transactionDateRaw: transactionDateRaw ?? this.transactionDateRaw,
+      month: month ?? this.month,
+      financialYear: financialYear ?? this.financialYear,
+      partyName: partyName ?? this.partyName,
+      panNumber: panNumber ?? this.panNumber,
+      gstNo: gstNo ?? this.gstNo,
+      documentNo: documentNo ?? this.documentNo,
+      description: description ?? this.description,
+      amount: amount ?? this.amount,
+      taxableAmount: taxableAmount ?? this.taxableAmount,
+      tdsAmount: tdsAmount ?? this.tdsAmount,
+      section: section ?? this.section,
+      normalizedName: normalizedName ?? this.normalizedName,
+      normalizedPan: normalizedPan ?? this.normalizedPan,
+      normalizedMonth: normalizedMonth ?? this.normalizedMonth,
+      normalizedSection: normalizedSection ?? this.normalizedSection,
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../upload/excel_upload_screen.dart';
 import '../buyers/buyer_management_screen.dart';
-import '../../data/local/buyer_store.dart';
+import '../buyers/services/buyer_store.dart';
 import '../../models/buyer.dart';
 
 class HomeScreen extends StatefulWidget {

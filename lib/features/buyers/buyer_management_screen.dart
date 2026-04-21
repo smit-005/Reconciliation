@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/local/buyer_store.dart';
+import 'services/buyer_store.dart';
 import '../../models/buyer.dart';
 
 class BuyerManagementScreen extends StatefulWidget {
@@ -47,6 +47,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   Future<void> saveBuyer() async {
     final name = nameController.text.trim();
     final pan = panController.text.trim().toUpperCase();
+    final wasEditing = editingId != null;
 
     if (name.isEmpty || pan.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +97,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          editingId == null ? 'Buyer added successfully' : 'Buyer updated successfully',
+          wasEditing
+              ? 'Buyer updated successfully'
+              : 'Buyer added successfully',
         ),
       ),
     );

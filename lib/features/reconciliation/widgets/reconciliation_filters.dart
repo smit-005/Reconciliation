@@ -15,6 +15,7 @@ class ReconciliationFilters extends StatelessWidget {
   final Function(String?) onFinancialYearChanged;
   final Function(String?) onSectionChanged;
   final Function(String?) onStatusChanged;
+  final bool showSectionFilter;
 
   const ReconciliationFilters({
     super.key,
@@ -30,76 +31,92 @@ class ReconciliationFilters extends StatelessWidget {
     required this.onFinancialYearChanged,
     required this.onSectionChanged,
     required this.onStatusChanged,
+    this.showSectionFilter = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: selectedSeller,
-            decoration: const InputDecoration(
-              labelText: 'Seller',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 920;
+        final fieldWidth = isCompact
+            ? constraints.maxWidth
+            : (constraints.maxWidth - (showSectionFilter ? 36 : 24)) /
+                (showSectionFilter ? 4 : 3);
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildField(
+              width: fieldWidth,
+              child: DropdownButtonFormField<String>(
+                value: selectedSeller,
+                decoration: _decoration('Seller Filter'),
+                items: sellerOptions
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: onSellerChanged,
+              ),
             ),
-            items: sellerOptions
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
-            onChanged: onSellerChanged,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: selectedFinancialYear,
-            decoration: const InputDecoration(
-              labelText: 'Financial Year',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
+            _buildField(
+              width: fieldWidth,
+              child: DropdownButtonFormField<String>(
+                value: selectedFinancialYear,
+                decoration: _decoration('Financial Year'),
+                items: financialYearOptions
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: onFinancialYearChanged,
+              ),
             ),
-            items: financialYearOptions
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
-            onChanged: onFinancialYearChanged,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: selectedSection,
-            decoration: const InputDecoration(
-              labelText: 'Section',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
+            if (showSectionFilter)
+              _buildField(
+                width: fieldWidth,
+                child: DropdownButtonFormField<String>(
+                  value: selectedSection,
+                  decoration: _decoration('Section'),
+                  items: sectionOptions
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: onSectionChanged,
+                ),
+              ),
+            _buildField(
+              width: fieldWidth,
+              child: DropdownButtonFormField<String>(
+                value: selectedStatus,
+                decoration: _decoration('Status'),
+                items: statusOptions
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: onStatusChanged,
+              ),
             ),
-            items: sectionOptions
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
-            onChanged: onSectionChanged,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: selectedStatus,
-            decoration: const InputDecoration(
-              labelText: 'Status',
-              border: OutlineInputBorder(),
-              filled: true,
-              fillColor: Colors.white,
-            ),
-            items: statusOptions
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
-            onChanged: onStatusChanged,
-          ),
-        ),
-      ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildField({required double width, required Widget child}) {
+    return SizedBox(width: width, child: child);
+  }
+
+  InputDecoration _decoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      isDense: true,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+      ),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     );
   }
 }
