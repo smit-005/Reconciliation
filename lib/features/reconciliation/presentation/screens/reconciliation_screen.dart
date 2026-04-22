@@ -1821,9 +1821,15 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.fixed,
+          content: Text(message),
+        ),
+      );
   }
 
   Color _statusColor(String status) {
