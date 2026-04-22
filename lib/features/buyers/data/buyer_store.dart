@@ -16,9 +16,10 @@ class BuyerStore {
       ..addAll(buyers);
   }
 
-  static Future<String?> add(String name, String pan) async {
+  static Future<String?> add(String name, String pan, String gstNumber) async {
     final normalizedName = name.trim();
     final normalizedPan = pan.trim().toUpperCase();
+    final normalizedGstNumber = gstNumber.trim().toUpperCase();
 
     final exists = await _repository.panExists(normalizedPan);
     if (exists) {
@@ -29,6 +30,7 @@ class BuyerStore {
       id: const Uuid().v4(),
       name: normalizedName,
       pan: normalizedPan,
+      gstNumber: normalizedGstNumber,
     );
 
     await _repository.addBuyer(buyer);
@@ -37,9 +39,15 @@ class BuyerStore {
     return null;
   }
 
-  static Future<String?> update(String id, String name, String pan) async {
+  static Future<String?> update(
+    String id,
+    String name,
+    String pan,
+    String gstNumber,
+  ) async {
     final normalizedName = name.trim();
     final normalizedPan = pan.trim().toUpperCase();
+    final normalizedGstNumber = gstNumber.trim().toUpperCase();
 
     final exists = await _repository.panExists(normalizedPan, excludeId: id);
     if (exists) {
@@ -50,6 +58,7 @@ class BuyerStore {
       id: id,
       name: normalizedName,
       pan: normalizedPan,
+      gstNumber: normalizedGstNumber,
     );
 
     await _repository.updateBuyer(updatedBuyer);

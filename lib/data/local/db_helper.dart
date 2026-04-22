@@ -5,7 +5,7 @@ import '../../core/utils/normalize_utils.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
     if (oldVersion < 5) {
       await _migrateSellerMappingsTable(db);
     }
+    if (oldVersion < 6) {
+      await _migrateBuyersTable(db);
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -65,7 +68,8 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
       CREATE TABLE buyers(
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        pan TEXT NOT NULL UNIQUE
+        pan TEXT NOT NULL UNIQUE,
+        gst_number TEXT NOT NULL DEFAULT ''
       )
     ''');
     await _createSellerMappingsTable(db);
@@ -105,6 +109,31 @@ CREATE TABLE import_format_profiles (
   UNIQUE(buyer_id, file_type, sample_signature)
 )
 ''');
+  }
+
+  static Future<void> _migrateBuyersTable(Database db) async {
+    if (!await _tableExists(db, 'buyers')) {
+      await db.execute('''
+      CREATE TABLE buyers(
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        pan TEXT NOT NULL UNIQUE,
+        gst_number TEXT NOT NULL DEFAULT ''
+      )
+    ''');
+      return;
+    }
+
+    final columns = await db.rawQuery("PRAGMA table_info(buyers)");
+    final hasGstNumber = columns.any(
+      (row) => (row['name'] ?? '').toString().toLowerCase() == 'gst_number',
+    );
+
+    if (!hasGstNumber) {
+      await db.execute(
+        "ALTER TABLE buyers ADD COLUMN gst_number TEXT NOT NULL DEFAULT ''",
+      );
+    }
   }
 
   static Future<bool> _tableExists(

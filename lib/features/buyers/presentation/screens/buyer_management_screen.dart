@@ -12,6 +12,7 @@ class BuyerManagementScreen extends StatefulWidget {
 class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   final nameController = TextEditingController();
   final panController = TextEditingController();
+  final gstController = TextEditingController();
   final searchController = TextEditingController();
 
   String? editingId;
@@ -47,6 +48,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   Future<void> saveBuyer() async {
     final name = nameController.text.trim();
     final pan = panController.text.trim().toUpperCase();
+    final gstNumber = gstController.text.trim().toUpperCase();
     final wasEditing = editingId != null;
 
     if (name.isEmpty || pan.isEmpty) {
@@ -70,9 +72,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     String? error;
 
     if (editingId == null) {
-      error = await BuyerStore.add(name, pan);
+      error = await BuyerStore.add(name, pan, gstNumber);
     } else {
-      error = await BuyerStore.update(editingId!, name, pan);
+      error = await BuyerStore.update(editingId!, name, pan, gstNumber);
     }
 
     if (!mounted) return;
@@ -90,6 +92,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
     nameController.clear();
     panController.clear();
+    gstController.clear();
     editingId = null;
 
     setState(() {});
@@ -108,6 +111,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   void editBuyer(Buyer buyer) {
     nameController.text = buyer.name;
     panController.text = buyer.pan;
+    gstController.text = buyer.gstNumber;
     editingId = buyer.id;
     setState(() {});
   }
@@ -121,6 +125,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   void clearForm() {
     nameController.clear();
     panController.clear();
+    gstController.clear();
     editingId = null;
     setState(() {});
   }
@@ -129,6 +134,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   void dispose() {
     nameController.dispose();
     panController.dispose();
+    gstController.dispose();
     searchController.dispose();
     super.dispose();
   }
@@ -139,7 +145,8 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
     final filtered = buyers.where((b) {
       return b.name.toLowerCase().contains(query) ||
-          b.pan.toLowerCase().contains(query);
+          b.pan.toLowerCase().contains(query) ||
+          b.gstNumber.toLowerCase().contains(query);
     }).toList();
 
     return Scaffold(
@@ -186,6 +193,16 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                         border: OutlineInputBorder(),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: gstController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'GST Number',
+                        hintText: 'GST Number',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 14),
                     Row(
                       children: [
@@ -221,7 +238,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                     controller: searchController,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Search buyer by name or PAN',
+                      hintText: 'Search buyer by name, PAN or GST',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: searchController.text.isEmpty
@@ -257,7 +274,12 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                         return Card(
                           child: ListTile(
                             title: Text(b.name),
-                            subtitle: Text('PAN: ${b.pan}'),
+                            subtitle: Text(
+                              b.gstNumber.trim().isEmpty
+                                  ? 'PAN: ${b.pan}'
+                                  : 'PAN: ${b.pan}\nGST: ${b.gstNumber}',
+                            ),
+                            isThreeLine: b.gstNumber.trim().isNotEmpty,
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
