@@ -5,7 +5,7 @@ import '../../core/utils/normalize_utils.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -55,6 +55,9 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
       await _migrateSellerMappingsTable(db);
       await _migrateImportFormatProfilesTable(db);
     }
+    if (oldVersion < 5) {
+      await _migrateSellerMappingsTable(db);
+    }
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -76,10 +79,11 @@ CREATE TABLE seller_mappings (
   buyer_name TEXT,
   buyer_pan TEXT NOT NULL,
   alias_name TEXT NOT NULL,
+  section_code TEXT NOT NULL DEFAULT 'ALL',
   mapped_pan TEXT,
   mapped_name TEXT,
   created_at TEXT,
-  UNIQUE(buyer_pan, alias_name)
+  UNIQUE(buyer_pan, alias_name, section_code)
 )
 ''');
   }
@@ -138,6 +142,9 @@ CREATE TABLE import_format_profiles (
       for (final row in rows) {
         final buyerPan = (row['buyer_pan'] ?? '').toString().trim().toUpperCase();
         final aliasName = normalizeName((row['alias_name'] ?? '').toString());
+        final sectionCode = _normalizeSellerMappingSectionCode(
+          (row['section_code'] ?? 'ALL').toString(),
+        );
 
         if (buyerPan.isEmpty || aliasName.isEmpty) {
           continue;
@@ -149,6 +156,7 @@ CREATE TABLE import_format_profiles (
             'buyer_name': (row['buyer_name'] ?? '').toString().trim(),
             'buyer_pan': buyerPan,
             'alias_name': aliasName,
+            'section_code': sectionCode,
             'mapped_pan': (row['mapped_pan'] ?? '').toString().trim().toUpperCase(),
             'mapped_name': (row['mapped_name'] ?? '').toString().trim(),
             'created_at': (row['created_at'] ?? '').toString(),
@@ -227,5 +235,15 @@ CREATE TABLE import_format_profiles (
     }
 
     return sheetNamePattern.trim().toLowerCase();
+  }
+
+  static String _normalizeSellerMappingSectionCode(String value) {
+    final trimmed = value.trim().toUpperCase();
+    if (trimmed == 'ALL' || trimmed.isEmpty) {
+      return 'ALL';
+    }
+
+    final normalized = normalizeSection(trimmed);
+    return normalized.isEmpty ? 'ALL' : normalized;
   }
 }

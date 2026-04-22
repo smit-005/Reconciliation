@@ -1,6 +1,6 @@
-import '../models/reconciliation_row.dart';
-import '../../../core/utils/date_utils.dart';
-import '../../../core/utils/parse_utils.dart';
+import 'package:reconciliation_app/core/utils/date_utils.dart';
+import 'package:reconciliation_app/core/utils/parse_utils.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 
 class TimingService {
   static const double tolerance = 1.0;

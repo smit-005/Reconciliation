@@ -1,7 +1,7 @@
-import '../../../core/utils/normalize_utils.dart';
-import '../../../core/utils/parse_utils.dart';
-import '../models/reconciliation_row.dart';
-import '../models/reconciliation_status.dart';
+import 'package:reconciliation_app/core/utils/normalize_utils.dart';
+import 'package:reconciliation_app/core/utils/parse_utils.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 
 class ReconciliationComputedAmounts {
   final double applicableAmount;

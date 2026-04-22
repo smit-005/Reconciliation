@@ -1,5 +1,5 @@
-import '../../features/reconciliation/models/reconciliation_row.dart';
-import '../../core/utils/normalize_utils.dart';
+import 'package:reconciliation_app/core/utils/normalize_utils.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 
 void sortSections(List<String> sections) {
   const preferredOrder = ['194Q', '194C', '194J', '194I', '194H', 'No Section'];
@@ -18,6 +18,10 @@ void sortSections(List<String> sections) {
 }
 
 String buildSellerDisplayKey(ReconciliationRow row) {
+  final resolvedSellerId = row.resolvedSellerId.trim();
+  if (resolvedSellerId.isNotEmpty) {
+    return resolvedSellerId;
+  }
   final pan = normalizePan(row.sellerPan);
   if (pan.isNotEmpty) {
     return 'PAN:$pan';

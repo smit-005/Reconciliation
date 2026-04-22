@@ -1,4 +1,4 @@
-import '../../reconciliation/models/normalized_ledger_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 
 class LedgerUploadFile {
   final String id;

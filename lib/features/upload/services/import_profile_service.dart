@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import '../../../data/local/db_helper.dart';
-import '../models/import_format_profile.dart';
+import 'package:reconciliation_app/data/local/db_helper.dart';
+import 'package:reconciliation_app/features/upload/models/import_format_profile.dart';
 
 class ImportProfileService {
   static Future<void> saveProfile(ImportFormatProfile profile) async {

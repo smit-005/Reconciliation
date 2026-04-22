@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
-import '../models/reconciliation_row.dart';
-import '../models/reconciliation_status.dart';
-import 'reconciliation_service.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
+import 'reconciliation_orchestrator.dart';
 
 class ExcelExportService {
   static const double _thresholdAmount = 5000000;
@@ -999,12 +999,6 @@ class ExcelExportService {
     return sections;
   }
 
-  static String _normalizeSection(String value) {
-    final section = value.trim();
-    if (section.isEmpty || section == '-') return 'No Section';
-    return section;
-  }
-
   static void _applyNumberFormat(
       xlsio.Worksheet sheet,
       int fromRow,
@@ -1049,40 +1043,40 @@ class ExcelExportService {
     final safeBuyerName = _safeFileName(
       buyerName.isEmpty ? 'buyer' : buyerName,
     );
+    final sellerNameValue = sellerName ?? '';
+    final financialYearValue = financialYear ?? '';
 
-    final hasSeller = sellerName != null &&
-        sellerName.trim().isNotEmpty &&
-        sellerName.trim() != 'All Sellers';
+    final hasSeller = sellerNameValue.trim().isNotEmpty &&
+        sellerNameValue.trim() != 'All Sellers';
 
-    final hasFy = financialYear != null &&
-        financialYear.trim().isNotEmpty &&
-        financialYear.trim() != 'All FY';
+    final hasFy = financialYearValue.trim().isNotEmpty &&
+        financialYearValue.trim() != 'All FY';
 
     String fileName;
 
     if (isPivot) {
       if (hasSeller && hasFy) {
         fileName =
-        '${safeBuyerName}_pivot_${_safeFileName(sellerName!.trim())}_${_safeFileName(financialYear!.trim())}.xlsx';
+        '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasFy) {
         fileName =
-        '${safeBuyerName}_pivot_${_safeFileName(financialYear!.trim())}.xlsx';
+        '${safeBuyerName}_pivot_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasSeller) {
         fileName =
-        '${safeBuyerName}_pivot_${_safeFileName(sellerName!.trim())}.xlsx';
+        '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}.xlsx';
       } else {
         fileName = '${safeBuyerName}_pivot_summary.xlsx';
       }
     } else {
       if (hasSeller && hasFy) {
         fileName =
-        '${safeBuyerName}_${_safeFileName(sellerName!.trim())}_${_safeFileName(financialYear!.trim())}.xlsx';
+        '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasFy) {
         fileName =
-        '${safeBuyerName}_${_safeFileName(financialYear!.trim())}.xlsx';
+        '${safeBuyerName}_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasSeller) {
         fileName =
-        '${safeBuyerName}_${_safeFileName(sellerName!.trim())}.xlsx';
+        '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}.xlsx';
       } else {
         fileName = '${safeBuyerName}_reconciliation.xlsx';
       }
