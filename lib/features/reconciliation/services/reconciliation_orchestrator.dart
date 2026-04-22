@@ -263,6 +263,7 @@ class CalculationService {
     '194C',
     '194H',
     '194J',
+    '194I',
     '194IB',
   ];
 
@@ -1156,6 +1157,30 @@ class CalculationService {
       return 'Applicable under 194C because cumulative section amount ${round2(currentCumulative)} exceeds 100000.';
     }
 
+    if (normalizedSection == '194H') {
+      if (applicableAmount <= 0) {
+        return '194H threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
+      }
+      return 'Applicable under 194H because cumulative section amount ${round2(currentCumulative)} exceeds 15000.';
+    }
+
+    if (normalizedSection == '194J') {
+      if (applicableAmount <= 0) {
+        return '194J threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
+      }
+      if (amount > 30000.0) {
+        return 'Applicable under 194J because payment ${round2(amount)} exceeds 30000.';
+      }
+      return 'Applicable under 194J because cumulative section amount ${round2(currentCumulative)} exceeds 30000.';
+    }
+
+    if (normalizedSection == '194I') {
+      if (applicableAmount <= 0) {
+        return '194I threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
+      }
+      return 'Applicable under 194I because cumulative section amount ${round2(currentCumulative)} exceeds 240000.';
+    }
+
     if (applicableAmount <= 0) {
       return 'Section threshold/rule not met for $normalizedSection.';
     }
@@ -1181,13 +1206,14 @@ class CalculationService {
     }
 
     if (expectedTds == 0 && rate == 0) {
-      if (normalizedSection == '194C' ||
-          normalizedSection == '194J' ||
-          normalizedSection == '194I') {
-        if (normalizedSection == '194C' && applicableAmount <= 0) {
-          return 'Expected TDS is zero because the 194C threshold is not crossed.';
-        }
-        return 'Expected TDS kept at zero because subtype/rate context is not modeled yet for $normalizedSection.';
+      if (normalizedSection == '194C' && applicableAmount <= 0) {
+        return 'Expected TDS is zero because the 194C threshold is not crossed.';
+      }
+      if (normalizedSection == '194J' && applicableAmount <= 0) {
+        return 'Expected TDS is zero because the 194J threshold is not crossed.';
+      }
+      if (normalizedSection == '194I' && applicableAmount <= 0) {
+        return 'Expected TDS is zero because the 194I threshold is not crossed.';
       }
       return 'Expected TDS is zero because the row is not yet applicable.';
     }

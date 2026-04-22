@@ -134,6 +134,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     '194C',
     '194H',
     '194J',
+    '194I',
     '194IB',
   ];
 

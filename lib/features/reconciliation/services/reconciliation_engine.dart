@@ -195,7 +195,7 @@ class ReconciliationEngine {
       if (sellerPan.trim().isEmpty) {
         remarks.add('PAN missing -> high TDS risk');
       }
-      remarks.add('${normalizedSection.isEmpty ? 'Section' : normalizedSection} rate unresolved - review required');
+      remarks.add(_manualReviewHeadline(normalizedSection));
       if (manualReviewReason.trim().isNotEmpty) {
         remarks.add(manualReviewReason.trim());
       }
@@ -378,6 +378,18 @@ class ReconciliationEngine {
       remarks:
           'TDS not applicable yet because the ${normalizeSection(row.section).isEmpty ? 'section' : normalizeSection(row.section)} threshold/rule is not met',
     );
+  }
+
+  static String _manualReviewHeadline(String normalizedSection) {
+    switch (normalizedSection) {
+      case '194J':
+      case '194I':
+        return '$normalizedSection subtype/rate unresolved - review required';
+      case '194C':
+        return '$normalizedSection rate unresolved - review required';
+      default:
+        return '${normalizedSection.isEmpty ? 'Section' : normalizedSection} rule unresolved - review required';
+    }
   }
 
   static ReconciliationRow buildRow({

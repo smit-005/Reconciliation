@@ -17,6 +17,15 @@ class SectionRuleResult {
 }
 
 class SectionRuleService {
+  static const double _threshold194Q = 5000000.0;
+  static const double _rate194Q = 0.001;
+  static const double _singleLimit194C = 30000.0;
+  static const double _yearlyLimit194C = 100000.0;
+  static const double _threshold194J = 30000.0;
+  static const double _threshold194I = 240000.0;
+  static const double _threshold194H = 15000.0;
+  static const double _rate194H = 0.05;
+
   static SectionRuleResult applyRule({
     required String section,
     required double cumulativePurchase,
@@ -67,23 +76,20 @@ class SectionRuleService {
       double previous,
       double current,
       ) {
-    const threshold = 5000000.0;
-    const rate = 0.001;
-
     double applicable = 0;
 
-    if (previous >= threshold) {
+    if (previous >= _threshold194Q) {
       applicable = current;
-    } else if (cumulative > threshold) {
-      final remaining = threshold - previous;
+    } else if (cumulative > _threshold194Q) {
+      final remaining = _threshold194Q - previous;
       applicable = current - remaining;
       if (applicable < 0) applicable = 0;
     }
 
     return SectionRuleResult(
       applicableAmount: applicable,
-      expectedTds: double.parse((applicable * rate).toStringAsFixed(2)),
-      rate: rate,
+      expectedTds: double.parse((applicable * _rate194Q).toStringAsFixed(2)),
+      rate: _rate194Q,
     );
   }
 
@@ -94,10 +100,8 @@ class SectionRuleService {
       {
         String sellerPan = '',
       }) {
-    const singleLimit = 30000.0;
-    const yearlyLimit = 100000.0;
-
-    final isApplicable = amount > singleLimit || sectionTotal > yearlyLimit;
+    final isApplicable =
+        amount > _singleLimit194C || sectionTotal > _yearlyLimit194C;
 
     final applicable = isApplicable ? amount : 0.0;
 
@@ -133,21 +137,24 @@ class SectionRuleService {
       double amount,
       double sectionTotal,
       ) {
-    const threshold = 30000.0;
-
-    final isApplicable = amount > threshold || sectionTotal > threshold;
+    final isApplicable =
+        amount > _threshold194J || sectionTotal > _threshold194J;
     final applicable = isApplicable ? amount : 0.0;
-
-    // 194J may apply at different rates depending on service subtype
-    // (for example technical vs professional). Since subtype context is
-    // not available reliably here yet, do not hardcode a rate. Return
-    // zero expected TDS for now so this can be upgraded safely later.
-    const rate = 0.0;
+    if (!isApplicable) {
+      return SectionRuleResult(
+        applicableAmount: 0.0,
+        expectedTds: 0.0,
+        rate: 0.0,
+      );
+    }
 
     return SectionRuleResult(
       applicableAmount: applicable,
-      expectedTds: applicable * rate,
-      rate: rate,
+      expectedTds: 0.0,
+      rate: 0.0,
+      manualReviewRequired: true,
+      reviewReason:
+          'Service subtype is unavailable, so the correct 194J rate could not be confirmed from available section context.',
     );
   }
 
@@ -156,20 +163,23 @@ class SectionRuleService {
       double amount,
       double sectionTotal,
       ) {
-    const threshold = 240000.0;
-    final isApplicable = sectionTotal > threshold;
+    final isApplicable = sectionTotal > _threshold194I;
     final applicable = isApplicable ? amount : 0.0;
-
-    // 194I may apply at different rates depending on rent subtype
-    // (for example plant/machinery vs land/building). Since subtype is
-    // not available reliably here yet, do not hardcode a rate. Return
-    // zero expected TDS for now so this can be upgraded safely later.
-    const rate = 0.0;
+    if (!isApplicable) {
+      return SectionRuleResult(
+        applicableAmount: 0.0,
+        expectedTds: 0.0,
+        rate: 0.0,
+      );
+    }
 
     return SectionRuleResult(
       applicableAmount: applicable,
-      expectedTds: applicable * rate,
-      rate: rate,
+      expectedTds: 0.0,
+      rate: 0.0,
+      manualReviewRequired: true,
+      reviewReason:
+          'Rent subtype is unavailable, so the correct 194I rate could not be confirmed from available section context.',
     );
   }
 
@@ -178,16 +188,13 @@ class SectionRuleService {
       double amount,
       double sectionTotal,
       ) {
-    const threshold = 15000.0;
-    const rate = 0.05;
-
-    final isApplicable = sectionTotal > threshold;
+    final isApplicable = sectionTotal > _threshold194H;
     final applicable = isApplicable ? amount : 0.0;
 
     return SectionRuleResult(
       applicableAmount: applicable,
-      expectedTds: applicable * rate,
-      rate: rate,
+      expectedTds: double.parse((applicable * _rate194H).toStringAsFixed(2)),
+      rate: _rate194H,
     );
   }
 
