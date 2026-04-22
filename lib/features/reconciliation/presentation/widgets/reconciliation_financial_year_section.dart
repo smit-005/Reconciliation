@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
@@ -58,8 +61,8 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColorScheme.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,17 +70,24 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sm,
+              AppSpacing.xs,
+              AppSpacing.sm,
+              AppSpacing.xs,
+            ),
             decoration: BoxDecoration(
-              color: const Color(0xFFFBFCFD),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              color: const Color(0xFFFAFCFE),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppRadius.sm),
+              ),
               border: const Border(
-                bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                bottom: BorderSide(color: AppColorScheme.divider),
               ),
             ),
             child: Wrap(
-              spacing: 10,
-              runSpacing: 4,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
@@ -85,7 +95,7 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
+                    color: AppColorScheme.textPrimary,
                   ),
                 ),
                 _inlineMetric('Basic', formatAmount(totalBasic)),
@@ -108,7 +118,7 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
+                  color: AppColorScheme.textMuted,
                 ),
               ),
             )
@@ -129,7 +139,7 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
                 final tableContent = SizedBox(
                   width: tableWidth,
                   child: Padding(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(AppSpacing.xxs),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -191,9 +201,9 @@ class _HeaderRow extends StatelessWidget {
         vertical: 7,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0),
+        color: const Color(0xFFF1F5F9),
         border: const Border(
-          bottom: BorderSide(color: Color(0xFFCBD5E1)),
+          bottom: BorderSide(color: AppColorScheme.border),
         ),
       ),
       child: Row(
@@ -258,12 +268,12 @@ class _DataRowCardState extends State<_DataRowCard> {
           horizontal: _rowHorizontalPadding,
           vertical: 7,
         ),
-        decoration: BoxDecoration(
-          color: _isHovered ? hover : zebra,
-          border: const Border(
-            bottom: BorderSide(color: Color(0xFFE2E8F0)),
-          ),
+      decoration: BoxDecoration(
+        color: _isHovered ? hover : zebra,
+        border: const Border(
+          bottom: BorderSide(color: AppColorScheme.divider),
         ),
+      ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: _buildTableColumns(
@@ -305,7 +315,7 @@ class _DataRowCardState extends State<_DataRowCard> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   height: 1.3,
-                  color: Color(0xFF64748B),
+                  color: AppColorScheme.textMuted,
                   fontSize: 11.5,
                 ),
               ),
@@ -406,7 +416,7 @@ class _TotalRowCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         border: const Border(
-          top: BorderSide(color: Color(0xFFCBD5E1)),
+          top: BorderSide(color: AppColorScheme.border),
         ),
       ),
       child: Row(
@@ -526,7 +536,7 @@ class _HeaderText extends StatelessWidget {
       style: const TextStyle(
         fontWeight: FontWeight.w700,
         fontSize: 11.5,
-        color: Color(0xFF334155),
+        color: AppColorScheme.textSecondary,
       ),
     );
   }
@@ -568,19 +578,18 @@ Widget _inlineMetric(String label, String value) {
     text: TextSpan(
       style: const TextStyle(fontSize: 10.8, color: Color(0xFF64748B)),
       children: [
-        const TextSpan(
-          text: '| ',
-          style: TextStyle(color: Color(0xFF94A3B8)),
-        ),
         TextSpan(
           text: '$label ',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: AppColorScheme.textMuted,
+          ),
         ),
         TextSpan(
           text: value,
           style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF334155),
+            fontWeight: FontWeight.w700,
+            color: AppColorScheme.textSecondary,
           ),
         ),
       ],

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
@@ -1344,50 +1347,97 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           final isActive = activeSectionTab == section;
           final mismatchCount = _mismatchCountForSection(section);
           return Padding(
-            padding: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
             child: InkWell(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               onTap: () => _selectSectionTab(section),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
+                  horizontal: AppSpacing.sm,
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFF1E293B) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
+                  gradient: isActive
+                      ? const LinearGradient(
+                          colors: [
+                            Color(0xFF1E3A5F),
+                            Color(0xFF0F172A),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: isActive ? null : Colors.white,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                   border: Border.all(
                     color: isActive
-                        ? const Color(0xFF60A5FA)
-                        : Colors.grey.shade300,
+                        ? const Color(0xFF93C5FD)
+                        : AppColorScheme.border,
                   ),
+                  boxShadow: isActive
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF0F172A)
+                                .withValues(alpha: 0.12),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : null,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      section,
-                      style: TextStyle(
-                        color: isActive ? Colors.white : Colors.black87,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          section,
+                          style: TextStyle(
+                            color: isActive
+                                ? Colors.white
+                                : AppColorScheme.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          section == 'All' ? 'Combined view' : 'Section focus',
+                          style: TextStyle(
+                            color: isActive
+                                ? Colors.white.withValues(alpha: 0.72)
+                                : AppColorScheme.textMuted,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sm),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
+                        horizontal: AppSpacing.xs,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
                         color: mismatchCount > 0
-                            ? const Color(0xFF7F1D1D)
-                            : const Color(0xFF14532D),
+                            ? (isActive
+                                ? const Color(0xFF7F1D1D)
+                                : const Color(0xFFFEE2E2))
+                            : (isActive
+                                ? const Color(0xFF14532D)
+                                : const Color(0xFFDCFCE7)),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         '$mismatchCount',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: mismatchCount > 0
+                              ? Colors.white
+                              : (isActive
+                                  ? Colors.white
+                                  : const Color(0xFF166534)),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -2034,7 +2084,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     final allSectionExportRows = _rowsForAllSectionsExport();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: const Color(0xFFF4F7FB),
       appBar: AppBar(
         title: const Text('Reconciliation'),
       ),
@@ -2046,7 +2096,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         onExportPivot: filteredRows.isEmpty ? null : _exportPivotExcel,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           children: [
             ReconciliationTopToolbar(
@@ -2066,7 +2116,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
               onRecalculate: _isRecalculating ? null : _recalculateAll,
               onManualMapping: _openSellerMappingScreen,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             Expanded(
               child: _buildMainContent(),
             ),

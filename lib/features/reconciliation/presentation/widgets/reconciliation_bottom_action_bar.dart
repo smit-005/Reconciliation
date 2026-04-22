@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
+import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
+import 'package:reconciliation_app/core/widgets/app_sticky_action_bar.dart';
+
 class ReconciliationBottomActionBar extends StatelessWidget {
   final VoidCallback? onExportCurrentSection;
   final VoidCallback? onExportAllSections;
@@ -14,79 +20,135 @@ class ReconciliationBottomActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            top: BorderSide(color: Colors.grey.shade300),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
+    return AppStickyActionBar(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      backgroundColor: Colors.white.withValues(alpha: 0.98),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 860;
+          final actions = [
+            _ActionButtonSlot(
+              child: AppPrimaryButton(
+                onPressed: onExportCurrentSection,
+                icon: Icons.download_rounded,
+                label: 'Export Current Section',
+              ),
             ),
-          ],
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final stacked = constraints.maxWidth < 720;
-            if (stacked) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FilledButton.icon(
-                    onPressed: onExportCurrentSection,
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Export Current Section'),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: onExportAllSections,
-                    icon: const Icon(Icons.download_for_offline_rounded),
-                    label: const Text('Export All Sections'),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: onExportPivot,
-                    icon: const Icon(Icons.table_chart_rounded),
-                    label: const Text('Export Pivot'),
-                  ),
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onExportCurrentSection,
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Export Current Section'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onExportAllSections,
-                    icon: const Icon(Icons.download_for_offline_rounded),
-                    label: const Text('Export All Sections'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onExportPivot,
-                    icon: const Icon(Icons.table_chart_rounded),
-                    label: const Text('Export Pivot'),
-                  ),
-                ),
+            _ActionButtonSlot(
+              child: AppSecondaryButton(
+                onPressed: onExportAllSections,
+                icon: Icons.download_for_offline_rounded,
+                label: 'Export All Sections',
+              ),
+            ),
+            _ActionButtonSlot(
+              child: AppSecondaryButton(
+                onPressed: onExportPivot,
+                icon: Icons.table_chart_rounded,
+                label: 'Export Pivot',
+              ),
+            ),
+          ];
+          final stackedChildren = <Widget>[
+            const Text(
+              'Exports',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColorScheme.textMuted,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            ...actions.expand(
+              (slot) => [
+                slot,
+                const SizedBox(height: AppSpacing.xs),
               ],
+            ),
+          ]..removeLast();
+
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: stackedChildren,
             );
-          },
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Exports',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColorScheme.textMuted,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  for (var i = 0; i < actions.length; i++) ...[
+                    Expanded(child: actions[i]),
+                    if (i != actions.length - 1)
+                      const SizedBox(width: AppSpacing.xs),
+                  ],
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ActionButtonSlot extends StatelessWidget {
+  final Widget child;
+
+  const _ActionButtonSlot({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColorScheme.divider),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            filledButtonTheme: FilledButtonThemeData(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 38),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            outlinedButtonTheme: OutlinedButtonThemeData(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 38),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          child: child,
         ),
       ),
     );

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_filter_bar.dart';
+
 class ReconciliationFilters extends StatelessWidget {
   final String selectedSeller;
   final String selectedFinancialYear;
@@ -39,14 +44,17 @@ class ReconciliationFilters extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 920;
-        final fieldWidth = isCompact
+        final normalizedWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : (constraints.maxWidth - (showSectionFilter ? 36 : 24)) /
+            : 920.0;
+        final fieldWidth = isCompact
+            ? normalizedWidth
+            : (normalizedWidth - (showSectionFilter ? 36 : 24)) /
                 (showSectionFilter ? 4 : 3);
 
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        return AppFilterBar(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
             _buildField(
               width: fieldWidth,
@@ -107,16 +115,30 @@ class ReconciliationFilters extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       isDense: true,
+      labelStyle: const TextStyle(
+        fontWeight: FontWeight.w700,
+        color: AppColorScheme.textMuted,
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: const BorderSide(color: AppColorScheme.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: const BorderSide(
+          color: AppColorScheme.primary,
+          width: 1.2,
+        ),
       ),
       filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      fillColor: const Color(0xFFFDFEFF),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 14,
+      ),
     );
   }
 }

@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_section_card.dart';
+import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
+
 import 'reconciliation_reason_chip.dart';
 import 'reconciliation_summary_header.dart';
 
@@ -45,11 +51,9 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7DCE4)),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -58,83 +62,134 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: ReconciliationSummaryHeader(
-              title: 'Analysis Panel',
-              subtitle:
-                  '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)',
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          border: Border.all(color: AppColorScheme.border),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFF9FBFD),
+                    Color(0xFFF3F7FB),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppRadius.xl),
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _metricCardGrid(),
-                  const SizedBox(height: 14),
-                  _chipSection(),
-                  const SizedBox(height: 14),
-                  _insightsCard(),
-                  if (detailedSummary != null) ...[
-                    const SizedBox(height: 14),
-                    Theme(
-                      data: Theme.of(context).copyWith(
-                        dividerColor: Colors.transparent,
+                  ReconciliationSummaryHeader(
+                    title: 'Analysis Panel',
+                    subtitle:
+                        '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      AppStatusBadge(
+                        label: '$totalSellers sellers',
+                        icon: Icons.apartment_rounded,
+                        tone: AppStatusBadgeTone.info,
                       ),
-                      child: ExpansionTile(
-                        tilePadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 2,
-                        ),
-                        childrenPadding: EdgeInsets.zero,
-                        collapsedBackgroundColor: const Color(0xFFF8FAFC),
-                        backgroundColor: const Color(0xFFF8FAFC),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
-                        collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        ),
-                        title: const Text(
-                          'Detailed Insights',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        subtitle: const Text(
-                          'Expanded buyer-level analytics and mismatch detail',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: detailedSummary!,
-                          ),
-                        ],
+                      AppStatusBadge(
+                        label: '$manualMappingsCount mappings',
+                        icon: Icons.link_rounded,
                       ),
-                    ),
-                  ],
+                      AppStatusBadge(
+                        label: '$totalSections sections',
+                        icon: Icons.grid_view_rounded,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _metricCardGrid(),
+                    const SizedBox(height: AppSpacing.md),
+                    _chipSection(),
+                    const SizedBox(height: AppSpacing.md),
+                    _insightsCard(),
+                    if (detailedSummary != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Theme(
+                        data: Theme.of(context).copyWith(
+                          dividerColor: Colors.transparent,
+                        ),
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: 2,
+                          ),
+                          childrenPadding: EdgeInsets.zero,
+                          collapsedBackgroundColor:
+                              AppColorScheme.surfaceVariant,
+                          backgroundColor: AppColorScheme.surfaceVariant,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            side: const BorderSide(color: AppColorScheme.divider),
+                          ),
+                          collapsedShape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            side: const BorderSide(color: AppColorScheme.divider),
+                          ),
+                          title: const Text(
+                            'Detailed Insights',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Expanded buyer-level analytics and mismatch detail',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(AppSpacing.sm),
+                              child: detailedSummary!,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _metricCardGrid() {
     return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
       children: [
         _compactMetric('Total Rows', '$totalRows'),
         _compactMetric('Mismatch Rows', '$mismatchRows'),
@@ -149,13 +204,10 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
   Widget _compactMetric(String label, String value) {
     return SizedBox(
       width: 148,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
+      child: AppSectionCard(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        backgroundColor: AppColorScheme.surfaceVariant,
+        borderColor: AppColorScheme.divider,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -164,7 +216,7 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF64748B),
+                color: AppColorScheme.textMuted,
               ),
             ),
             const SizedBox(height: 6),
@@ -173,7 +225,7 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
+                color: AppColorScheme.textPrimary,
               ),
             ),
           ],
@@ -183,14 +235,10 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
   }
 
   Widget _chipSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+    return AppSectionCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      backgroundColor: AppColorScheme.surfaceVariant,
+      borderColor: AppColorScheme.divider,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -198,10 +246,10 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
             'Mismatch Reasons',
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
             children: [
               ReconciliationReasonChip(
                 label: 'No 26Q entry',
@@ -245,37 +293,43 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
         'Unsupported/unknown 26Q sections visible in current scope: ${unsupportedSections.join(', ')}',
     ];
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: unsupportedSections.isNotEmpty
-            ? const Color(0xFFFFF7ED)
-            : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: unsupportedSections.isNotEmpty
-              ? const Color(0xFFF59E0B)
-              : const Color(0xFFE2E8F0),
-        ),
-      ),
+    return AppSectionCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      backgroundColor: unsupportedSections.isNotEmpty
+          ? const Color(0xFFFFF7ED)
+          : AppColorScheme.surfaceVariant,
+      borderColor: unsupportedSections.isNotEmpty
+          ? const Color(0xFFF59E0B)
+          : AppColorScheme.divider,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Notes & Insights',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Notes & Insights',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (unsupportedSections.isNotEmpty)
+                const AppStatusBadge(
+                  label: 'Attention Needed',
+                  icon: Icons.warning_amber_rounded,
+                  tone: AppStatusBadgeTone.warning,
+                ),
+            ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           ...notes.map(
             (note) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: Text(
                 note,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF475569),
+                  color: AppColorScheme.textSecondary,
                   height: 1.4,
                 ),
               ),

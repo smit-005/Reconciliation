@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
+import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
+import 'package:reconciliation_app/core/widgets/app_section_card.dart';
+import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
+
 class ReconciliationTopToolbar extends StatelessWidget {
   final String buyerName;
   final String buyerPan;
@@ -28,62 +36,140 @@ class ReconciliationTopToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFD7DCE4)),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0xFFFDFEFF),
+            Color(0xFFF6F9FC),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildBuyerLine(),
-          const SizedBox(height: 6),
-          sectionTabs,
-          const SizedBox(height: 6),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stacked = constraints.maxWidth < 1240;
-              if (stacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: AppSectionCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        backgroundColor: Colors.white.withValues(alpha: 0.94),
+        borderColor: AppColorScheme.border,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeaderBlock(),
+            const SizedBox(height: AppSpacing.md),
+            _buildTabSection(),
+            const SizedBox(height: AppSpacing.md),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 1240;
+                if (stacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      filters,
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildActionRow(),
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    filters,
-                    const SizedBox(height: 6),
+                    Expanded(child: filters),
+                    const SizedBox(width: AppSpacing.md),
                     _buildActionRow(),
                   ],
                 );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: filters),
-                  const SizedBox(width: 12),
-                  _buildActionRow(),
-                ],
-              );
-            },
-          ),
-        ],
+              },
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildHeaderBlock() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 980;
+        final identity = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Reconciliation Analysis',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColorScheme.textPrimary,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _buildBuyerLine(),
+          ],
+        );
+
+        final badges = Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
+          children: const [
+            AppStatusBadge(
+              label: 'Enterprise View',
+              icon: Icons.workspace_premium_rounded,
+              tone: AppStatusBadgeTone.info,
+            ),
+            AppStatusBadge(
+              label: 'CA Workflow',
+              icon: Icons.assured_workload_rounded,
+            ),
+          ],
+        );
+
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              identity,
+              const SizedBox(height: AppSpacing.sm),
+              badges,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: identity),
+            const SizedBox(width: AppSpacing.md),
+            badges,
+          ],
+        );
+      },
     );
   }
 
   Widget _buildBuyerLine() {
     return Wrap(
-      spacing: 10,
-      runSpacing: 4,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(
-          buyerName.isEmpty ? '-' : buyerName,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF0F172A),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: AppColorScheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: AppColorScheme.divider),
+          ),
+          child: Text(
+            buyerName.isEmpty ? '-' : buyerName,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColorScheme.textPrimary,
+            ),
           ),
         ),
         _metaText('PAN', buyerPan.isEmpty ? '-' : buyerPan),
@@ -92,66 +178,74 @@ class ReconciliationTopToolbar extends StatelessWidget {
     );
   }
 
+  Widget _buildTabSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFE),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColorScheme.divider),
+      ),
+      child: sectionTabs,
+    );
+  }
+
   Widget _metaText(String label, String value) {
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(
-          fontSize: 11.5,
-          color: Color(0xFF475569),
-        ),
-        children: [
-          const TextSpan(
-            text: '| ',
-            style: TextStyle(color: Color(0xFF94A3B8)),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColorScheme.divider),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 11.5,
+            color: AppColorScheme.textSecondary,
           ),
-          TextSpan(
-            text: '$label ',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          TextSpan(
-            text: value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0F172A),
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColorScheme.textMuted,
+              ),
             ),
-          ),
-        ],
+            TextSpan(
+              text: value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColorScheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildActionRow() {
     return Wrap(
-      spacing: 10,
-      runSpacing: 8,
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _buildRawModeSwitch(),
-        FilledButton.icon(
+        AppPrimaryButton(
           onPressed: onRecalculate,
-          style: FilledButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          icon: isRecalculating
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.refresh_rounded, size: 16),
-          label: Text(
-            isRecalculating ? 'Recalculating...' : 'Recalculate',
-          ),
+          label: isRecalculating ? 'Recalculating...' : 'Recalculate',
+          icon: Icons.refresh_rounded,
+          isLoading: isRecalculating,
         ),
-        OutlinedButton.icon(
+        AppSecondaryButton(
           onPressed: onManualMapping,
-          style: OutlinedButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          icon: const Icon(Icons.link_rounded, size: 16),
-          label: const Text('Seller Mapping'),
+          icon: Icons.link_rounded,
+          label: 'Seller Mapping',
         ),
       ],
     );
@@ -159,30 +253,49 @@ class ReconciliationTopToolbar extends StatelessWidget {
 
   Widget _buildRawModeSwitch() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: AppColorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColorScheme.divider),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Raw Mode',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF334155),
-            ),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Raw Mode',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColorScheme.textPrimary,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Show all underlying rows',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColorScheme.textMuted,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.sm),
           Transform.scale(
             scale: 0.9,
             child: Switch(
               value: showAllRows,
               onChanged: onShowAllRowsChanged,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              activeColor: AppColorScheme.primary,
             ),
           ),
         ],
