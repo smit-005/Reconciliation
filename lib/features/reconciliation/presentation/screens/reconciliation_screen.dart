@@ -5,6 +5,7 @@ import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/skipped_row_summary.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_summary.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
@@ -167,6 +168,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     CalculationService.sellerStatusMismatch,
     CalculationService.sellerStatusNo26Q,
     CalculationService.sellerStatusOnly26Q,
+    ReconciliationStatus.sectionMissing,
     ReconciliationStatus.belowThreshold,
     ReconciliationStatus.timingDifference,
     ReconciliationStatus.shortDeduction,
@@ -1782,6 +1784,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       case CalculationService.sellerStatusNo26Q:
       case ReconciliationStatus.applicableButNo26Q:
         return Colors.orange.shade50;
+      case ReconciliationStatus.sectionMissing:
+        return const Color(0xFFFFF7ED);
       case CalculationService.sellerStatusOnly26Q:
       case ReconciliationStatus.onlyIn26Q:
         return Colors.purple.shade50;
@@ -1808,6 +1812,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         return const Color(0xFFB45309);
       case ReconciliationStatus.belowThreshold:
         return const Color(0xFF64748B);
+      case ReconciliationStatus.sectionMissing:
+        return const Color(0xFF9A3412);
       case ReconciliationStatus.applicableButNo26Q:
         return const Color(0xFFB45309);
       case CalculationService.sellerStatusMatched:
@@ -1909,6 +1915,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   Widget _buildMainContent() {
     final summary = _activeSummary();
+    final skippedRowSummary =
+        _sectionResultCache?.skippedRowSummary ?? SkippedRowSummary.empty;
     final detailedSummary = ReconciliationSummaryPanel(
       buyerName: widget.buyerName,
       buyerPan: widget.buyerPan,
@@ -1951,6 +1959,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       manualMappingsCount: manualNameMapping.length,
       mismatchRowsCount: _mismatchRowsCount(),
       sectionCounts: _sectionCounts(),
+      skippedRowSummary: skippedRowSummary,
     );
     final tableContent = ReconciliationTableSection(
       filteredRows: filteredRows,

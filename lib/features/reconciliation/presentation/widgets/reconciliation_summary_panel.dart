@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/features/reconciliation/models/result/skipped_row_summary.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'reconciliation_common_widgets.dart';
 import 'reconciliation_analytics_panel.dart';
@@ -48,6 +49,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
   final int manualMappingsCount;
   final int mismatchRowsCount;
   final Map<String, int> sectionCounts;
+  final SkippedRowSummary skippedRowSummary;
 
   const ReconciliationSummaryPanel({
     super.key,
@@ -89,6 +91,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
     required this.manualMappingsCount,
     required this.mismatchRowsCount,
     required this.sectionCounts,
+    this.skippedRowSummary = SkippedRowSummary.empty,
   });
 
   String _fmt(double value) => value.toStringAsFixed(2);
@@ -200,6 +203,60 @@ class ReconciliationSummaryPanel extends StatelessWidget {
             value: _fmt(applicableButNo26QTds),
             bgColor: Colors.deepOrange.shade50,
             textColor: Colors.deepOrange.shade700,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkippedRowsCard() {
+    if (skippedRowSummary.total <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final rowLabel = skippedRowSummary.total == 1 ? 'row' : 'rows';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        border: Border.all(color: const Color(0xFFF59E0B)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Skipped Rows Found',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF9A3412),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${skippedRowSummary.total} $rowLabel excluded from calculation:',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF9A3412),
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...skippedRowSummary.reasonCounts.entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                '- ${entry.key}: ${entry.value}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF7C2D12),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -324,6 +381,10 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           ),
           children: [
             _buildTopSummaryCard(),
+            if (skippedRowSummary.total > 0) ...[
+              const SizedBox(height: 16),
+              _buildSkippedRowsCard(),
+            ],
             const SizedBox(height: 16),
             ReconciliationAnalyticsPanel(
               mismatchRowsCount: mismatchRowsCount,

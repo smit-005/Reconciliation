@@ -193,26 +193,27 @@ class GroupingService {
 
       if (sellerKey.isEmpty) continue;
 
-      final fyMonthKey = '$financialYear|$month';
+      final effectiveSection = row.normalizedSection.isNotEmpty
+          ? row.normalizedSection
+          : row.section;
+      final fyMonthSectionKey = '$financialYear|$month|$effectiveSection';
 
       grouped.putIfAbsent(sellerKey, () => {});
       final monthMap = grouped[sellerKey]!;
 
-      final existing = monthMap[fyMonthKey];
+      final existing = monthMap[fyMonthSectionKey];
       if (existing == null) {
-        monthMap[fyMonthKey] = TdsGroup(
+        monthMap[fyMonthSectionKey] = TdsGroup(
           financialYear: financialYear,
           month: month,
           sellerName: sellerName,
           sellerPan: sellerPan,
           deductedAmount: row.deductedAmount,
           actualTds: row.tds,
-          section: row.normalizedSection.isNotEmpty
-              ? row.normalizedSection
-              : row.section,
+          section: effectiveSection,
         );
       } else {
-        monthMap[fyMonthKey] = TdsGroup(
+        monthMap[fyMonthSectionKey] = TdsGroup(
           financialYear: financialYear,
           month: month,
           sellerName:
@@ -221,11 +222,7 @@ class GroupingService {
           existing.sellerPan.isNotEmpty ? existing.sellerPan : sellerPan,
           deductedAmount: existing.deductedAmount + row.deductedAmount,
           actualTds: existing.actualTds + row.tds,
-          section: existing.section.isNotEmpty
-              ? existing.section
-              : (row.normalizedSection.isNotEmpty
-                  ? row.normalizedSection
-                  : row.section),
+          section: existing.section,
         );
       }
     }

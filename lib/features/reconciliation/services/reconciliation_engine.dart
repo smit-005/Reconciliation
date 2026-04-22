@@ -96,6 +96,10 @@ class ReconciliationEngine {
     required double tdsTolerance,
     required double minorTdsTolerance,
   }) {
+    if (!hasValidSection) {
+      return ReconciliationStatus.sectionMissing;
+    }
+
     if (purchaseMissing && !tdsMissing) {
       return ReconciliationStatus.onlyIn26Q;
     }
@@ -116,10 +120,6 @@ class ReconciliationEngine {
 
     if (purchaseMissing && tdsMissing) {
       return ReconciliationStatus.noData;
-    }
-
-    if (!hasValidSection) {
-      return ReconciliationStatus.sectionMissing;
     }
 
     final amountDiffAbs = amountDifference.abs();
@@ -166,6 +166,17 @@ class ReconciliationEngine {
   }) {
     final remarks = <String>{};
 
+    if (!hasValidSection) {
+      if (sellerPan.trim().isEmpty) {
+        remarks.add('PAN missing -> high TDS risk');
+      }
+      remarks.add('Section unresolved - review required');
+      remarks.add(
+        'Applicability and expected TDS may be incomplete because section-based rules could not be confirmed',
+      );
+      return remarks.join(', ');
+    }
+
     final isBelowThresholdPurchase = !purchaseMissing &&
         tdsMissing &&
         applicableAmount.abs() <= amountTolerance &&
@@ -193,10 +204,6 @@ class ReconciliationEngine {
         remarks.add('TDS not required');
       }
       return remarks.join(', ');
-    }
-
-    if (!hasValidSection) {
-      remarks.add('Section missing');
     }
 
     final amountDiffAbs = amountDifference.abs();

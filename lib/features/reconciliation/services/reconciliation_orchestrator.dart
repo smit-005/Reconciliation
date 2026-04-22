@@ -12,6 +12,7 @@ import 'package:reconciliation_app/features/reconciliation/models/result/reconci
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_summary.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/resolved_seller_identity.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/skipped_row_summary.dart';
 
 import 'reconciliation_engine.dart';
 import 'section_rule_service.dart';
@@ -26,12 +27,14 @@ class SectionReconciliationResult {
   final ReconciliationSummary combinedSummary;
   final Map<String, ReconciliationSummary> sectionSummaries;
   final Map<String, List<ReconciliationRow>> rowsBySection;
+  final SkippedRowSummary skippedRowSummary;
 
   const SectionReconciliationResult({
     required this.rows,
     required this.combinedSummary,
     required this.sectionSummaries,
     required this.rowsBySection,
+    this.skippedRowSummary = SkippedRowSummary.empty,
   });
 }
 
@@ -194,6 +197,52 @@ class _MonthlyBucketKey {
   );
 }
 
+class _SkippedRowAccumulator {
+  static const int _maxSamples = 5;
+
+  final Map<String, int> _reasonCounts = <String, int>{};
+  final List<SkippedRowSample> _samples = <SkippedRowSample>[];
+  int _total = 0;
+
+  void add({
+    required String sourceType,
+    required String reason,
+    required String sellerName,
+    required String month,
+  }) {
+    _total += 1;
+    _reasonCounts[reason] = (_reasonCounts[reason] ?? 0) + 1;
+
+    if (_samples.length < _maxSamples) {
+      _samples.add(
+        SkippedRowSample(
+          sourceType: sourceType,
+          reason: reason,
+          sellerName: sellerName.trim(),
+          month: month.trim(),
+        ),
+      );
+    }
+  }
+
+  SkippedRowSummary build() {
+    final sortedCounts = _reasonCounts.entries.toList()
+      ..sort((a, b) {
+        final countCompare = b.value.compareTo(a.value);
+        if (countCompare != 0) return countCompare;
+        return a.key.compareTo(b.key);
+      });
+
+    return SkippedRowSummary(
+      total: _total,
+      reasonCounts: {
+        for (final entry in sortedCounts) entry.key: entry.value,
+      },
+      samples: List<SkippedRowSample>.unmodifiable(_samples),
+    );
+  }
+}
+
 class CalculationService {
   static const double threshold = 5000000.0;
   static const double amountTolerance = 1.0;
@@ -230,6 +279,7 @@ class CalculationService {
   }) async {
     final normalizedBuyerPan = normalizePan(buyerPan);
     final normalizedMapping = _normalizeNameMapping(nameMapping ?? {});
+    final skippedRows = _SkippedRowAccumulator();
     final activeSections = (sections ?? supportedSections)
         .map(_normalizeSupportedSection)
         .where((value) => value.isNotEmpty)
@@ -278,6 +328,7 @@ class CalculationService {
             row: row,
             nameMapping: normalizedMapping,
             resolver: resolver,
+            skippedRows: skippedRows,
           ),
         )
         .whereType<_ResolvedSourceRow>()
@@ -290,6 +341,7 @@ class CalculationService {
             row: row,
             nameMapping: normalizedMapping,
             resolver: resolver,
+            skippedRows: skippedRows,
           ),
         )
         .whereType<_ResolvedSourceRow>()
@@ -359,6 +411,7 @@ class CalculationService {
       combinedSummary: _buildSummary(section: 'ALL', rows: timedRows),
       sectionSummaries: sectionSummaries,
       rowsBySection: rowsBySection,
+      skippedRowSummary: skippedRows.build(),
     );
   }
 
@@ -459,6 +512,7 @@ class CalculationService {
     required NormalizedTransactionRow row,
     required Map<String, String> nameMapping,
     required SellerIdentityResolver resolver,
+    required _SkippedRowAccumulator skippedRows,
   }) {
     final mappedName = _applyNameMapping(row.partyName, nameMapping);
     final normalizedName = _normalizeSellerName(row.partyName, nameMapping);
@@ -471,7 +525,23 @@ class CalculationService {
     final section = _normalizeSourceSection(row.section, row.normalizedSection);
     final amount = round2(row.taxableAmount > 0 ? row.taxableAmount : row.amount);
 
-    if (month.isEmpty || financialYear.isEmpty || amount == 0.0) {
+    if (month.isEmpty || financialYear.isEmpty) {
+      skippedRows.add(
+        sourceType: row.sourceType,
+        reason: 'Missing month',
+        sellerName: row.partyName,
+        month: row.month,
+      );
+      return null;
+    }
+
+    if (amount == 0.0) {
+      skippedRows.add(
+        sourceType: row.sourceType,
+        reason: 'Missing required numeric data',
+        sellerName: row.partyName,
+        month: row.month,
+      );
       return null;
     }
 
@@ -505,6 +575,7 @@ class CalculationService {
     required Tds26QRow row,
     required Map<String, String> nameMapping,
     required SellerIdentityResolver resolver,
+    required _SkippedRowAccumulator skippedRows,
   }) {
     final mappedName = _applyNameMapping(row.deducteeName, nameMapping);
     final normalizedName = _normalizeSellerName(row.deducteeName, nameMapping);
@@ -517,6 +588,12 @@ class CalculationService {
     final section = _normalizeTdsSection(row.section);
 
     if (month.isEmpty || financialYear.isEmpty) {
+      skippedRows.add(
+        sourceType: 'tds26q',
+        reason: 'Missing month',
+        sellerName: row.deducteeName,
+        month: row.month,
+      );
       return null;
     }
 
@@ -1031,6 +1108,10 @@ class CalculationService {
     required double applicableAmount,
   }) {
     final normalizedSection = _normalizeSupportedSection(section);
+    if (normalizedSection.isEmpty) {
+      return 'Section unresolved; applicability was kept at zero for safety until the section is confirmed.';
+    }
+
     if (normalizedSection == '194Q') {
       if (applicableAmount <= 0) {
         return '194Q threshold not crossed yet; cumulative remained at ${round2(currentCumulative)}.';
@@ -1054,6 +1135,10 @@ class CalculationService {
     required double rate,
   }) {
     final normalizedSection = _normalizeSupportedSection(section);
+    if (normalizedSection.isEmpty) {
+      return 'Expected TDS was kept at zero for safety because the section is unresolved.';
+    }
+
     if (expectedTds == 0 && rate == 0) {
       if (normalizedSection == '194C' ||
           normalizedSection == '194J' ||
@@ -1089,7 +1174,7 @@ class CalculationService {
       case ReconciliationStatus.noDeductionRequired:
         return 'Bucket is not applicable for TDS after rule evaluation.';
       case ReconciliationStatus.sectionMissing:
-        return 'Section was unavailable or unsupported for this bucket.';
+        return 'Section was unavailable, blank, or unsupported for this bucket, so section-based applicability and expected TDS were kept conservative for review.';
       default:
         return 'Status derived from resolved seller + FY + section + month reconciliation bucket.';
     }
