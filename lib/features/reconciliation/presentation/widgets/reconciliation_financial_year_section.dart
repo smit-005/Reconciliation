@@ -550,6 +550,8 @@ String _statusDisplayLabel(String status) {
   switch (status) {
     case ReconciliationStatus.belowThreshold:
       return 'Below Threshold';
+    case ReconciliationStatus.reviewRequired:
+      return 'Review';
     case ReconciliationStatus.amountMismatch:
       return 'Amt mismatch';
     case ReconciliationStatus.applicableButNo26Q:

@@ -71,6 +71,8 @@ class _PurchaseComputation {
   final double cumulativeBefore;
   final double cumulativeAfter;
   final bool thresholdCrossed;
+  final bool manualReviewRequired;
+  final String manualReviewReason;
   final String applicableAmountReason;
   final String expectedTdsReason;
 
@@ -83,6 +85,8 @@ class _PurchaseComputation {
     required this.cumulativeBefore,
     required this.cumulativeAfter,
     required this.thresholdCrossed,
+    required this.manualReviewRequired,
+    required this.manualReviewReason,
     required this.applicableAmountReason,
     required this.expectedTdsReason,
   });
@@ -132,6 +136,8 @@ class _MonthlyPurchaseBucket {
   double cumulativeBefore = 0.0;
   double cumulativeAfter = 0.0;
   bool thresholdCrossed = false;
+  bool manualReviewRequired = false;
+  String manualReviewReason = '';
   final Set<String> originalSellerNames = <String>{};
   final Set<String> normalizedSellerNames = <String>{};
   final Set<String> originalPans = <String>{};
@@ -658,6 +664,9 @@ class CalculationService {
                 currentAmount: entry.amount,
                 sectionCumulative: nextSection,
                 previousSectionCumulative: previousSection,
+                sellerPan: entry.identity.resolvedPan.isNotEmpty
+                    ? entry.identity.resolvedPan
+                    : entry.originalPan,
               )
             : SectionRuleResult(
                 applicableAmount: 0.0,
@@ -681,6 +690,8 @@ class CalculationService {
           thresholdCrossed: normalizedSection == '194Q'
               ? previousOverall < threshold && nextOverall > threshold
               : previousSection < nextSection && rule.applicableAmount > 0,
+          manualReviewRequired: rule.manualReviewRequired,
+          manualReviewReason: rule.reviewReason,
           applicableAmountReason: _buildApplicableReason(
             section: entry.section,
             amount: entry.amount,
@@ -694,6 +705,9 @@ class CalculationService {
             section: entry.section,
             expectedTds: round2(rule.expectedTds),
             rate: rule.rate,
+            applicableAmount: round2(rule.applicableAmount),
+            manualReviewRequired: rule.manualReviewRequired,
+            manualReviewReason: rule.reviewReason,
           ),
         );
 
@@ -770,6 +784,7 @@ class CalculationService {
     );
 
     final statusAndRemarks = ReconciliationEngine.buildStatusAndRemarks(
+      section: key.section,
       sellerPan: identity.resolvedPan,
       purchaseMissing: purchase == null,
       tdsMissing: tds == null,
@@ -783,6 +798,8 @@ class CalculationService {
       amountTolerance: amountTolerance,
       tdsTolerance: tdsTolerance,
       minorTdsTolerance: minorTdsTolerance,
+      manualReviewRequired: purchase?.manualReviewRequired ?? false,
+      manualReviewReason: purchase?.manualReviewReason ?? '',
       isLowConfidenceMatch: identity.identityConfidence < 0.75,
     );
 
@@ -877,6 +894,7 @@ class CalculationService {
       ),
       amountTolerance: amountTolerance,
       tdsTolerance: tdsTolerance,
+      manualReviewRequired: purchase?.manualReviewRequired ?? false,
     );
   }
 
@@ -896,6 +914,12 @@ class CalculationService {
         : bucket.cumulativeBefore;
     bucket.cumulativeAfter = computation.cumulativeAfter;
     bucket.thresholdCrossed = bucket.thresholdCrossed || computation.thresholdCrossed;
+    bucket.manualReviewRequired =
+        bucket.manualReviewRequired || computation.manualReviewRequired;
+    if (bucket.manualReviewReason.trim().isEmpty &&
+        computation.manualReviewReason.trim().isNotEmpty) {
+      bucket.manualReviewReason = computation.manualReviewReason.trim();
+    }
     bucket.originalSellerNames.add(computation.source.originalSellerName.trim());
     bucket.normalizedSellerNames.add(computation.source.normalizedSellerName);
     final originalPan = normalizePan(computation.source.originalPan);
@@ -1122,6 +1146,16 @@ class CalculationService {
       return '194Q threshold was already crossed before this row; full amount ${round2(amount)} is applicable.';
     }
 
+    if (normalizedSection == '194C') {
+      if (applicableAmount <= 0) {
+        return '194C threshold not crossed; single payment stayed within 30000 and cumulative remained at ${round2(currentCumulative)}.';
+      }
+      if (amount > 30000.0) {
+        return 'Applicable under 194C because single payment ${round2(amount)} exceeds 30000.';
+      }
+      return 'Applicable under 194C because cumulative section amount ${round2(currentCumulative)} exceeds 100000.';
+    }
+
     if (applicableAmount <= 0) {
       return 'Section threshold/rule not met for $normalizedSection.';
     }
@@ -1133,16 +1167,26 @@ class CalculationService {
     required String section,
     required double expectedTds,
     required double rate,
+    required double applicableAmount,
+    required bool manualReviewRequired,
+    required String manualReviewReason,
   }) {
     final normalizedSection = _normalizeSupportedSection(section);
     if (normalizedSection.isEmpty) {
       return 'Expected TDS was kept at zero for safety because the section is unresolved.';
     }
 
+    if (manualReviewRequired) {
+      return 'Expected TDS could not be confirmed for $normalizedSection because ${manualReviewReason.trim().isEmpty ? 'rate inference was unresolved.' : manualReviewReason.trim()}';
+    }
+
     if (expectedTds == 0 && rate == 0) {
       if (normalizedSection == '194C' ||
           normalizedSection == '194J' ||
           normalizedSection == '194I') {
+        if (normalizedSection == '194C' && applicableAmount <= 0) {
+          return 'Expected TDS is zero because the 194C threshold is not crossed.';
+        }
         return 'Expected TDS kept at zero because subtype/rate context is not modeled yet for $normalizedSection.';
       }
       return 'Expected TDS is zero because the row is not yet applicable.';
@@ -1165,6 +1209,8 @@ class CalculationService {
         return 'Purchase bucket is applicable but there is no matching 26Q bucket.';
       case ReconciliationStatus.belowThreshold:
         return 'Purchase bucket stayed below the applicable threshold and no 26Q bucket exists.';
+      case ReconciliationStatus.reviewRequired:
+        return 'Purchase bucket is applicable, but the expected TDS rate could not be confirmed automatically and needs manual review.';
       case ReconciliationStatus.amountMismatch:
         return 'Applicable purchase amount and deducted 26Q amount differ by ${round2(amountDifference)}.';
       case ReconciliationStatus.shortDeduction:

@@ -1,12 +1,18 @@
+import 'package:reconciliation_app/core/utils/normalize_utils.dart';
+
 class SectionRuleResult {
   final double applicableAmount;
   final double expectedTds;
   final double rate;
+  final bool manualReviewRequired;
+  final String reviewReason;
 
   SectionRuleResult({
     required this.applicableAmount,
     required this.expectedTds,
     required this.rate,
+    this.manualReviewRequired = false,
+    this.reviewReason = '',
   });
 }
 
@@ -18,6 +24,7 @@ class SectionRuleService {
     required double currentAmount,
     required double sectionCumulative,
     required double previousSectionCumulative,
+    String sellerPan = '',
   }) {
     final sec = _clean(section);
 
@@ -30,7 +37,11 @@ class SectionRuleService {
         );
 
       case '194C':
-        return _apply194C(currentAmount, sectionCumulative);
+        return _apply194C(
+          currentAmount,
+          sectionCumulative,
+          sellerPan: sellerPan,
+        );
 
       case '194J':
         return _apply194J(currentAmount, sectionCumulative);
@@ -80,25 +91,40 @@ class SectionRuleService {
   static SectionRuleResult _apply194C(
       double amount,
       double sectionTotal,
-      ) {
+      {
+        String sellerPan = '',
+      }) {
     const singleLimit = 30000.0;
     const yearlyLimit = 100000.0;
 
-    final isApplicable =
-        amount > singleLimit || sectionTotal > yearlyLimit;
+    final isApplicable = amount > singleLimit || sectionTotal > yearlyLimit;
 
     final applicable = isApplicable ? amount : 0.0;
 
-    // 194C may apply at different rates depending on payee type
-    // (for example individual/HUF vs others). Since party-type context
-    // is not available reliably here yet, do not hardcode a rate.
-    // Return zero expected TDS for now so this can be upgraded safely later.
-    const rate = 0.0;
+    if (!isApplicable) {
+      return SectionRuleResult(
+        applicableAmount: 0.0,
+        expectedTds: 0.0,
+        rate: 0.0,
+      );
+    }
+
+    final resolvedRate = _resolve194CRateFromPan(sellerPan);
+    if (resolvedRate == null) {
+      return SectionRuleResult(
+        applicableAmount: applicable,
+        expectedTds: 0.0,
+        rate: 0.0,
+        manualReviewRequired: true,
+        reviewReason:
+            'PAN/entity type unavailable, so expected TDS could not be confirmed.',
+      );
+    }
 
     return SectionRuleResult(
       applicableAmount: applicable,
-      expectedTds: applicable * rate,
-      rate: rate,
+      expectedTds: double.parse((applicable * resolvedRate).toStringAsFixed(2)),
+      rate: resolvedRate,
     );
   }
 
@@ -176,5 +202,34 @@ class SectionRuleService {
     if (v.contains('194H')) return '194H';
 
     return '';
+  }
+
+  static double? _resolve194CRateFromPan(String sellerPan) {
+    final normalizedPan = normalizePan(sellerPan);
+    if (!looksLikePan(normalizedPan)) {
+      return null;
+    }
+
+    final entityCode = normalizedPan[3];
+    if (entityCode == 'P' || entityCode == 'H') {
+      return 0.01;
+    }
+
+    const businessEntityCodes = {
+      'A',
+      'B',
+      'C',
+      'F',
+      'G',
+      'J',
+      'L',
+      'T',
+    };
+
+    if (businessEntityCodes.contains(entityCode)) {
+      return 0.02;
+    }
+
+    return null;
   }
 }

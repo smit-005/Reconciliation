@@ -169,6 +169,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     CalculationService.sellerStatusNo26Q,
     CalculationService.sellerStatusOnly26Q,
     ReconciliationStatus.sectionMissing,
+    ReconciliationStatus.reviewRequired,
     ReconciliationStatus.belowThreshold,
     ReconciliationStatus.timingDifference,
     ReconciliationStatus.shortDeduction,
@@ -1785,6 +1786,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       case ReconciliationStatus.applicableButNo26Q:
         return Colors.orange.shade50;
       case ReconciliationStatus.sectionMissing:
+      case ReconciliationStatus.reviewRequired:
         return const Color(0xFFFFF7ED);
       case CalculationService.sellerStatusOnly26Q:
       case ReconciliationStatus.onlyIn26Q:
@@ -1813,6 +1815,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       case ReconciliationStatus.belowThreshold:
         return const Color(0xFF64748B);
       case ReconciliationStatus.sectionMissing:
+      case ReconciliationStatus.reviewRequired:
         return const Color(0xFF9A3412);
       case ReconciliationStatus.applicableButNo26Q:
         return const Color(0xFFB45309);

@@ -83,6 +83,7 @@ class ReconciliationEngine {
   }
 
   static String buildBaseStatus({
+    required String section,
     required bool purchaseMissing,
     required bool tdsMissing,
     required double basicAmount,
@@ -95,6 +96,7 @@ class ReconciliationEngine {
     required double amountTolerance,
     required double tdsTolerance,
     required double minorTdsTolerance,
+    required bool manualReviewRequired,
   }) {
     if (!hasValidSection) {
       return ReconciliationStatus.sectionMissing;
@@ -105,6 +107,10 @@ class ReconciliationEngine {
     }
 
     if (!purchaseMissing && tdsMissing) {
+      if (manualReviewRequired) {
+        return ReconciliationStatus.reviewRequired;
+      }
+
       if (applicableAmount > amountTolerance) {
         return ReconciliationStatus.applicableButNo26Q;
       }
@@ -120,6 +126,10 @@ class ReconciliationEngine {
 
     if (purchaseMissing && tdsMissing) {
       return ReconciliationStatus.noData;
+    }
+
+    if (manualReviewRequired) {
+      return ReconciliationStatus.reviewRequired;
     }
 
     final amountDiffAbs = amountDifference.abs();
@@ -150,6 +160,7 @@ class ReconciliationEngine {
   }
 
   static String buildRemarks({
+    required String section,
     required String sellerPan,
     required bool purchaseMissing,
     required bool tdsMissing,
@@ -163,8 +174,11 @@ class ReconciliationEngine {
     required double amountTolerance,
     required double tdsTolerance,
     required double minorTdsTolerance,
+    required bool manualReviewRequired,
+    required String manualReviewReason,
   }) {
     final remarks = <String>{};
+    final normalizedSection = normalizeSection(section);
 
     if (!hasValidSection) {
       if (sellerPan.trim().isEmpty) {
@@ -177,6 +191,20 @@ class ReconciliationEngine {
       return remarks.join(', ');
     }
 
+    if (manualReviewRequired) {
+      if (sellerPan.trim().isEmpty) {
+        remarks.add('PAN missing -> high TDS risk');
+      }
+      remarks.add('${normalizedSection.isEmpty ? 'Section' : normalizedSection} rate unresolved - review required');
+      if (manualReviewReason.trim().isNotEmpty) {
+        remarks.add(manualReviewReason.trim());
+      }
+      if (!purchaseMissing && tdsMissing) {
+        remarks.add('No 26Q entry');
+      }
+      return remarks.join(', ');
+    }
+
     final isBelowThresholdPurchase = !purchaseMissing &&
         tdsMissing &&
         applicableAmount.abs() <= amountTolerance &&
@@ -184,7 +212,13 @@ class ReconciliationEngine {
         actualTds.abs() <= tdsTolerance;
 
     if (isBelowThresholdPurchase) {
-      remarks.add('TDS not applicable yet under 194Q threshold');
+      if (normalizedSection.isNotEmpty) {
+        remarks.add(
+          'TDS not applicable yet because the $normalizedSection threshold/rule is not met',
+        );
+      } else {
+        remarks.add('TDS not applicable yet because the section threshold/rule is not met');
+      }
       return remarks.join(', ');
     }
 
@@ -223,6 +257,7 @@ class ReconciliationEngine {
   }
 
   static ReconciliationStatusRemarks buildStatusAndRemarks({
+    required String section,
     required String sellerPan,
     required bool purchaseMissing,
     required bool tdsMissing,
@@ -236,10 +271,13 @@ class ReconciliationEngine {
     required double amountTolerance,
     required double tdsTolerance,
     required double minorTdsTolerance,
+    required bool manualReviewRequired,
+    String manualReviewReason = '',
     bool isLowConfidenceMatch = false,
     bool panDerivedFromGstin = false,
   }) {
     final status = buildBaseStatus(
+      section: section,
       purchaseMissing: purchaseMissing,
       tdsMissing: tdsMissing,
       basicAmount: basicAmount,
@@ -252,9 +290,11 @@ class ReconciliationEngine {
       amountTolerance: amountTolerance,
       tdsTolerance: tdsTolerance,
       minorTdsTolerance: minorTdsTolerance,
+      manualReviewRequired: manualReviewRequired,
     );
 
     final remarks = buildRemarks(
+      section: section,
       sellerPan: sellerPan,
       purchaseMissing: purchaseMissing,
       tdsMissing: tdsMissing,
@@ -268,6 +308,8 @@ class ReconciliationEngine {
       amountTolerance: amountTolerance,
       tdsTolerance: tdsTolerance,
       minorTdsTolerance: minorTdsTolerance,
+      manualReviewRequired: manualReviewRequired,
+      manualReviewReason: manualReviewReason,
     );
 
     final lowConfidenceRemarks = isLowConfidenceMatch
@@ -314,7 +356,12 @@ class ReconciliationEngine {
     ReconciliationRow row, {
     required double amountTolerance,
     required double tdsTolerance,
+    bool manualReviewRequired = false,
   }) {
+    if (manualReviewRequired) {
+      return row;
+    }
+
     final isBelowThreshold = row.applicableAmount.abs() <= amountTolerance &&
         row.expectedTds.abs() <= tdsTolerance &&
         row.actualTds.abs() <= tdsTolerance &&
@@ -328,7 +375,8 @@ class ReconciliationEngine {
 
     return row.copyWith(
       status: ReconciliationStatus.belowThreshold,
-      remarks: 'TDS not applicable yet under 194Q threshold',
+      remarks:
+          'TDS not applicable yet because the ${normalizeSection(row.section).isEmpty ? 'section' : normalizeSection(row.section)} threshold/rule is not met',
     );
   }
 

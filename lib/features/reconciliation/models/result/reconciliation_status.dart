@@ -4,6 +4,7 @@ class ReconciliationStatus {
   static const String onlyIn26Q = 'Only in 26Q';
   static const String applicableButNo26Q = 'Applicable but no 26Q';
   static const String belowThreshold = 'Below Threshold';
+  static const String reviewRequired = 'Review Required';
   static const String amountMismatch = 'Amount Mismatch';
   static const String shortDeduction = 'Short Deduction';
   static const String excessDeduction = 'Excess Deduction';
@@ -20,5 +21,6 @@ class ReconciliationStatus {
     purchaseOnly,
     onlyIn26Q,
     applicableButNo26Q,
+    reviewRequired,
   ];
 }
