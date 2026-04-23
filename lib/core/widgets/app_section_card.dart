@@ -24,6 +24,26 @@ class AppSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final content = title == null && trailing == null
+        ? child
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (title != null) Expanded(child: title!),
+                  if (title != null && trailing != null)
+                    const SizedBox(width: AppSpacing.md),
+                  if (trailing != null) trailing!,
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              child,
+            ],
+          );
+
     return Container(
       width: double.infinity,
       padding: padding,
@@ -32,24 +52,7 @@ class AppSectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: borderColor ?? AppColorScheme.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null || trailing != null) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (title != null) Expanded(child: title!),
-                if (title != null && trailing != null)
-                  const SizedBox(width: AppSpacing.md),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          child,
-        ],
-      ),
+      child: content,
     );
   }
 }

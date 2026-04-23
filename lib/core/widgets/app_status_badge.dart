@@ -31,7 +31,7 @@ class AppStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
-        vertical: 6,
+        vertical: 5,
       ),
       decoration: BoxDecoration(
         color: colors.$1,
@@ -45,13 +45,16 @@ class AppStatusBadge extends StatelessWidget {
             Icon(icon, size: 14, color: colors.$2),
             const SizedBox(width: 6),
           ],
-          Flexible(
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 148),
             child: Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              softWrap: false,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: colors.$2,
+                    height: 1.05,
                   ),
             ),
           ),

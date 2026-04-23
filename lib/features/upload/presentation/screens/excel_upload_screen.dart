@@ -213,9 +213,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   void _showUploadSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..clearSnackBars()
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.fixed,
+          content: Text(message),
+        ),
+      );
   }
 
   Future<PlatformFile?> _pickExcelFile() async {

@@ -21,7 +21,7 @@ class ReconciliationReasonChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
+        vertical: 6,
       ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.09),
@@ -40,12 +40,19 @@ class ReconciliationReasonChip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 136),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                height: 1.05,
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),

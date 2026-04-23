@@ -1823,6 +1823,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   void _showSnackBar(String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger
+      ..clearSnackBars()
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(

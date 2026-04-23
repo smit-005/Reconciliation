@@ -111,7 +111,7 @@ class AppTheme {
         color: AppColorScheme.primary,
       ),
       snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
+        behavior: SnackBarBehavior.fixed,
         backgroundColor: AppColorScheme.textPrimary,
         contentTextStyle: const TextStyle(color: Colors.white),
         shape: RoundedRectangleBorder(
