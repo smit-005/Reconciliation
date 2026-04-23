@@ -74,12 +74,14 @@ class ReconciliationBottomActionBar extends StatelessWidget {
 
           if (stacked) {
             return Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: stackedChildren,
             );
           }
 
           return Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
