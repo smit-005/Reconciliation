@@ -272,7 +272,11 @@ CREATE TABLE import_format_profiles (
       return 'ALL';
     }
 
+    if (isLegacyUnsupportedSection(trimmed)) {
+      return '194IB';
+    }
+
     final normalized = normalizeSection(trimmed);
-    return normalized.isEmpty ? 'ALL' : normalized;
+    return normalized.isEmpty ? trimmed : normalized;
   }
 }

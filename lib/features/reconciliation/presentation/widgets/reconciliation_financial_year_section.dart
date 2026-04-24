@@ -250,10 +250,7 @@ class _DataRowCardState extends State<_DataRowCard> {
 
   @override
   Widget build(BuildContext context) {
-    final remarks = [
-      widget.row.remarks.trim(),
-      widget.row.calculationRemark.trim(),
-    ].where((e) => e.isNotEmpty).join(', ');
+    final remarks = widget.row.remarks.trim();
     final zebra = widget.index.isEven
         ? const Color(0xFFFFFFFF)
         : const Color(0xFFF8FAFC);

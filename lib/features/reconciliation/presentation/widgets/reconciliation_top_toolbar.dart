@@ -6,7 +6,8 @@ import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
-import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_view_mode_toggle.dart';
 
 class ReconciliationTopToolbar extends StatelessWidget {
   final String buyerName;
@@ -14,11 +15,12 @@ class ReconciliationTopToolbar extends StatelessWidget {
   final String gstNo;
   final Widget sectionTabs;
   final Widget filters;
-  final bool showAllRows;
+  final ReconciliationViewMode viewMode;
   final bool isRecalculating;
-  final ValueChanged<bool> onShowAllRowsChanged;
+  final ValueChanged<ReconciliationViewMode> onViewModeChanged;
   final VoidCallback? onRecalculate;
-  final VoidCallback onManualMapping;
+  final VoidCallback? onManualMapping;
+  final String? viewModeHelperText;
 
   const ReconciliationTopToolbar({
     super.key,
@@ -27,11 +29,12 @@ class ReconciliationTopToolbar extends StatelessWidget {
     required this.gstNo,
     required this.sectionTabs,
     required this.filters,
-    required this.showAllRows,
+    required this.viewMode,
     required this.isRecalculating,
-    required this.onShowAllRowsChanged,
+    required this.onViewModeChanged,
     required this.onRecalculate,
-    required this.onManualMapping,
+    this.onManualMapping,
+    this.viewModeHelperText,
   });
 
   @override
@@ -96,7 +99,7 @@ class ReconciliationTopToolbar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Reconciliation Analysis',
+              _displayBuyerTitle(),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: AppColorScheme.textPrimary,
@@ -107,21 +110,9 @@ class ReconciliationTopToolbar extends StatelessWidget {
           ],
         );
 
-        final badges = Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
-          alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
-          children: const [
-            AppStatusBadge(
-              label: 'Enterprise View',
-              icon: Icons.workspace_premium_rounded,
-              tone: AppStatusBadgeTone.info,
-            ),
-            AppStatusBadge(
-              label: 'CA Workflow',
-              icon: Icons.assured_workload_rounded,
-            ),
-          ],
+        final viewModeControl = ReconciliationViewModeToggle(
+          value: viewMode,
+          onChanged: onViewModeChanged,
         );
 
         if (stacked) {
@@ -130,7 +121,7 @@ class ReconciliationTopToolbar extends StatelessWidget {
             children: [
               identity,
               const SizedBox(height: AppSpacing.sm),
-              badges,
+              viewModeControl,
             ],
           );
         }
@@ -140,7 +131,7 @@ class ReconciliationTopToolbar extends StatelessWidget {
           children: [
             Expanded(child: identity),
             const SizedBox(width: AppSpacing.md),
-            badges,
+            viewModeControl,
           ],
         );
       },
@@ -153,29 +144,26 @@ class ReconciliationTopToolbar extends StatelessWidget {
       runSpacing: AppSpacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            color: AppColorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: AppColorScheme.divider),
-          ),
-          child: Text(
-            buyerName.isEmpty ? '-' : buyerName,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: AppColorScheme.textPrimary,
-            ),
-          ),
-        ),
         _metaText('PAN', buyerPan.isEmpty ? '-' : buyerPan),
         _metaText('GST', gstNo.isEmpty ? '-' : gstNo),
       ],
     );
+  }
+
+  String _displayBuyerTitle() {
+    final trimmed = buyerName.trim();
+    if (trimmed.isEmpty) {
+      return '-';
+    }
+
+    return trimmed
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) {
+          final lower = part.toLowerCase();
+          return '${lower[0].toUpperCase()}${lower.substring(1)}';
+        })
+        .join(' ');
   }
 
   Widget _buildTabSection() {
@@ -235,71 +223,19 @@ class ReconciliationTopToolbar extends StatelessWidget {
       runSpacing: AppSpacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _buildRawModeSwitch(),
         AppPrimaryButton(
           onPressed: onRecalculate,
           label: isRecalculating ? 'Recalculating...' : 'Recalculate',
           icon: Icons.refresh_rounded,
           isLoading: isRecalculating,
         ),
-        AppSecondaryButton(
-          onPressed: onManualMapping,
-          icon: Icons.link_rounded,
-          label: 'Seller Mapping',
-        ),
+        if (onManualMapping != null)
+          AppSecondaryButton(
+            onPressed: onManualMapping,
+            icon: Icons.link_rounded,
+            label: 'Seller Mapping',
+          ),
       ],
-    );
-  }
-
-  Widget _buildRawModeSwitch() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColorScheme.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Raw Mode',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  color: AppColorScheme.textPrimary,
-                ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Show all underlying rows',
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColorScheme.textMuted,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Transform.scale(
-            scale: 0.9,
-            child: Switch(
-              value: showAllRows,
-              onChanged: onShowAllRowsChanged,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              activeColor: AppColorScheme.primary,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

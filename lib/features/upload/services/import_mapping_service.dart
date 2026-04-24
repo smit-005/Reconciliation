@@ -72,6 +72,7 @@ class ImportMappingService {
           key: 'pan_number',
           label: 'PAN Number',
           description: 'Deductee PAN',
+          requiredField: true,
           importantField: true,
         ),
         MappingFieldOption(
@@ -191,8 +192,8 @@ class ImportMappingService {
         ),
         MappingFieldOption(
           key: 'party_or_pan',
-          label: 'Party Name or PAN',
-          description: 'At least one is required',
+          label: 'Party Name and PAN',
+          description: 'Both are required',
           requiredField: true,
         ),
         MappingFieldOption(
@@ -306,9 +307,13 @@ class ImportMappingService {
     }
 
     if (fileType == tds26qFileType &&
-        !canonicalMapping.containsKey('party_name') &&
+        !canonicalMapping.containsKey('party_name')) {
+      errors.add('Party Name is required');
+    }
+
+    if (fileType == tds26qFileType &&
         !canonicalMapping.containsKey('pan_number')) {
-      errors.add('Map either Party Name or PAN Number');
+      errors.add('PAN Number is required');
     }
 
     if (fileType == tds26qFileType &&

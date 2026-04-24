@@ -428,7 +428,11 @@ class Tds26QParser {
     final patterns = [
       '194Q',
       '194C',
+      '194J_A',
+      '194J_B',
       '194J',
+      '194I_A',
+      '194I_B',
       '194I',
       '194A',
       '194H',
@@ -445,6 +449,11 @@ class Tds26QParser {
     for (final p in patterns) {
       if (upper.contains(p)) return p;
     }
+
+    if (upper.contains('194J(A)') || upper.contains('194J A')) return '194J_A';
+    if (upper.contains('194J(B)') || upper.contains('194J B')) return '194J_B';
+    if (upper.contains('194I(A)') || upper.contains('194I A')) return '194I_A';
+    if (upper.contains('194I(B)') || upper.contains('194I B')) return '194I_B';
 
     final regex = RegExp(r'(19\d{2}[A-Z]{0,2}|20\d{2}[A-Z]{0,2})');
     final match = regex.firstMatch(upper);

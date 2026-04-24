@@ -12,13 +12,15 @@ import 'package:reconciliation_app/features/reconciliation/models/result/skipped
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_summary.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/pan_propagation_mapping.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_view_visibility.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_analysis_panel.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_bottom_action_bar.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_filters.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_reason_chip.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_summary_header.dart';
-import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_summary_panel.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_summary_pill.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_table_section.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_top_toolbar.dart';
@@ -101,11 +103,10 @@ class _SellerMappingConflict {
   final String aliasKey;
   final String message;
 
-  const _SellerMappingConflict({
-    required this.aliasKey,
-    required this.message,
-  });
+  const _SellerMappingConflict({required this.aliasKey, required this.message});
 }
+
+enum _SellerExceptionFilter { skippedRows, missing26Q }
 
 class ReconciliationScreen extends StatefulWidget {
   final Map<String, List<NormalizedTransactionRow>> sourceRowsBySection;
@@ -115,6 +116,7 @@ class ReconciliationScreen extends StatefulWidget {
   final String buyerName;
   final String buyerPan;
   final String gstNo;
+  final bool sellerMappingConfirmed;
 
   const ReconciliationScreen({
     super.key,
@@ -124,6 +126,7 @@ class ReconciliationScreen extends StatefulWidget {
     this.buyerName = '',
     this.buyerPan = '',
     this.gstNo = '',
+    this.sellerMappingConfirmed = false,
   });
 
   @override
@@ -136,35 +139,43 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     '194Q',
     '194C',
     '194H',
-    '194J',
-    '194I',
-    '194IB',
+    '194I_A',
+    '194I_B',
+    '194J_A',
+    '194J_B',
   ];
 
   List<ReconciliationRow> allRows = [];
   List<ReconciliationRow> filteredRows = [];
+  List<ReconciliationRow> tableRows = [];
   Map<String, ReconciliationSummary> sectionSummaries = {};
   ReconciliationSummary? combinedSummary;
   SectionReconciliationResult? _sectionResultCache;
   _FilteredMetrics? _filteredMetrics;
 
-  List<String> sellerOptions = ['All Sellers'];
+  List<String> sellerOptions = [];
   List<String> financialYearOptions = ['All FY'];
   List<String> sectionOptions = ['All Sections'];
 
   Map<String, String> manualNameMapping = {};
-  final Set<String> blockedAutoMappingAliases = {};
 
-  String selectedSeller = 'All Sellers';
+  String selectedSeller = '';
   String selectedFinancialYear = 'All FY';
   String selectedSection = 'All Sections';
   String selectedStatus = 'All Status';
   String activeSectionTab = 'All';
+  ReconciliationViewMode _viewMode = ReconciliationViewMode.summary;
+  _SellerExceptionFilter? _activeSellerExceptionFilter;
 
-  bool showAllRows = true;
   bool _isRecalculating = false;
+  String _processingMessage = 'Processing reconciliation...';
   final Map<String, List<ReconciliationRow>> _filterRowsCache = {};
   final Map<String, List<String>> _sectionOptionsCache = {};
+  String? _autoMappingCacheKey;
+  AutoMappingBatchResult? _autoMappingCacheResult;
+  String? _tdsPanLookupCacheKey;
+  Map<String, String> _exactTdsPanLookup = {};
+  Map<String, String> _normalizedTdsPanLookup = {};
 
   final List<String> statusOptions = const [
     'All Status',
@@ -172,19 +183,25 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     CalculationService.sellerStatusMismatch,
     CalculationService.sellerStatusNo26Q,
     CalculationService.sellerStatusOnly26Q,
-    ReconciliationStatus.sectionMissing,
     ReconciliationStatus.reviewRequired,
-    ReconciliationStatus.belowThreshold,
-    ReconciliationStatus.timingDifference,
-    ReconciliationStatus.shortDeduction,
-    ReconciliationStatus.excessDeduction,
-    'Threshold Crossed Only',
   ];
 
   @override
   void initState() {
     super.initState();
     _recalculateAll();
+  }
+
+  Future<void> _allowLoadingFrame() async {
+    debugPrint('RECON UI => loading state set');
+    await Future<void>.delayed(Duration.zero);
+    await WidgetsBinding.instance.endOfFrame;
+    debugPrint('RECON UI => first frame painted');
+  }
+
+  void _logPerformance(String label, Stopwatch watch, {String details = ''}) {
+    final suffix = details.trim().isEmpty ? '' : ' | $details';
+    debugPrint('RECON PERF => $label ${watch.elapsedMilliseconds} ms$suffix');
   }
 
   Future<List<SellerMapping>> _loadManualMappingRecordsFromDb() {
@@ -221,22 +238,91 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   String _normalizeAlias(String value) => normalizeName(value.trim());
 
-  Set<String> _resolveTargetPans(String mappedName) {
-    final normalizedMappedName = _normalizeAlias(mappedName);
-    final pans = <String>{};
+  String _buildCollectionSignature(Iterable<String> values) {
+    final items = values.toList()..sort();
+    return '${items.length}:${Object.hashAll(items)}';
+  }
+
+  String _buildAutoMappingCacheKey({
+    required List<String> purchaseNames,
+    required List<String> tdsNames,
+  }) {
+    return '${normalizePan(widget.buyerPan)}|'
+        '${_buildCollectionSignature(purchaseNames)}|'
+        '${_buildCollectionSignature(tdsNames)}';
+  }
+
+  String _buildTdsPanLookupCacheKey() {
+    final signatures =
+        widget.tdsRows
+            .map(
+              (row) =>
+                  '${row.deducteeName.trim().toUpperCase()}|${normalizePan(row.panNumber)}',
+            )
+            .toList()
+          ..sort();
+    return _buildCollectionSignature(signatures);
+  }
+
+  void _invalidatePerformanceCaches() {
+    _autoMappingCacheKey = null;
+    _autoMappingCacheResult = null;
+    _tdsPanLookupCacheKey = null;
+    _exactTdsPanLookup = {};
+    _normalizedTdsPanLookup = {};
+  }
+
+  void _ensureTdsPanLookups() {
+    final nextCacheKey = _buildTdsPanLookupCacheKey();
+    if (_tdsPanLookupCacheKey == nextCacheKey) {
+      return;
+    }
+
+    final exactPanSets = <String, Set<String>>{};
+    final normalizedPanSets = <String, Set<String>>{};
 
     for (final row in widget.tdsRows) {
-      final rowPan = normalizePan(row.panNumber);
-      if (rowPan.isEmpty) continue;
+      final pan = normalizePan(row.panNumber);
+      if (pan.isEmpty) continue;
 
-      final exactMatch =
-          row.deducteeName.trim().toUpperCase() == mappedName.trim().toUpperCase();
-      final normalizedMatch =
-          _normalizeAlias(row.deducteeName) == normalizedMappedName;
+      final exactName = row.deducteeName.trim().toUpperCase();
+      final normalizedName = _normalizeAlias(row.deducteeName);
 
-      if (exactMatch || normalizedMatch) {
-        pans.add(rowPan);
+      if (exactName.isNotEmpty) {
+        exactPanSets.putIfAbsent(exactName, () => <String>{}).add(pan);
       }
+      if (normalizedName.isNotEmpty) {
+        normalizedPanSets
+            .putIfAbsent(normalizedName, () => <String>{})
+            .add(pan);
+      }
+    }
+
+    _exactTdsPanLookup = {
+      for (final entry in exactPanSets.entries)
+        if (entry.value.length == 1) entry.key: entry.value.first,
+    };
+    _normalizedTdsPanLookup = {
+      for (final entry in normalizedPanSets.entries)
+        if (entry.value.length == 1) entry.key: entry.value.first,
+    };
+    _tdsPanLookupCacheKey = nextCacheKey;
+  }
+
+  Set<String> _resolveTargetPans(String mappedName) {
+    _ensureTdsPanLookups();
+    final pans = <String>{};
+    final exactName = mappedName.trim().toUpperCase();
+    final normalizedMappedName = _normalizeAlias(mappedName);
+
+    final exactPan = _exactTdsPanLookup[exactName];
+    if (exactPan != null && exactPan.isNotEmpty) {
+      pans.add(exactPan);
+    }
+
+    final normalizedPan = _normalizedTdsPanLookup[normalizedMappedName];
+    if (normalizedPan != null && normalizedPan.isNotEmpty) {
+      pans.add(normalizedPan);
     }
 
     return pans;
@@ -269,65 +355,19 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     };
   }
 
-  List<SellerMappingScreenRowData> _buildPurchaseMappingRows(
-    List<NormalizedTransactionRow> sourceRows, {
-    Map<String, SellerMappingResolvedSuggestion> resolvedSuggestionsByKey =
-        const {},
-  }) {
-    final rowsByKey = <String, SellerMappingScreenRowData>{};
-
-    for (final row in sourceRows) {
-      final normalizedAlias = _normalizeAlias(row.partyName);
-      final normalizedSection = normalizeSection(row.section).isNotEmpty
-          ? normalizeSection(row.section)
-          : normalizeSection(row.normalizedSection);
-      final sectionCode =
-          normalizeSellerMappingSectionCode(normalizedSection.isEmpty ? 'ALL' : normalizedSection);
-
-      if (normalizedAlias.isEmpty) continue;
-
-      final rowKey = '$normalizedAlias|$sectionCode';
-      final existing = rowsByKey[rowKey];
-      final displayName = row.partyName.trim();
-      final purchasePan = normalizePan(row.panNumber);
-
-      rowsByKey[rowKey] = SellerMappingScreenRowData(
-        purchasePartyDisplayName: displayName.isNotEmpty
-            ? displayName
-            : (existing?.purchasePartyDisplayName ?? ''),
-        normalizedAlias: normalizedAlias,
-        sectionCode: sectionCode,
-        purchasePan: purchasePan.isNotEmpty
-            ? purchasePan
-            : (existing?.purchasePan ?? ''),
-        resolvedSuggestion:
-            resolvedSuggestionsByKey[rowKey] ?? existing?.resolvedSuggestion,
-      );
-    }
-
-    final rows = rowsByKey.values.toList()
-      ..sort((a, b) {
-        final nameCompare =
-            a.purchasePartyDisplayName.compareTo(b.purchasePartyDisplayName);
-        if (nameCompare != 0) return nameCompare;
-        return a.sectionCode.compareTo(b.sectionCode);
-      });
-
-    return rows;
-  }
-
   String _resolveSuggestedTdsPartyName(ReconciliationRow row) {
     final resolvedPan = normalizePan(row.resolvedPan);
     final resolvedName = row.resolvedSellerName.trim();
 
     if (resolvedPan.isNotEmpty) {
-      final panMatches = widget.tdsRows
-          .where((tdsRow) => normalizePan(tdsRow.panNumber) == resolvedPan)
-          .map((tdsRow) => tdsRow.deducteeName.trim())
-          .where((name) => name.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final panMatches =
+          widget.tdsRows
+              .where((tdsRow) => normalizePan(tdsRow.panNumber) == resolvedPan)
+              .map((tdsRow) => tdsRow.deducteeName.trim())
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
       if (panMatches.length == 1) {
         return panMatches.first;
@@ -348,13 +388,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       return resolvedName;
     }
 
-    final nameMatches = widget.tdsRows
-        .map((tdsRow) => tdsRow.deducteeName.trim())
-        .where((name) => name.isNotEmpty)
-        .where((name) => normalizeName(name) == normalizedResolvedName)
-        .toSet()
-        .toList()
-      ..sort();
+    final nameMatches =
+        widget.tdsRows
+            .map((tdsRow) => tdsRow.deducteeName.trim())
+            .where((name) => name.isNotEmpty)
+            .where((name) => normalizeName(name) == normalizedResolvedName)
+            .toSet()
+            .toList()
+          ..sort();
 
     if (nameMatches.isNotEmpty) {
       return nameMatches.first;
@@ -422,8 +463,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
       final score =
           (_resolvedSuggestionPriority(source) * 1000) +
-              (row.identityConfidence * 100).round() +
-              (mappedPan.isNotEmpty ? 10 : 0);
+          (row.identityConfidence * 100).round() +
+          (mappedPan.isNotEmpty ? 10 : 0);
 
       final suggestion = SellerMappingResolvedSuggestion(
         mappedName: mappedName,
@@ -530,10 +571,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     final tdsChanged = oldWidget.tdsRows != widget.tdsRows;
     final buyerChanged =
         oldWidget.buyerName != widget.buyerName ||
-            oldWidget.buyerPan != widget.buyerPan ||
-            oldWidget.gstNo != widget.gstNo;
+        oldWidget.buyerPan != widget.buyerPan ||
+        oldWidget.gstNo != widget.gstNo;
 
     if (sourceChanged || tdsChanged || buyerChanged) {
+      _invalidatePerformanceCaches();
       _recalculateAll();
     }
   }
@@ -543,39 +585,101 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     setState(() {
       _isRecalculating = true;
+      _processingMessage = 'Processing reconciliation...';
     });
+    await _allowLoadingFrame();
 
     try {
+      debugPrint('RECON PERF => heavy work started');
+      final totalWatch = Stopwatch()..start();
       final prevSeller = selectedSeller;
       final prevFY = selectedFinancialYear;
       final prevSection = selectedSection;
       final prevStatus = selectedStatus;
+      final mappingsWatch = Stopwatch()..start();
       final latestManualMappings = await _loadManualMappingsFromDb();
+      mappingsWatch.stop();
+      _logPerformance(
+        'manual mapping load',
+        mappingsWatch,
+        details: 'mappings=${latestManualMappings.length}',
+      );
+
+      setState(() {
+        _processingMessage = 'Preparing source data...';
+      });
+      await _allowLoadingFrame();
+
       final sourceRows = widget.sourceRowsBySection.values
           .expand((rows) => rows)
           .toList();
+      debugPrint(
+        'RECON INPUT => sourceRows=${sourceRows.length} sourceSections=${widget.sourceRowsBySection.length} '
+        'tdsRows=${widget.tdsRows.length} buyer=${widget.buyerPan}',
+      );
 
-      final purchaseNames = sourceRows
-          .map((e) => e.partyName.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final purchaseNames =
+          sourceRows
+              .map((e) => e.partyName.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
-      final tdsNames = widget.tdsRows
-          .map((e) => e.deducteeName.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final tdsNames =
+          widget.tdsRows
+              .map((e) => e.deducteeName.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
-      final mappingResults = AutoMappingService.autoMapParties(
-        purchaseParties: purchaseNames,
-        tdsParties: tdsNames,
-        threshold: 0.80,
+      final autoMapWatch = Stopwatch()..start();
+      final autoMapCacheKey = _buildAutoMappingCacheKey(
+        purchaseNames: purchaseNames,
+        tdsNames: tdsNames,
+      );
+      final autoMapCacheHit =
+          _autoMappingCacheKey == autoMapCacheKey &&
+          _autoMappingCacheResult != null;
+      late final AutoMappingBatchResult autoMappingBatch;
+      if (autoMapCacheHit) {
+        autoMappingBatch = _autoMappingCacheResult!;
+      } else {
+        final isolateWatch = Stopwatch()..start();
+        debugPrint('AUTO MAP ISOLATE => started');
+        autoMappingBatch = await AutoMappingService.autoMapPartiesInBackground(
+          purchaseParties: purchaseNames,
+          tdsParties: tdsNames,
+          threshold: 0.80,
+        );
+        isolateWatch.stop();
+        debugPrint(
+          'AUTO MAP ISOLATE => completed ${isolateWatch.elapsedMilliseconds} ms',
+        );
+      }
+      if (!autoMapCacheHit) {
+        _autoMappingCacheKey = autoMapCacheKey;
+        _autoMappingCacheResult = autoMappingBatch;
+      }
+      autoMapWatch.stop();
+      final mappingResults = autoMappingBatch.results;
+      debugPrint(
+        'AUTO MAP PERF => cacheHit=$autoMapCacheHit | '
+        'normalize ${autoMapCacheHit ? 0 : autoMappingBatch.normalizationMs} ms | '
+        'match ${autoMapCacheHit ? 0 : autoMappingBatch.matchingMs} ms | '
+        'results=${mappingResults.length}',
+      );
+      _logPerformance(
+        'auto mapping',
+        autoMapWatch,
+        details:
+            'purchaseNames=${purchaseNames.length} tdsNames=${tdsNames.length} results=${mappingResults.length}',
       );
 
       final nameMapping = <String, String>{};
+      final eligibleAutoMappings =
+          <({String purchaseParty, String mappedTdsParty})>[];
 
       for (final m in mappingResults) {
         final purchaseRaw = m.purchaseParty.trim();
@@ -585,18 +689,22 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
         final purchaseKey = normalizeName(purchaseRaw.trim());
         if (purchaseKey.isEmpty) continue;
-        if (blockedAutoMappingAliases.contains(purchaseKey)) continue;
 
         if (m.isMatched) {
           nameMapping[purchaseKey] = tdsRaw;
+          eligibleAutoMappings.add((
+            purchaseParty: purchaseRaw,
+            mappedTdsParty: tdsRaw,
+          ));
           continue;
         }
 
-        final pNorm = AutoMappingService.normalizePartyName(purchaseRaw);
-        final tNorm = AutoMappingService.normalizePartyName(tdsRaw);
-
-        if (pNorm == tNorm) {
+        if (m.normalizedPurchaseParty == m.normalizedMatchedTdsParty) {
           nameMapping[purchaseKey] = tdsRaw;
+          eligibleAutoMappings.add((
+            purchaseParty: purchaseRaw,
+            mappedTdsParty: tdsRaw,
+          ));
         }
       }
 
@@ -609,22 +717,70 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         nameMapping[normalizedSource] = mappedTarget;
       }
 
+      setState(() {
+        _processingMessage = 'Propagating seller PAN mappings...';
+      });
+      await _allowLoadingFrame();
+
+      final panPropagationWatch = Stopwatch()..start();
+      final panMapBuildWatch = Stopwatch()..start();
+      _ensureTdsPanLookups();
+      final panPropagationMapping = buildPanPropagationMapping(
+        manualMappings: latestManualMappings.entries,
+        autoMappings: eligibleAutoMappings,
+      );
+      panMapBuildWatch.stop();
+      final panApplyWatch = Stopwatch()..start();
+      final propagatedSourceRows = _applyPropagatedPanToSourceRows(
+        sourceRows: List<NormalizedTransactionRow>.from(sourceRows),
+        nameMapping: panPropagationMapping,
+      );
+      panApplyWatch.stop();
+      panPropagationWatch.stop();
+      debugPrint(
+        'PAN PROP PERF => mapBuild ${panMapBuildWatch.elapsedMilliseconds} ms | '
+        'apply ${panApplyWatch.elapsedMilliseconds} ms',
+      );
+      _logPerformance(
+        'pan propagation',
+        panPropagationWatch,
+        details:
+            'propagationMap=${panPropagationMapping.length} sourceRows=${propagatedSourceRows.length}',
+      );
+
+      setState(() {
+        _processingMessage = 'Calculating reconciliation results...';
+      });
+      await _allowLoadingFrame();
+
+      final reconciliationWatch = Stopwatch()..start();
       final sectionResult = await CalculationService.reconcileSectionWise(
         buyerName: widget.buyerName,
         buyerPan: widget.buyerPan,
-        sourceRows: _applyPropagatedPanToSourceRows(
-          sourceRows: List<NormalizedTransactionRow>.from(sourceRows),
-          nameMapping: nameMapping,
-        ),
+        sourceRows: propagatedSourceRows,
         tdsRows: List<Tds26QRow>.from(widget.tdsRows),
         nameMapping: nameMapping,
-        includeAllRows: showAllRows,
+        includeAllRows: true,
         sections: widget.sourceRowsBySection.keys.toList(),
       );
+      reconciliationWatch.stop();
+      _logPerformance(
+        'reconciliation calculation',
+        reconciliationWatch,
+        details:
+            'rows=${sectionResult.rows.length} sections=${sectionResult.sectionSummaries.length}',
+      );
+
+      setState(() {
+        _processingMessage = 'Applying filters and preparing results table...';
+      });
+      await _allowLoadingFrame();
+
       final freshRows = sectionResult.rows;
+      final visibleRows = _rowsForCurrentSummaryScope(freshRows);
 
       final sellerOptionsByKey = <String, String>{};
-      for (final row in freshRows) {
+      for (final row in visibleRows) {
         final key = buildSellerDisplayKey(row);
         final label = _sellerFilterLabel(row);
         if (key.isEmpty || label.isEmpty) continue;
@@ -632,26 +788,27 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       }
       final sellers = sellerOptionsByKey.values.toList()..sort();
 
-      final financialYears = freshRows
-          .map((e) => e.financialYear.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final financialYears =
+          visibleRows
+              .map((e) => e.financialYear.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
 
-      final nextSellerOptions = ['All Sellers', ...sellers];
+      final nextSellerOptions = sellers;
       final nextFinancialYearOptions = ['All FY', ...financialYears];
 
       final normalizedPrevSection = prevSection.trim();
 
-      final nextSelectedSeller =
-      nextSellerOptions.contains(prevSeller) ? prevSeller : 'All Sellers';
+      final nextSelectedSeller = prevSeller;
 
       final nextSelectedFinancialYear =
-      nextFinancialYearOptions.contains(prevFY) ? prevFY : 'All FY';
+          nextFinancialYearOptions.contains(prevFY) ? prevFY : 'All FY';
 
-      final nextSelectedStatus =
-      statusOptions.contains(prevStatus) ? prevStatus : 'All Status';
+      final nextSelectedStatus = statusOptions.contains(prevStatus)
+          ? prevStatus
+          : 'All Status';
 
       final nextSectionOptions = _buildSectionOptions(
         rows: freshRows,
@@ -661,17 +818,32 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       );
 
       final nextSelectedSection =
-      nextSectionOptions.contains(normalizedPrevSection) ||
-          _isSupportedSectionTab(normalizedPrevSection)
+          nextSectionOptions.contains(normalizedPrevSection) ||
+              _isSupportedSectionTab(normalizedPrevSection)
           ? normalizedPrevSection
           : 'All Sections';
 
+      final filterWatch = Stopwatch()..start();
       final nextFilteredRows = _filterRows(
         rows: freshRows,
         selectedSellerValue: nextSelectedSeller,
         selectedFinancialYearValue: nextSelectedFinancialYear,
         selectedSectionValue: nextSelectedSection,
         selectedStatusValue: nextSelectedStatus,
+      );
+      final nextTableRows = _filterTableRows(
+        rows: freshRows,
+        selectedSellerValue: nextSelectedSeller,
+        selectedFinancialYearValue: nextSelectedFinancialYear,
+        selectedSectionValue: nextSelectedSection,
+        selectedStatusValue: nextSelectedStatus,
+      );
+      filterWatch.stop();
+      _logPerformance(
+        'filtering',
+        filterWatch,
+        details:
+            'summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length} activeTab=${nextSelectedSection == 'All Sections' ? 'All' : nextSelectedSection}',
       );
 
       if (!mounted) return;
@@ -682,6 +854,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         _sectionResultCache = sectionResult;
         allRows = freshRows;
         filteredRows = nextFilteredRows;
+        tableRows = nextTableRows;
         manualNameMapping = latestManualMappings;
         sectionSummaries = sectionResult.sectionSummaries;
         combinedSummary = sectionResult.combinedSummary;
@@ -694,13 +867,23 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         selectedFinancialYear = nextSelectedFinancialYear;
         selectedSection = nextSelectedSection;
         selectedStatus = nextSelectedStatus;
-        activeSectionTab =
-            nextSelectedSection == 'All Sections' ? 'All' : nextSelectedSection;
+        activeSectionTab = nextSelectedSection == 'All Sections'
+            ? 'All'
+            : nextSelectedSection;
         _filteredMetrics = _buildFilteredMetrics(
           rows: nextFilteredRows,
-          activeTab: nextSelectedSection == 'All Sections' ? 'All' : nextSelectedSection,
+          activeTab: nextSelectedSection == 'All Sections'
+              ? 'All'
+              : nextSelectedSection,
         );
       });
+      totalWatch.stop();
+      _logPerformance(
+        'reconciliation screen total refresh',
+        totalWatch,
+        details:
+            'allRows=${freshRows.length} summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length}',
+      );
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Recalculation failed: $e');
@@ -714,39 +897,85 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   void _applyFilters() {
+    final filterWatch = Stopwatch()..start();
+    final visibleRows = _rowsForCurrentSummaryScope(allRows);
+    final sellerOptionsByKey = <String, String>{};
+    for (final row in visibleRows) {
+      final key = buildSellerDisplayKey(row);
+      final label = _sellerFilterLabel(row);
+      if (key.isEmpty || label.isEmpty) continue;
+      sellerOptionsByKey[key] = label;
+    }
+
+    final nextSellerOptions = sellerOptionsByKey.values.toList()..sort();
+    final nextFinancialYearOptions = [
+      'All FY',
+      ...(visibleRows
+          .map((row) => row.financialYear.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort()),
+    ];
+    final nextSelectedSeller = selectedSeller;
+    final nextSelectedFinancialYear =
+        nextFinancialYearOptions.contains(selectedFinancialYear)
+        ? selectedFinancialYear
+        : 'All FY';
+
     final nextSectionOptions = _buildSectionOptions(
       rows: allRows,
-      selectedSellerValue: selectedSeller,
-      selectedFinancialYearValue: selectedFinancialYear,
+      selectedSellerValue: nextSelectedSeller,
+      selectedFinancialYearValue: nextSelectedFinancialYear,
       selectedStatusValue: selectedStatus,
     );
     final normalizedSelectedSection = selectedSection.trim();
     final nextSelectedSection =
         nextSectionOptions.contains(normalizedSelectedSection) ||
-                _isSupportedSectionTab(normalizedSelectedSection)
-            ? normalizedSelectedSection
-            : 'All Sections';
+            _isSupportedSectionTab(normalizedSelectedSection)
+        ? normalizedSelectedSection
+        : 'All Sections';
 
     final nextFilteredRows = _filterRows(
       rows: allRows,
-      selectedSellerValue: selectedSeller,
-      selectedFinancialYearValue: selectedFinancialYear,
+      selectedSellerValue: nextSelectedSeller,
+      selectedFinancialYearValue: nextSelectedFinancialYear,
       selectedSectionValue: nextSelectedSection,
       selectedStatusValue: selectedStatus,
     );
-    final nextActiveTab =
-        nextSelectedSection == 'All Sections' ? 'All' : nextSelectedSection;
+    final nextTableRows = _filterTableRows(
+      rows: allRows,
+      selectedSellerValue: nextSelectedSeller,
+      selectedFinancialYearValue: nextSelectedFinancialYear,
+      selectedSectionValue: nextSelectedSection,
+      selectedStatusValue: selectedStatus,
+    );
+    final nextActiveTab = nextSelectedSection == 'All Sections'
+        ? 'All'
+        : nextSelectedSection;
 
     setState(() {
+      sellerOptions = nextSellerOptions;
+      financialYearOptions = nextFinancialYearOptions;
       sectionOptions = nextSectionOptions;
+      selectedSeller = nextSelectedSeller;
+      selectedFinancialYear = nextSelectedFinancialYear;
       selectedSection = nextSelectedSection;
       activeSectionTab = nextActiveTab;
       filteredRows = nextFilteredRows;
+      tableRows = nextTableRows;
       _filteredMetrics = _buildFilteredMetrics(
         rows: nextFilteredRows,
         activeTab: nextActiveTab,
       );
     });
+    filterWatch.stop();
+    _logPerformance(
+      'filter apply',
+      filterWatch,
+      details:
+          'summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length} sellerFilter=${selectedSeller.isEmpty ? 'ALL' : selectedSeller}',
+    );
   }
 
   void _selectSectionTab(String tab) {
@@ -763,11 +992,50 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   List<ReconciliationRow> _baseRowsForSection(String selectedSectionValue) {
     if (selectedSectionValue == 'All Sections') {
-      return allRows;
+      return List<ReconciliationRow>.of(allRows);
     }
 
-    return _sectionResultCache?.rowsBySection[selectedSectionValue] ??
+    final sectionRows =
+        _sectionResultCache?.rowsBySection[selectedSectionValue] ??
         const <ReconciliationRow>[];
+    return List<ReconciliationRow>.of(sectionRows);
+  }
+
+  List<ReconciliationRow> _rowsForCurrentSummaryScope(
+    List<ReconciliationRow> rows,
+  ) {
+    if (_viewMode == ReconciliationViewMode.audit) {
+      return List<ReconciliationRow>.of(rows);
+    }
+
+    return rows.where(isReconciliationRowSummaryEligible).toList();
+  }
+
+  List<ReconciliationRow> _rowsForVisibleSellers(List<ReconciliationRow> rows) {
+    if (_viewMode == ReconciliationViewMode.audit) {
+      return List<ReconciliationRow>.of(rows);
+    }
+
+    final rowsBySeller = <String, List<ReconciliationRow>>{};
+    for (final row in rows) {
+      final sellerKey = buildSellerSectionDisplayKey(row);
+      rowsBySeller.putIfAbsent(sellerKey, () => <ReconciliationRow>[]).add(row);
+    }
+
+    final visibleSellerKeys = rowsBySeller.entries
+        .where(
+          (entry) =>
+              isReconciliationSellerVisibleInViewMode(entry.value, _viewMode),
+        )
+        .map((entry) => entry.key)
+        .toSet();
+
+    return rows
+        .where(
+          (row) =>
+              visibleSellerKeys.contains(buildSellerSectionDisplayKey(row)),
+        )
+        .toList();
   }
 
   List<String> _buildSectionOptions({
@@ -811,6 +1079,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedStatusValue,
   }) {
     return [
+      _viewMode.name,
       selectedSellerValue,
       selectedFinancialYearValue,
       selectedStatusValue,
@@ -866,6 +1135,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         selectedFinancialYearValue: selectedFinancialYearValue,
         selectedSectionValue: selectedSectionValue,
         selectedStatusValue: selectedStatusValue,
+        preserveVisibleSellerHistory: false,
+        sellerExceptionFilter: null,
       );
       _filterRowsCache[cacheKey] = computedRows;
       return computedRows;
@@ -877,6 +1148,26 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: selectedFinancialYearValue,
       selectedSectionValue: selectedSectionValue,
       selectedStatusValue: selectedStatusValue,
+      preserveVisibleSellerHistory: false,
+      sellerExceptionFilter: null,
+    );
+  }
+
+  List<ReconciliationRow> _filterTableRows({
+    required List<ReconciliationRow> rows,
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedSectionValue,
+    required String selectedStatusValue,
+  }) {
+    return _computeFilteredRows(
+      rows: rows,
+      selectedSellerValue: selectedSellerValue,
+      selectedFinancialYearValue: selectedFinancialYearValue,
+      selectedSectionValue: selectedSectionValue,
+      selectedStatusValue: selectedStatusValue,
+      preserveVisibleSellerHistory: true,
+      sellerExceptionFilter: _activeSellerExceptionFilter,
     );
   }
 
@@ -887,11 +1178,29 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedStatusValue,
   }) {
     return [
+      _viewMode.name,
       selectedSellerValue,
       selectedFinancialYearValue,
       selectedSectionValue,
       selectedStatusValue,
     ].join('\u0001');
+  }
+
+  bool _matchesSellerQuery(ReconciliationRow row, String query) {
+    final normalizedQuery = query.trim().toUpperCase();
+    if (normalizedQuery.isEmpty) {
+      return true;
+    }
+
+    final haystack = <String>{
+      _sellerFilterLabel(row),
+      row.resolvedSellerName.trim(),
+      row.sellerName.trim(),
+      normalizePan(row.resolvedPan),
+      normalizePan(row.sellerPan),
+    }.join(' ').toUpperCase();
+
+    return haystack.contains(normalizedQuery);
   }
 
   String? _sellerLevelStatusFromFilter(String selectedStatusValue) {
@@ -927,7 +1236,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     final grouped = <String, List<ReconciliationRow>>{};
     for (final row in rows) {
-      final key = buildSellerDisplayKey(row);
+      final key = buildSellerSectionDisplayKey(row);
       grouped.putIfAbsent(key, () => <ReconciliationRow>[]).add(row);
     }
 
@@ -950,90 +1259,102 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedFinancialYearValue,
     required String selectedSectionValue,
     required String selectedStatusValue,
+    required bool preserveVisibleSellerHistory,
+    required _SellerExceptionFilter? sellerExceptionFilter,
   }) {
-    var result = identical(rows, allRows)
+    var baseRows = identical(rows, allRows)
         ? _baseRowsForSection(selectedSectionValue)
         : rows;
 
-    if (selectedSellerValue != 'All Sellers') {
-      result = result
-          .where(
-            (row) => _sellerFilterLabel(row) == selectedSellerValue.trim(),
-          )
+    if (selectedSellerValue.trim().isNotEmpty) {
+      baseRows = baseRows
+          .where((row) => _matchesSellerQuery(row, selectedSellerValue))
           .toList();
     }
 
     if (selectedFinancialYearValue != 'All FY') {
-      result = result
+      baseRows = baseRows
           .where(
             (row) =>
-        row.financialYear.trim() == selectedFinancialYearValue.trim(),
-      )
+                row.financialYear.trim() == selectedFinancialYearValue.trim(),
+          )
           .toList();
     }
 
-    if (selectedSectionValue != 'All Sections' && !identical(result, rows)) {
+    if (selectedSectionValue != 'All Sections' && !identical(baseRows, rows)) {
       // Section scoping already narrowed the base list when filtering from the
       // cached reconciliation result.
     } else if (selectedSectionValue != 'All Sections') {
-      result = result
+      baseRows = baseRows
           .where((row) => row.section.trim() == selectedSectionValue)
           .toList();
     }
 
+    final sellerHistoryRows = _rowsForVisibleSellers(baseRows);
+    var summaryScopedRows = _rowsForCurrentSummaryScope(baseRows);
+
     if (selectedStatusValue != 'All Status') {
       if (_isSellerLevelStatusFilter(selectedStatusValue)) {
-        result = _filterRowsBySellerLevelStatus(
-          rows: result,
+        summaryScopedRows = _filterRowsBySellerLevelStatus(
+          rows: summaryScopedRows,
           selectedStatusValue: selectedStatusValue,
         );
-      } else if (selectedStatusValue == 'Threshold Crossed Only') {
-        final grouped = <String, double>{};
-
-        for (final row in result) {
-          final key =
-              '${normalizePan(row.buyerPan)}|${buildSellerDisplayKey(row)}|${row.financialYear.trim()}';
-          final cumulativeAfter = row.debugInfo.cumulativePurchaseAfterRow;
-          grouped[key] = cumulativeAfter > (grouped[key] ?? 0.0)
-              ? cumulativeAfter
-              : (grouped[key] ?? 0.0);
-        }
-
-        result = result.where((row) {
-          final key =
-              '${normalizePan(row.buyerPan)}|${buildSellerDisplayKey(row)}|${row.financialYear.trim()}';
-          return (grouped[key] ?? 0.0) > 5000000;
-        }).toList();
       } else {
-        result = result
-            .where((row) {
-              final status = row.status.trim();
-              final selected = selectedStatusValue.trim();
-              return status == selected;
-            })
-            .toList();
+        summaryScopedRows = summaryScopedRows.where((row) {
+          final status = row.status.trim();
+          final selected = selectedStatusValue.trim();
+          return status == selected;
+        }).toList();
       }
     }
 
-    result.sort((a, b) {
+    if (sellerExceptionFilter != null) {
+      final visibleSellerKeys = _sellerKeysForExceptionFilter(
+        rows: summaryScopedRows,
+        filter: sellerExceptionFilter,
+      );
+      summaryScopedRows = summaryScopedRows
+          .where(
+            (row) =>
+                visibleSellerKeys.contains(buildSellerSectionDisplayKey(row)),
+          )
+          .toList();
+    }
+
+    var filteredRows = List<ReconciliationRow>.of(summaryScopedRows);
+    if (preserveVisibleSellerHistory) {
+      final visibleSellerKeys = summaryScopedRows
+          .map(buildSellerSectionDisplayKey)
+          .toSet();
+      filteredRows = sellerHistoryRows
+          .where(
+            (row) =>
+                visibleSellerKeys.contains(buildSellerSectionDisplayKey(row)),
+          )
+          .toList();
+    }
+
+    filteredRows.sort((a, b) {
       final sellerCompare = _sellerFilterLabel(a)
           .trim()
           .toUpperCase()
           .compareTo(_sellerFilterLabel(b).trim().toUpperCase());
       if (sellerCompare != 0) return sellerCompare;
 
-      final panCompare =
-          normalizePan(a.resolvedPan).compareTo(normalizePan(b.resolvedPan));
+      final panCompare = normalizePan(
+        a.resolvedPan,
+      ).compareTo(normalizePan(b.resolvedPan));
       if (panCompare != 0) return panCompare;
 
-      final fyCompare =
-      a.financialYear.trim().compareTo(b.financialYear.trim());
+      final fyCompare = a.financialYear.trim().compareTo(
+        b.financialYear.trim(),
+      );
       if (fyCompare != 0) return fyCompare;
 
       return CalculationService.compareMonthLabels(a.month, b.month);
     });
 
-    return result;
+    return filteredRows;
   }
 
   _FilteredMetrics _buildFilteredMetrics({
@@ -1081,11 +1402,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final section = row.section.trim();
       final status = row.status.trim();
       final upperStatus = status.toUpperCase();
-      final remarks = row.remarks.trim().toUpperCase();
-      final calculationRemark = row.calculationRemark.trim().toUpperCase();
-      final combinedText = '$remarks $calculationRemark';
-
-      sellerKeys.add(buildSellerDisplayKey(row));
+      sellerKeys.add(buildSellerSectionDisplayKey(row));
       sectionCounts[section] = (sectionCounts[section] ?? 0) + 1;
 
       if (status == ReconciliationStatus.matched) {
@@ -1094,7 +1411,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         summaryMismatchRows++;
       }
 
-      if (sectionMismatchCounts.containsKey(section == 'All Sections' ? 'All' : section) &&
+      if (sectionMismatchCounts.containsKey(
+            section == 'All Sections' ? 'All' : section,
+          ) &&
           upperStatus != 'MATCHED') {
         sectionMismatchCounts[section] =
             (sectionMismatchCounts[section] ?? 0) + 1;
@@ -1143,41 +1462,41 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         applicableButNo26QTds += row.expectedTds;
       }
 
-      if (upperStatus == 'APPLICABLE BUT NO 26Q' ||
-          combinedText.contains('NO 26Q ENTRY')) {
+      if (status == ReconciliationStatus.applicableButNo26Q) {
         mismatchReasonCounts['No 26Q entry'] =
             (mismatchReasonCounts['No 26Q entry'] ?? 0) + 1;
       }
-      if (upperStatus == 'AMOUNT MISMATCH' ||
-          combinedText.contains('AMOUNT MISMATCH')) {
+      if (status == ReconciliationStatus.amountMismatch) {
         mismatchReasonCounts['Amount mismatch'] =
             (mismatchReasonCounts['Amount mismatch'] ?? 0) + 1;
       }
-      if (upperStatus == 'SHORT DEDUCTION' ||
-          upperStatus == 'EXCESS DEDUCTION' ||
-          combinedText.contains('RATE MISMATCH') ||
-          combinedText.contains('ROUNDING DIFFERENCE')) {
+      if (status == ReconciliationStatus.shortDeduction ||
+          status == ReconciliationStatus.excessDeduction) {
         mismatchReasonCounts['TDS mismatch'] =
             (mismatchReasonCounts['TDS mismatch'] ?? 0) + 1;
       }
-      if (upperStatus == 'TIMING DIFFERENCE') {
+      if (status == ReconciliationStatus.timingDifference) {
         mismatchReasonCounts['Timing difference'] =
             (mismatchReasonCounts['Timing difference'] ?? 0) + 1;
       }
-      if (combinedText.contains('LOW CONFIDENCE MATCH') ||
-          combinedText.contains('PAN MISSING') ||
-          combinedText.contains('PAN DERIVED FROM GSTIN')) {
+      if (row.identityConfidence < 0.75 ||
+          normalizePan(row.resolvedPan).isEmpty ||
+          row.remarks.contains('PAN from GSTIN')) {
         mismatchReasonCounts['PAN/name mismatch'] =
             (mismatchReasonCounts['PAN/name mismatch'] ?? 0) + 1;
       }
     }
 
     final topMismatchSection = () {
-      final mismatchEntries = sectionCounts.keys
-          .map((section) => MapEntry(section, sectionMismatchCounts[section] ?? 0))
-          .where((entry) => entry.value > 0)
-          .toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
+      final mismatchEntries =
+          sectionCounts.keys
+              .map(
+                (section) =>
+                    MapEntry(section, sectionMismatchCounts[section] ?? 0),
+              )
+              .where((entry) => entry.value > 0)
+              .toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
       return mismatchEntries.isEmpty ? '-' : mismatchEntries.first.key;
     }();
 
@@ -1198,14 +1517,16 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       tdsDifference: tdsDifference,
     );
 
-    final mismatchPercentage =
-        rows.isEmpty ? 0.0 : (mismatchRowsCount / rows.length) * 100;
+    final mismatchPercentage = rows.isEmpty
+        ? 0.0
+        : (mismatchRowsCount / rows.length) * 100;
 
     return _FilteredMetrics(
       summary: summary,
       mismatchReasonCounts: mismatchReasonCounts,
       sectionCounts: {
-        for (final entry in (sectionCounts.entries.toList()
+        for (final entry
+            in (sectionCounts.entries.toList()
               ..sort((a, b) => b.value.compareTo(a.value))))
           entry.key: entry.value,
       },
@@ -1221,7 +1542,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       purchaseOnlyCount: purchaseOnlyCount,
       only26QCount: only26QCount,
       applicableButNo26QCount: applicableButNo26QCount,
-      matchedPercentage: rows.isEmpty ? 0.0 : (matchedCount / rows.length) * 100,
+      matchedPercentage: rows.isEmpty
+          ? 0.0
+          : (matchedCount / rows.length) * 100,
       mismatchPercentage: mismatchPercentage,
       basicAmount: basicAmount,
       applicableAmount: applicableAmount,
@@ -1236,7 +1559,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       purchaseOnlyAmount: purchaseOnlyAmount,
       only26QAmount: only26QAmount,
       netMismatchAmount:
-          shortDeductionAmount + excessDeductionAmount + purchaseOnlyAmount + only26QAmount,
+          shortDeductionAmount +
+          excessDeductionAmount +
+          purchaseOnlyAmount +
+          only26QAmount,
       applicableButNo26QAmount: applicableButNo26QAmount,
       applicableButNo26QTds: applicableButNo26QTds,
     );
@@ -1313,6 +1639,23 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return _filteredMetrics?.sectionMismatchCounts[section] ?? 0;
   }
 
+  List<ReconciliationRow> _stableSectionCountScope() {
+    if (_viewMode == ReconciliationViewMode.audit) {
+      return List<ReconciliationRow>.of(allRows);
+    }
+
+    return _rowsForVisibleSellers(allRows);
+  }
+
+  int _sellerCountForSection(String section) {
+    final stableRows = _stableSectionCountScope();
+    final scopedRows = section == 'All'
+        ? stableRows
+        : stableRows.where((row) => row.section.trim() == section).toList();
+
+    return scopedRows.map(buildSellerSectionDisplayKey).toSet().length;
+  }
+
   Map<String, int> _activeMismatchReasonCounts() {
     return _filteredMetrics?.mismatchReasonCounts ??
         const <String, int>{
@@ -1325,18 +1668,70 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   List<String> _unsupportedSectionsInActiveScope() {
-    final unsupported = filteredRows
-        .map((row) => row.section.trim())
-        .where(
-          (section) =>
-              section.isNotEmpty &&
-              !CalculationService.supportedSections.contains(section),
-        )
-        .toSet()
-        .toList()
-      ..sort();
+    final unsupported =
+        filteredRows
+            .map((row) => row.section.trim())
+            .where(
+              (section) =>
+                  section.isNotEmpty &&
+                  !CalculationService.supportedSections.contains(section),
+            )
+            .toSet()
+            .toList()
+          ..sort();
 
     return unsupported;
+  }
+
+  void _setViewMode(ReconciliationViewMode nextMode) {
+    if (_viewMode == nextMode) {
+      return;
+    }
+
+    setState(() {
+      _viewMode = nextMode;
+    });
+    _applyFilters();
+  }
+
+  int _summaryHiddenSellerCount() {
+    if (_viewMode != ReconciliationViewMode.summary) {
+      return 0;
+    }
+
+    final allSellerKeys = allRows.map(buildSellerSectionDisplayKey).toSet();
+    final visibleSellerKeys = _rowsForCurrentSummaryScope(
+      allRows,
+    ).map(buildSellerSectionDisplayKey).toSet();
+    return allSellerKeys.length - visibleSellerKeys.length;
+  }
+
+  int _summaryHiddenRowCount() {
+    if (_viewMode != ReconciliationViewMode.summary) {
+      return 0;
+    }
+
+    return allRows.length - _rowsForVisibleSellers(allRows).length;
+  }
+
+  String? _viewModeHelperText() {
+    if (_viewMode != ReconciliationViewMode.summary) {
+      return null;
+    }
+
+    final hiddenSellers = _summaryHiddenSellerCount();
+    final hiddenRows = _summaryHiddenRowCount();
+    if (hiddenSellers <= 0 && hiddenRows <= 0) {
+      return null;
+    }
+
+    if (hiddenSellers > 0 && hiddenRows > 0) {
+      return '$hiddenSellers below-threshold sellers and $hiddenRows non-actionable rows are hidden in Summary View.';
+    }
+    if (hiddenSellers > 0) {
+      return '$hiddenSellers below-threshold sellers are hidden in Summary View.';
+    }
+    return '$hiddenRows non-actionable rows are hidden in Summary View.';
   }
 
   Widget _buildSectionTabs() {
@@ -1345,7 +1740,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       child: Row(
         children: _sectionTabs.map((section) {
           final isActive = activeSectionTab == section;
-          final mismatchCount = _mismatchCountForSection(section);
+          final sellerCount = _sellerCountForSection(section);
           return Padding(
             padding: const EdgeInsets.only(right: AppSpacing.sm),
             child: InkWell(
@@ -1359,10 +1754,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                 decoration: BoxDecoration(
                   gradient: isActive
                       ? const LinearGradient(
-                          colors: [
-                            Color(0xFF1E3A5F),
-                            Color(0xFF0F172A),
-                          ],
+                          colors: [Color(0xFF1E3A5F), Color(0xFF0F172A)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         )
@@ -1377,8 +1769,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color: const Color(0xFF0F172A)
-                                .withValues(alpha: 0.12),
+                            color: const Color(
+                              0xFF0F172A,
+                            ).withValues(alpha: 0.12),
                             blurRadius: 14,
                             offset: const Offset(0, 6),
                           ),
@@ -1393,7 +1786,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          section,
+                          section == 'All'
+                              ? section
+                              : sectionDisplayLabel(section),
                           style: TextStyle(
                             color: isActive
                                 ? Colors.white
@@ -1403,7 +1798,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          section == 'All' ? 'Combined view' : 'Section focus',
+                          section == 'All'
+                              ? 'Unique sellers'
+                              : 'Section sellers',
                           style: TextStyle(
                             color: isActive
                                 ? Colors.white.withValues(alpha: 0.72)
@@ -1417,28 +1814,22 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
                     const SizedBox(width: AppSpacing.sm),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xs,
+                        horizontal: AppSpacing.sm,
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: mismatchCount > 0
-                            ? (isActive
-                                ? const Color(0xFF7F1D1D)
-                                : const Color(0xFFFEE2E2))
-                            : (isActive
-                                ? const Color(0xFF14532D)
-                                : const Color(0xFFDCFCE7)),
+                        color: isActive
+                            ? const Color(0xFF1E40AF)
+                            : const Color(0xFFEFF6FF),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        '$mismatchCount',
+                        '$sellerCount sellers',
                         style: TextStyle(
-                          color: mismatchCount > 0
+                          color: isActive
                               ? Colors.white
-                              : (isActive
-                                  ? Colors.white
-                                  : const Color(0xFF166534)),
-                          fontSize: 12,
+                              : const Color(0xFF1D4ED8),
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1456,8 +1847,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   Widget _buildSectionSummaryStrip() {
     final summary = _activeSummary();
     if (summary == null) return const SizedBox.shrink();
-    final activeSectionCode =
-        activeSectionTab == 'All' ? 'All Sections' : activeSectionTab;
+    final activeSectionCode = activeSectionTab == 'All'
+        ? 'All Sections'
+        : activeSectionTab;
     final sourceFileCount = activeSectionTab == 'All'
         ? widget.sourceFileCountBySection.values.fold<int>(
             0,
@@ -1486,7 +1878,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         children: [
           ReconciliationSummaryHeader(
             title:
-                '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} Summary',
+                '${activeSectionTab == 'All' ? 'Combined' : sectionDisplayLabel(activeSectionTab)} Summary',
             subtitle:
                 '$activeSectionCode  •  $sourceFileCount source file(s)  •  '
                 '$sourceRowCount source row(s)',
@@ -1596,12 +1988,150 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return _filteredMetrics?.topMismatchSection ?? '-';
   }
 
+  int _skippedSellerCount(SkippedRowSummary skippedRowSummary) {
+    final skippedSellerNames = skippedRowSummary.samples
+        .map((sample) => normalizeName(sample.sellerName))
+        .where((seller) => seller.isNotEmpty)
+        .toSet();
+
+    return filteredRows
+        .where((row) {
+          final resolvedName = normalizeName(row.resolvedSellerName);
+          final sellerName = normalizeName(row.sellerName);
+          return skippedSellerNames.contains(resolvedName) ||
+              skippedSellerNames.contains(sellerName);
+        })
+        .map(buildSellerDisplayKey)
+        .toSet()
+        .length;
+  }
+
+  int _applicableButNo26QSellerCount() {
+    return _sellerKeysForExceptionFilter(
+      rows: filteredRows,
+      filter: _SellerExceptionFilter.missing26Q,
+    ).length;
+  }
+
+  Map<String, int> _sellerOutcomeCounts() {
+    final rowsBySeller = <String, List<ReconciliationRow>>{};
+
+    for (final row in filteredRows) {
+      final scopedSellerKey = buildSellerSectionDisplayKey(row);
+      if (scopedSellerKey.isEmpty) continue;
+      rowsBySeller
+          .putIfAbsent(scopedSellerKey, () => <ReconciliationRow>[])
+          .add(row);
+    }
+
+    var matchedSellers = 0;
+    var mismatchSellers = 0;
+    var only26QSellers = 0;
+    var belowThresholdOnlySellers = 0;
+
+    for (final sellerRows in rowsBySeller.values) {
+      final isBelowThresholdOnlySeller = sellerRows.every(
+        (row) =>
+            row.status == ReconciliationStatus.belowThreshold ||
+            row.status == ReconciliationStatus.noDeductionRequired,
+      );
+      if (isBelowThresholdOnlySeller) {
+        belowThresholdOnlySellers++;
+        continue;
+      }
+
+      final snapshot = CalculationService.buildSellerLevelStatus(sellerRows);
+      switch (snapshot.status) {
+        case CalculationService.sellerStatusMatched:
+          matchedSellers++;
+          break;
+        case CalculationService.sellerStatusOnly26Q:
+          only26QSellers++;
+          break;
+        case CalculationService.sellerStatusMismatch:
+        case CalculationService.sellerStatusNo26Q:
+          mismatchSellers++;
+          break;
+      }
+    }
+
+    return <String, int>{
+      'matched': matchedSellers,
+      'mismatch': mismatchSellers,
+      'only26q': only26QSellers,
+      'belowThresholdOnly': belowThresholdOnlySellers,
+    };
+  }
+
+  Set<String> _sellerKeysForExceptionFilter({
+    required List<ReconciliationRow> rows,
+    required _SellerExceptionFilter filter,
+  }) {
+    switch (filter) {
+      case _SellerExceptionFilter.missing26Q:
+        return rows
+            .where(
+              (row) =>
+                  row.applicableAmount > 0 &&
+                  row.tds26QAmount == 0 &&
+                  row.actualTds == 0,
+            )
+            .map(buildSellerSectionDisplayKey)
+            .toSet();
+      case _SellerExceptionFilter.skippedRows:
+        final skippedSummary =
+            _sectionResultCache?.skippedRowSummary ?? SkippedRowSummary.empty;
+        final skippedSellerNames = skippedSummary.samples
+            .map((sample) => normalizeName(sample.sellerName))
+            .where((seller) => seller.isNotEmpty)
+            .toSet();
+
+        return rows
+            .where((row) {
+              final resolvedName = normalizeName(row.resolvedSellerName);
+              final sellerName = normalizeName(row.sellerName);
+              return skippedSellerNames.contains(resolvedName) ||
+                  skippedSellerNames.contains(sellerName);
+            })
+            .map(buildSellerSectionDisplayKey)
+            .toSet();
+    }
+  }
+
+  String _sellerExceptionFilterLabel(_SellerExceptionFilter filter) {
+    switch (filter) {
+      case _SellerExceptionFilter.skippedRows:
+        return 'Seller exception: Skipped rows';
+      case _SellerExceptionFilter.missing26Q:
+        return 'Seller exception: Missing 26Q deductions';
+    }
+  }
+
+  void _toggleSellerExceptionFilter(_SellerExceptionFilter filter) {
+    setState(() {
+      _activeSellerExceptionFilter = _activeSellerExceptionFilter == filter
+          ? null
+          : filter;
+    });
+    _applyFilters();
+  }
+
   double _purchaseOnlyAmount() {
     return _filteredMetrics?.purchaseOnlyAmount ?? 0.0;
   }
 
   double _only26QAmount() {
     return _filteredMetrics?.only26QAmount ?? 0.0;
+  }
+
+  String _sellerFilterDisplayValue() {
+    final query = selectedSeller.trim();
+    return query.isEmpty ? 'All Visible Sellers' : query;
+  }
+
+  String _exportSellerLabel() {
+    final query = selectedSeller.trim();
+    return query.isEmpty ? 'All Sellers' : query;
   }
 
   List<ReconciliationRow> _rowsForAllSectionsExport() {
@@ -1622,7 +2152,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
         financialYear: selectedFinancialYear,
-        sellerName: selectedSeller,
+        sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
@@ -1642,7 +2172,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
         financialYear: selectedFinancialYear,
-        sellerName: selectedSeller,
+        sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
@@ -1661,7 +2191,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
         financialYear: selectedFinancialYear,
-        sellerName: selectedSeller,
+        sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
@@ -1672,164 +2202,13 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     }
   }
 
-  Future<void> _openSellerMappingScreen() async {
-    final existingMappings = await _loadManualMappingRecordsFromDb();
-    if (!mounted) return;
-    final sourceRows = widget.sourceRowsBySection.values
-        .expand((rows) => rows)
-        .toList();
-    final purchaseRows = _buildPurchaseMappingRows(
-      sourceRows,
-      resolvedSuggestionsByKey: _buildResolvedSuggestions(allRows),
-    );
-
-    final tdsNames = widget.tdsRows
-        .map((e) => e.deducteeName.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SellerMappingScreen(
-          buyerName: widget.buyerName,
-          buyerPan: widget.buyerPan,
-          financialYearLabel: selectedFinancialYear,
-          selectedSectionLabel: selectedSection,
-          purchaseRows: purchaseRows,
-          tdsParties: tdsNames,
-          existingMappings: existingMappings,
-          blockedAliases: blockedAutoMappingAliases,
-          tdsPartyPans: _buildTdsPartyPans(),
-        ),
-      ),
-    );
-
-    if (result == null) return;
-
-    final returnedUpserts =
-        ((result['upserts'] as List?) ?? const <dynamic>[])
-            .whereType<Map>()
-            .map((entry) => entry.map(
-                  (key, value) => MapEntry(key.toString(), value.toString()),
-                ))
-            .toList();
-    final returnedDeleted =
-        ((result['deleted'] as List?) ?? const <dynamic>[])
-            .whereType<Map>()
-            .map((entry) => entry.map(
-                  (key, value) => MapEntry(key.toString(), value.toString()),
-                ))
-            .toList();
-
-    final mismatchWarnings = <String>[];
-    final cautionWarnings = <String>[];
-    final blockedAliases = <String>{};
-
-    for (final entry in returnedUpserts) {
-      final aliasName = _normalizeAlias(entry['aliasName'] ?? '');
-      final sectionCode = normalizeSellerMappingSectionCode(
-        entry['sectionCode'] ?? 'ALL',
-      );
-      final mappedName = (entry['mappedName'] ?? '').trim();
-
-      if (aliasName.isEmpty || mappedName.isEmpty) continue;
-
-      final mappedPan = normalizePan(entry['mappedPan'] ?? '');
-      final purchasePans = sourceRows
-          .where((row) {
-            final rowSection = normalizeSellerMappingSectionCode(
-              normalizeSection(row.section).isNotEmpty
-                  ? normalizeSection(row.section)
-                  : normalizeSection(row.normalizedSection).isNotEmpty
-                      ? normalizeSection(row.normalizedSection)
-                      : 'ALL',
-            );
-            return _normalizeAlias(row.partyName) == aliasName &&
-                rowSection == sectionCode;
-          })
-          .map((row) => normalizePan(row.panNumber))
-          .where((pan) => pan.isNotEmpty)
-          .toSet();
-
-      if (purchasePans.isNotEmpty &&
-          mappedPan.isNotEmpty &&
-          mappedPan != 'MULTIPLEPANS' &&
-          !purchasePans.contains(mappedPan)) {
-        mismatchWarnings.add(
-          'Seller mapping blocked: PAN mismatch for "$aliasName" in section '
-          '"$sectionCode" against 26Q party "$mappedName".',
-        );
-        blockedAliases.add(aliasName);
-        continue;
-      }
-
-      if (purchasePans.isEmpty ||
-          mappedPan.isEmpty ||
-          mappedPan == 'MULTIPLEPANS') {
-        cautionWarnings.add(
-          'Caution: PAN missing or not unique for "$aliasName" in section '
-          '"$sectionCode" -> "$mappedName". Please verify manually.',
-        );
-      }
-
-      await SellerMappingService.saveMapping(
-        SellerMapping(
-          buyerName: widget.buyerName,
-          buyerPan: widget.buyerPan.trim().toUpperCase(),
-          aliasName: aliasName,
-          sectionCode: sectionCode,
-          mappedPan: mappedPan == 'MULTIPLEPANS' ? '' : mappedPan,
-          mappedName: mappedName,
-        ),
-      );
-    }
-
-    for (final entry in returnedDeleted) {
-      final aliasName = _normalizeAlias(entry['aliasName'] ?? '');
-      final sectionCode = normalizeSellerMappingSectionCode(
-        entry['sectionCode'] ?? 'ALL',
-      );
-      if (aliasName.isEmpty) continue;
-
-      blockedAliases.add(aliasName);
-      await SellerMappingService.deleteMapping(
-        buyerPan: widget.buyerPan.trim().toUpperCase(),
-        aliasName: aliasName,
-        sectionCode: sectionCode,
-      );
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      blockedAutoMappingAliases.addAll(blockedAliases);
-    });
-
-    await _recalculateAll();
-
-    if (!mounted) return;
-    if (mismatchWarnings.isNotEmpty) {
-      _showSnackBar(mismatchWarnings.join('\n'));
-    } else if (cautionWarnings.isNotEmpty) {
-      _showSnackBar(cautionWarnings.join('\n'));
-    } else {
-      _showSnackBar('Seller mappings saved successfully');
-    }
-  }
-
   void _showSnackBar(String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger
       ..clearSnackBars()
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.fixed,
-          content: Text(message),
-        ),
+        SnackBar(behavior: SnackBarBehavior.fixed, content: Text(message)),
       );
   }
 
@@ -1949,17 +2328,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       statusOptions: statusOptions,
       showSectionFilter: false,
       onSellerChanged: (value) {
-        if (value == null) return;
         setState(() => selectedSeller = value);
         _applyFilters();
       },
       onFinancialYearChanged: (value) {
-        if (value == null) return;
         setState(() => selectedFinancialYear = value);
         _applyFilters();
       },
       onSectionChanged: (value) {
-        if (value == null) return;
         setState(() {
           selectedSection = value;
           activeSectionTab = value == 'All Sections' ? 'All' : value;
@@ -1967,7 +2343,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         _applyFilters();
       },
       onStatusChanged: (value) {
-        if (value == null) return;
         setState(() => selectedStatus = value);
         _applyFilters();
       },
@@ -1975,55 +2350,13 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   Widget _buildMainContent() {
-    final summary = _activeSummary();
     final skippedRowSummary =
         _sectionResultCache?.skippedRowSummary ?? SkippedRowSummary.empty;
-    final detailedSummary = ReconciliationSummaryPanel(
-      buyerName: widget.buyerName,
-      buyerPan: widget.buyerPan,
-      gstNo: widget.gstNo,
-      selectedSeller: selectedSeller,
-      selectedFinancialYear: selectedFinancialYear,
-      selectedSection: selectedSection,
-      selectedStatus: selectedStatus,
-      filteredRowsCount: filteredRows.length,
-      totalSellers: _totalSellers(),
-      totalSections: _totalSections(),
-      matchedPercentage: _matchedPercentage(),
-      mismatchPercentage: _mismatchPercentage(),
-      topMismatchSection: _topMismatchSection(),
-      basicAmount: _filteredMetrics?.basicAmount ?? 0.0,
-      applicableAmount: _filteredMetrics?.applicableAmount ?? 0.0,
-      tds26QAmount: _filteredMetrics?.tds26QAmount ?? 0.0,
-      expectedTds: _filteredMetrics?.expectedTds ?? 0.0,
-      actualTds: _filteredMetrics?.actualTds ?? 0.0,
-      tdsDifference: _filteredMetrics?.tdsDifference ?? 0.0,
-      amountDifference: _filteredMetrics?.amountDifference ?? 0.0,
-      matchedCount: _countByStatus(ReconciliationStatus.matched),
-      timingDifferenceCount:
-          _countByStatus(ReconciliationStatus.timingDifference),
-      shortDeductionCount:
-          _countByStatus(ReconciliationStatus.shortDeduction),
-      excessDeductionCount:
-          _countByStatus(ReconciliationStatus.excessDeduction),
-      purchaseOnlyCount: _countByStatus(ReconciliationStatus.purchaseOnly),
-      only26QCount: _countByStatus(ReconciliationStatus.onlyIn26Q),
-      applicableButNo26QCount: _applicableButNo26QCount(),
-      shortDeductionAmount: _shortDeductionAmount(),
-      excessDeductionAmount: _excessDeductionAmount(),
-      timingDifferenceAmount: _timingDifferenceAmount(),
-      purchaseOnlyAmount: _purchaseOnlyAmount(),
-      only26QAmount: _only26QAmount(),
-      netMismatchAmount: _netMismatchAmount(),
-      applicableButNo26QAmount: _applicableButNo26QAmount(),
-      applicableButNo26QTds: _applicableButNo26QTds(),
-      manualMappingsCount: manualNameMapping.length,
-      mismatchRowsCount: _mismatchRowsCount(),
-      sectionCounts: _sectionCounts(),
-      skippedRowSummary: skippedRowSummary,
-    );
     final tableContent = ReconciliationTableSection(
-      filteredRows: filteredRows,
+      filteredRows: tableRows,
+      skippedRowSummary: skippedRowSummary,
+      showSkippedRowImpact:
+          _activeSellerExceptionFilter == _SellerExceptionFilter.skippedRows,
       isRecalculating: _isRecalculating,
       formatAmount: _fmt,
       statusColor: _statusColor,
@@ -2033,6 +2366,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final useSplitView = constraints.maxWidth >= 1180;
+        final sellerOutcomeCounts = _sellerOutcomeCounts();
         final analysisPane = SizedBox(
           width: useSplitView ? null : double.infinity,
           child: ReconciliationAnalysisPanel(
@@ -2042,28 +2376,44 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
             totalSellers: _totalSellers(),
             totalSections: _totalSections(),
             manualMappingsCount: manualNameMapping.length,
-            topMismatchSection: _topMismatchSection(),
-            detailedSummary: detailedSummary,
+            matchedSellersCount: sellerOutcomeCounts['matched'] ?? 0,
+            mismatchSellersCount: sellerOutcomeCounts['mismatch'] ?? 0,
+            only26QSellersCount: sellerOutcomeCounts['only26q'] ?? 0,
+            belowThresholdOnlySellersCount:
+                sellerOutcomeCounts['belowThresholdOnly'] ?? 0,
             mismatchReasonCounts: _activeMismatchReasonCounts(),
             unsupportedSections: _unsupportedSectionsInActiveScope(),
-            totalRows: summary?.totalRows ?? 0,
-            mismatchRows: summary?.mismatchRows ?? 0,
-            sourceAmount: summary?.sourceAmount ?? 0.0,
-            tds26QAmount: summary?.tds26QAmount ?? 0.0,
-            expectedTds: summary?.expectedTds ?? 0.0,
-            actualTds: summary?.actualTds ?? 0.0,
+            skippedSellerCount: _skippedSellerCount(skippedRowSummary),
+            skippedRowsCount: skippedRowSummary.total,
+            applicableButNo26QSellerCount: _applicableButNo26QSellerCount(),
+            applicableButNo26QRowCount: _applicableButNo26QCount(),
+            isSkippedRowsFilterActive:
+                _activeSellerExceptionFilter ==
+                _SellerExceptionFilter.skippedRows,
+            isMissing26QFilterActive:
+                _activeSellerExceptionFilter ==
+                _SellerExceptionFilter.missing26Q,
+            onSkippedRowsTap: skippedRowSummary.total <= 0
+                ? null
+                : () => _toggleSellerExceptionFilter(
+                    _SellerExceptionFilter.skippedRows,
+                  ),
+            onMissing26QTap: _applicableButNo26QCount() <= 0
+                ? null
+                : () => _toggleSellerExceptionFilter(
+                    _SellerExceptionFilter.missing26Q,
+                  ),
           ),
         );
+
+        final tablePane = tableContent;
 
         if (!useSplitView) {
           return Column(
             children: [
-              Expanded(child: tableContent),
+              Expanded(child: tablePane),
               const SizedBox(height: 16),
-              SizedBox(
-                height: 520,
-                child: analysisPane,
-              ),
+              SizedBox(height: 520, child: analysisPane),
             ],
           );
         }
@@ -2071,15 +2421,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              flex: 4,
-              child: tableContent,
-            ),
+            Expanded(flex: 4, child: tablePane),
             const SizedBox(width: 16),
-            Expanded(
-              flex: 1,
-              child: analysisPane,
-            ),
+            Expanded(flex: 1, child: analysisPane),
           ],
         );
       },
@@ -2089,49 +2433,102 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   @override
   Widget build(BuildContext context) {
     final allSectionExportRows = _rowsForAllSectionsExport();
+    final body = Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        children: [
+          ReconciliationTopToolbar(
+            buyerName: widget.buyerName,
+            buyerPan: widget.buyerPan,
+            gstNo: widget.gstNo,
+            sectionTabs: _buildSectionTabs(),
+            filters: _buildFilters(),
+            viewMode: _viewMode,
+            isRecalculating: _isRecalculating,
+            onViewModeChanged: _setViewMode,
+            onRecalculate: _isRecalculating ? null : _recalculateAll,
+            viewModeHelperText: _viewModeHelperText(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Expanded(child: _buildMainContent()),
+        ],
+      ),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
-      appBar: AppBar(
-        title: const Text('Reconciliation'),
-      ),
+      appBar: AppBar(title: const Text('Reconciliation')),
       bottomNavigationBar: ReconciliationBottomActionBar(
-        onExportCurrentSection:
-            filteredRows.isEmpty ? null : _exportCurrentSectionExcel,
-        onExportAllSections:
-            allSectionExportRows.isEmpty ? null : _exportAllSectionsExcel,
+        onExportCurrentSection: filteredRows.isEmpty
+            ? null
+            : _exportCurrentSectionExcel,
+        onExportAllSections: allSectionExportRows.isEmpty
+            ? null
+            : _exportAllSectionsExcel,
         onExportPivot: filteredRows.isEmpty ? null : _exportPivotExcel,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          children: [
-            ReconciliationTopToolbar(
-              buyerName: widget.buyerName,
-              buyerPan: widget.buyerPan,
-              gstNo: widget.gstNo,
-              sectionTabs: _buildSectionTabs(),
-              filters: _buildFilters(),
-              showAllRows: showAllRows,
-              isRecalculating: _isRecalculating,
-              onShowAllRowsChanged: (value) async {
-                setState(() {
-                  showAllRows = value;
-                });
-                await _recalculateAll();
-              },
-              onRecalculate: _isRecalculating ? null : _recalculateAll,
-              onManualMapping: _openSellerMappingScreen,
+      body: Stack(
+        children: [
+          body,
+          if (_isRecalculating)
+            Positioned.fill(
+              child: AbsorbPointer(
+                absorbing: true,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.74),
+                  ),
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 3),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            _processingMessage,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColorScheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          const Text(
+                            'Please wait while the reconciliation results are prepared.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColorScheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: _buildMainContent(),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
-
-

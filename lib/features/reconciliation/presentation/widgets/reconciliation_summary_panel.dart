@@ -119,7 +119,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           summaryTile('Buyer Name', buyerName.isEmpty ? '-' : buyerName),
           summaryTile('Buyer PAN', buyerPan.isEmpty ? '-' : buyerPan),
           summaryTile('GST No', gstNo.isEmpty ? '-' : gstNo),
-          summaryTile('Seller Filter', selectedSeller),
+          summaryTile('Seller Search', selectedSeller),
           summaryTile('FY Filter', selectedFinancialYear),
           summaryTile('Section Filter', selectedSection),
           summaryTile('Status Filter', selectedStatus),

@@ -12,27 +12,20 @@ import 'package:reconciliation_app/features/upload/services/import_mapping_servi
 class ColumnMappingScreen extends StatefulWidget {
   final ExcelPreviewData previewData;
 
-  const ColumnMappingScreen({
-    super.key,
-    required this.previewData,
-  });
+  const ColumnMappingScreen({super.key, required this.previewData});
 
   @override
   State<ColumnMappingScreen> createState() => _ColumnMappingScreenState();
 }
 
 class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
-  static const List<String> purchaseRequiredFields = [
-    'party_name',
-    'date',
-  ];
-  static const List<List<String>> purchaseRequiredAnyOf = [
-    ['basic_amount', 'bill_amount'],
-  ];
   static const List<String> q26RequiredFields = [
     'party_name',
+    'pan_number',
+    'section',
+    'amount_paid',
     'tds_amount',
-    'date',
+    'date_month',
   ];
   static const List<String> genericLedgerRequiredFields = [
     'party_name',
@@ -42,12 +35,14 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   late final List<MappingFieldOption> fieldOptions;
   late Map<String, String> selections;
+  late final ScrollController _columnsScrollController;
   bool saveProfile = true;
   List<String> validationErrors = const [];
 
   @override
   void initState() {
     super.initState();
+    _columnsScrollController = ScrollController();
     fieldOptions = ImportMappingService.fieldOptionsFor(
       widget.previewData.fileType,
     );
@@ -57,15 +52,18 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     };
   }
 
-  Map<String, String> get _canonicalMapping =>
-      _normalizeCanonicalMapping(
-        ImportMappingService.buildCanonicalMapping(
-          {
-            for (final entry in selections.entries)
-              entry.key: _normalizeSelectionValue(entry.value),
-          },
-        ),
-      );
+  @override
+  void dispose() {
+    _columnsScrollController.dispose();
+    super.dispose();
+  }
+
+  Map<String, String> get _canonicalMapping => _normalizeCanonicalMapping(
+    ImportMappingService.buildCanonicalMapping({
+      for (final entry in selections.entries)
+        entry.key: _normalizeSelectionValue(entry.value),
+    }),
+  );
 
   Map<String, String> _normalizeCanonicalMapping(Map<String, String> mapping) {
     final normalized = Map<String, String>.from(mapping);
@@ -97,8 +95,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   }
 
   Map<String, String> get _fieldLabels => {
-        for (final option in fieldOptions) option.key: option.label,
-      };
+    for (final option in fieldOptions) option.key: option.label,
+  };
 
   bool get _isPurchaseFile =>
       widget.previewData.fileType == ImportMappingService.purchaseFileType;
@@ -130,28 +128,25 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     final canonicalKeys = _canonicalMapping.keys.toSet();
     return [
       if (canonicalKeys.contains('party_name')) 'party_name',
-      if (canonicalKeys.contains('date') || canonicalKeys.contains('eom')) 'date',
+      if (canonicalKeys.contains('date')) 'date',
+      if (canonicalKeys.contains('date_month')) 'date_month',
+      if (canonicalKeys.contains('eom')) 'eom',
       if (canonicalKeys.contains('basic_amount')) 'basic_amount',
       if (canonicalKeys.contains('bill_amount')) 'bill_amount',
       if (canonicalKeys.contains('amount')) 'amount',
+      if (canonicalKeys.contains('amount_paid')) 'amount_paid',
       if (canonicalKeys.contains('tds_amount')) 'tds_amount',
       if (canonicalKeys.contains('pan_number')) 'pan_number',
       if (canonicalKeys.contains('gst_no')) 'gst_no',
       if (canonicalKeys.contains('bill_no')) 'bill_no',
       if (canonicalKeys.contains('description')) 'description',
+      if (canonicalKeys.contains('section')) 'section',
     ];
   }
 
   bool hasRequiredFields(List<String?> mapped, List<String> required) {
     final mappedSet = mapped.whereType<String>().toSet();
     return required.every(mappedSet.contains);
-  }
-
-  bool hasAnyRequiredGroup(List<String?> mapped, List<List<String>> groups) {
-    final mappedSet = mapped.whereType<String>().toSet();
-    return groups.every(
-      (group) => group.any(mappedSet.contains),
-    );
   }
 
   bool isValidMapping(bool is26Q, List<String?> mapped) {
@@ -163,8 +158,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       return hasRequiredFields(mapped, q26RequiredFields);
     }
 
-    return hasRequiredFields(mapped, purchaseRequiredFields) &&
-        hasAnyRequiredGroup(mapped, purchaseRequiredAnyOf);
+    return hasRequiredFields(mapped, const ['party_name']) &&
+        (mapped.contains('date') || mapped.contains('eom')) &&
+        (mapped.contains('basic_amount') || mapped.contains('bill_amount'));
   }
 
   List<String> get _requiredValidationMessages {
@@ -175,37 +171,76 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       messages.add('Party Name is required');
     }
 
-    if (!mappedSet.contains('date')) {
-      messages.add('Date is required');
-    }
-
     if (_isGenericLedgerFile) {
+      if (!mappedSet.contains('date')) {
+        messages.add('Date is required');
+      }
       if (!mappedSet.contains('amount')) {
         messages.add('Amount is required');
       }
+      final amountColumnKey = _selectedColumnFor('amount');
+      final amountColumnLabel = amountColumnKey == null
+          ? ''
+          : (widget.previewData.columnLabels[amountColumnKey] ??
+                amountColumnKey);
+      final normalizedAmountLabel = amountColumnLabel.trim().toLowerCase();
+      if (normalizedAmountLabel.contains('closing balance')) {
+        messages.add('Closing Balance cannot be used as Amount');
+      }
     } else if (_isTdsFile) {
+      if (!mappedSet.contains('date_month')) {
+        messages.add('Date / Month is required');
+      }
+      if (!mappedSet.contains('pan_number')) {
+        messages.add('PAN Number is required');
+      }
+      if (!mappedSet.contains('amount_paid')) {
+        messages.add('Amount Paid is required');
+      }
       if (!mappedSet.contains('tds_amount')) {
         messages.add('TDS Amount is required');
       }
-    } else if (!mappedSet.contains('basic_amount') &&
-        !mappedSet.contains('bill_amount')) {
-      messages.add('Map either Basic Amount or Bill Amount');
+      if (!mappedSet.contains('section')) {
+        messages.add('Section is required');
+      }
+    } else {
+      if (!mappedSet.contains('date') && !mappedSet.contains('eom')) {
+        messages.add('Bill Date or EOM is required');
+      }
+      if (!mappedSet.contains('basic_amount') &&
+          !mappedSet.contains('bill_amount')) {
+        messages.add('Map either Basic Amount or Bill Amount');
+      }
     }
 
     return messages;
   }
 
+  String? _selectedColumnFor(String canonicalKey) {
+    for (final entry in selections.entries) {
+      if (entry.value.trim() == canonicalKey) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
   bool get _isMappingValid => isValidMapping(_isTdsFile, _mappedFieldKeys);
 
   Map<String, bool> get _requiredCompletionStatus => {
-        'date': _canonicalMapping.containsKey('date') ||
-            _canonicalMapping.containsKey('eom'),
-        'party_name': _canonicalMapping.containsKey('party_name'),
-        'amount': _canonicalMapping.containsKey('amount'),
-        'tds_amount': _canonicalMapping.containsKey('tds_amount'),
-        'amount_column': _canonicalMapping.containsKey('bill_amount') ||
-            _canonicalMapping.containsKey('basic_amount'),
-      };
+    'date': _canonicalMapping.containsKey('date'),
+    'date_month': _canonicalMapping.containsKey('date_month'),
+    'eom': _canonicalMapping.containsKey('eom'),
+    'party_name': _canonicalMapping.containsKey('party_name'),
+    'amount': _canonicalMapping.containsKey('amount'),
+    'amount_paid': _canonicalMapping.containsKey('amount_paid'),
+    'tds_amount': _canonicalMapping.containsKey('tds_amount'),
+    'pan_number': _canonicalMapping.containsKey('pan_number'),
+    'section': _canonicalMapping.containsKey('section'),
+    'amount_column':
+        _canonicalMapping.containsKey('bill_amount') ||
+        _canonicalMapping.containsKey('basic_amount'),
+  };
 
   Map<String, String> get _requiredFieldLabels {
     if (_isGenericLedgerFile) {
@@ -219,8 +254,11 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     if (_isTdsFile) {
       return const {
         'party_name': 'Party Name',
+        'pan_number': 'PAN Number',
+        'section': 'Section',
+        'amount_paid': 'Amount Paid',
+        'date_month': 'Date / Month',
         'tds_amount': 'TDS Amount',
-        'date': 'Date',
       };
     }
 
@@ -242,11 +280,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     }
 
     if (_isTdsFile) {
-      return const {
-        'pan_number': 'PAN Number',
-        'section': 'Section',
-        'amount_paid': 'Amount Paid',
-      };
+      return const {};
     }
 
     return const {
@@ -258,32 +292,26 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   Set<String> get _requiredOptionKeys {
     if (_isGenericLedgerFile) {
-      return const {
-        'date',
-        'party_name',
-        'amount',
-      };
+      return const {'date', 'party_name', 'amount'};
     }
 
     if (_isTdsFile) {
       return const {
         'date_month',
         'party_name',
+        'pan_number',
+        'section',
+        'amount_paid',
         'tds_amount',
       };
     }
 
-    return const {
-      'date',
-      'eom',
-      'party_name',
-      'basic_amount',
-      'bill_amount',
-    };
+    return const {'date', 'eom', 'party_name', 'basic_amount', 'bill_amount'};
   }
 
-  int get _completedRequiredCount =>
-      _requiredFieldLabels.keys.where((key) => _requiredCompletionStatus[key] ?? false).length;
+  int get _completedRequiredCount => _requiredFieldLabels.keys
+      .where((key) => _requiredCompletionStatus[key] ?? false)
+      .length;
 
   bool get _allRequiredMapped => _isMappingValid;
 
@@ -311,12 +339,15 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   List<String> get _requiredColumnKeys {
     final keys = widget.previewData.columnKeys.where((columnKey) {
       final selected = selections[columnKey]?.trim() ?? '';
-      final suggested = widget.previewData.suggestedMappings[columnKey]?.trim() ?? '';
+      final suggested =
+          widget.previewData.suggestedMappings[columnKey]?.trim() ?? '';
       return _requiredOptionKeys.contains(selected) ||
           _requiredOptionKeys.contains(suggested);
     }).toList();
 
-    return keys.isNotEmpty ? keys : widget.previewData.columnKeys.take(4).toList();
+    return keys.isNotEmpty
+        ? keys
+        : widget.previewData.columnKeys.take(4).toList();
   }
 
   List<String> get _optionalColumnKeys => widget.previewData.columnKeys
@@ -376,7 +407,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       ..._requiredValidationMessages,
       ..._selectionCounts.entries
           .where((entry) => entry.value > 1)
-          .map((entry) => '${_fieldLabels[entry.key] ?? entry.key} is mapped more than once'),
+          .map(
+            (entry) =>
+                '${_fieldLabels[entry.key] ?? entry.key} is mapped more than once',
+          ),
     ];
 
     if (errors.isNotEmpty) {
@@ -408,7 +442,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     final selected = selections[columnKey]?.trim() ?? '';
     if (selected.isEmpty) return false;
 
-    final suggested = widget.previewData.suggestedMappings[columnKey]?.trim() ?? '';
+    final suggested =
+        widget.previewData.suggestedMappings[columnKey]?.trim() ?? '';
     return _displayConfidence < 0.75 && selected == suggested;
   }
 
@@ -526,12 +561,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             _isPurchaseFile
                 ? 'Required: Party Name, Date, and Basic Amount or Bill Amount.'
                 : _isGenericLedgerFile
-                    ? 'Required: Party Name, Date, and Amount.'
-                    : 'Required: Party Name, TDS Amount, and Date.',
-            style: const TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 12,
-            ),
+                ? 'Required: Date, Party Name, and Amount. Prefer Debit for expense ledgers. Closing Balance is not allowed as Amount.'
+                : 'Required: Party Name, PAN, Section, Amount Paid, TDS Amount, and Date / Month.',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
           ),
           const SizedBox(height: 14),
           ..._requiredFieldLabels.entries.map((entry) {
@@ -571,10 +603,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             const SizedBox(height: 8),
             Text(
               'Recommended: ${_recommendedFieldLabels.values.join(', ')}',
-              style: const TextStyle(
-                color: Color(0xFF94A3B8),
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
             ),
           ],
           if (visibleErrors.isNotEmpty) ...[
@@ -602,8 +631,11 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(),
       child: Scrollbar(
+        controller: _columnsScrollController,
         thumbVisibility: true,
         child: ListView(
+          controller: _columnsScrollController,
+          primary: false,
           children: [
             const Text(
               'Required Columns',
@@ -617,9 +649,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             ..._requiredColumnKeys.map(_buildColumnCard),
             const SizedBox(height: 12),
             Theme(
-              data: Theme.of(context).copyWith(
-                dividerColor: Colors.transparent,
-              ),
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 collapsedIconColor: const Color(0xFF94A3B8),
@@ -633,10 +665,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 ),
                 subtitle: const Text(
                   'Expand to map GST, PAN, product, or extra fields.',
-                  style: TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                 ),
                 children: [
                   for (final columnKey in _optionalColumnKeys)
@@ -655,7 +684,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   Widget _buildColumnCard(String columnKey) {
     final columnLabel = widget.previewData.columnLabels[columnKey] ?? columnKey;
-    final sampleValue = widget.previewData.sampleRows.firstOrNull?[columnKey] ?? '';
+    final sampleValue =
+        widget.previewData.sampleRows.firstOrNull?[columnKey] ?? '';
     final selectedValue = selections[columnKey];
     final hasDuplicate = _hasDuplicateFor(selectedValue);
     final lowConfidence = _isLowConfidenceMapping(columnKey);
@@ -697,7 +727,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      sampleValue.isEmpty ? 'Sample: (blank)' : 'Sample: $sampleValue',
+                      sampleValue.isEmpty
+                          ? 'Sample: (blank)'
+                          : 'Sample: $sampleValue',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -710,7 +742,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
               ),
               if (lowConfidence)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF78350F),
                     borderRadius: BorderRadius.circular(999),
@@ -779,18 +814,17 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 ),
               ),
             ],
-            onChanged: (value) =>
-                _updateSelection(columnKey, (value ?? '').isEmpty ? null : value),
+            onChanged: (value) => _updateSelection(
+              columnKey,
+              (value ?? '').isEmpty ? null : value,
+            ),
           ),
           if (hasDuplicate)
             const Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text(
                 'This field is already mapped from another column.',
-                style: TextStyle(
-                  color: Color(0xFFFCA5A5),
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
               ),
             ),
         ],
@@ -801,9 +835,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: Theme.of(context).copyWith(
-        scaffoldBackgroundColor: const Color(0xFF020617),
-      ),
+      data: Theme.of(
+        context,
+      ).copyWith(scaffoldBackgroundColor: const Color(0xFF020617)),
       child: Scaffold(
         backgroundColor: const Color(0xFF020617),
         appBar: AppBar(
@@ -813,9 +847,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             widget.previewData.fileType == ImportMappingService.purchaseFileType
                 ? 'Purchase Import Mapping'
                 : widget.previewData.fileType ==
-                        ImportMappingService.genericLedgerFileType
-                    ? 'Generic Ledger Import Mapping'
-                    : '26Q Import Mapping',
+                      ImportMappingService.genericLedgerFileType
+                ? 'Generic Ledger Import Mapping'
+                : '26Q Import Mapping',
           ),
         ),
         body: Padding(
@@ -833,9 +867,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                         children: [
                           _buildRequiredFieldsPanel(),
                           const SizedBox(height: 16),
-                          Expanded(
-                            child: _buildColumnsPanel(),
-                          ),
+                          Expanded(child: _buildColumnsPanel()),
                         ],
                       ),
                     ),
@@ -852,8 +884,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
               ),
               const SizedBox(height: 18),
               MappingStatusBar(
-                mappedCount:
-                    selections.values.where((value) => value.trim().isNotEmpty).length,
+                mappedCount: selections.values
+                    .where((value) => value.trim().isNotEmpty)
+                    .length,
                 totalColumns: widget.previewData.columnKeys.length,
                 warnings: [
                   ...widget.previewData.warnings,

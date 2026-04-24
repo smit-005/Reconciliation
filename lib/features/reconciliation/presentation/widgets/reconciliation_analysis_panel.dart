@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
-import 'package:reconciliation_app/core/widgets/app_section_card.dart';
-import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 
 import 'reconciliation_reason_chip.dart';
 import 'reconciliation_summary_header.dart';
@@ -16,16 +14,20 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
   final int totalSellers;
   final int totalSections;
   final int manualMappingsCount;
-  final String topMismatchSection;
-  final Widget? detailedSummary;
+  final int matchedSellersCount;
+  final int mismatchSellersCount;
+  final int only26QSellersCount;
+  final int belowThresholdOnlySellersCount;
   final Map<String, int> mismatchReasonCounts;
   final List<String> unsupportedSections;
-  final int totalRows;
-  final int mismatchRows;
-  final double sourceAmount;
-  final double tds26QAmount;
-  final double expectedTds;
-  final double actualTds;
+  final int skippedSellerCount;
+  final int skippedRowsCount;
+  final int applicableButNo26QSellerCount;
+  final int applicableButNo26QRowCount;
+  final bool isSkippedRowsFilterActive;
+  final bool isMissing26QFilterActive;
+  final VoidCallback? onSkippedRowsTap;
+  final VoidCallback? onMissing26QTap;
 
   const ReconciliationAnalysisPanel({
     super.key,
@@ -35,22 +37,26 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
     required this.totalSellers,
     required this.totalSections,
     required this.manualMappingsCount,
-    required this.topMismatchSection,
-    required this.detailedSummary,
+    required this.matchedSellersCount,
+    required this.mismatchSellersCount,
+    required this.only26QSellersCount,
+    required this.belowThresholdOnlySellersCount,
     required this.mismatchReasonCounts,
     required this.unsupportedSections,
-    required this.totalRows,
-    required this.mismatchRows,
-    required this.sourceAmount,
-    required this.tds26QAmount,
-    required this.expectedTds,
-    required this.actualTds,
+    required this.skippedSellerCount,
+    required this.skippedRowsCount,
+    required this.applicableButNo26QSellerCount,
+    required this.applicableButNo26QRowCount,
+    this.isSkippedRowsFilterActive = false,
+    this.isMissing26QFilterActive = false,
+    this.onSkippedRowsTap,
+    this.onMissing26QTap,
   });
-
-  String _fmt(double value) => value.toStringAsFixed(2);
 
   @override
   Widget build(BuildContext context) {
+    final sellerExceptions = _buildSellerExceptions();
+
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -69,6 +75,7 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
           border: Border.all(color: AppColorScheme.border),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(
@@ -79,10 +86,7 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
               ),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFF9FBFD),
-                    Color(0xFFF3F7FB),
-                  ],
+                  colors: [Color(0xFFF9FBFD), Color(0xFFF3F7FB)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -94,28 +98,42 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ReconciliationSummaryHeader(
-                    title: 'Analysis Panel',
+                    title: 'Exception Summary',
                     subtitle:
                         '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)',
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
+                  Row(
                     children: [
-                      AppStatusBadge(
-                        label: '$totalSellers sellers',
-                        icon: Icons.apartment_rounded,
-                        tone: AppStatusBadgeTone.info,
+                      Expanded(
+                        child: _topMetricTile(
+                          icon: Icons.apartment_rounded,
+                          value: totalSellers.toString(),
+                          label: 'Sellers',
+                          emphasize: true,
+                        ),
                       ),
-                      AppStatusBadge(
-                        label: '$manualMappingsCount mappings',
-                        icon: Icons.link_rounded,
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: _topMetricTile(
+                          icon: Icons.link_rounded,
+                          value: manualMappingsCount.toString(),
+                          label: 'Mappings',
+                        ),
                       ),
-                      AppStatusBadge(
-                        label: '$totalSections sections',
-                        icon: Icons.grid_view_rounded,
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _topMetricTile(
+                          icon: Icons.grid_view_rounded,
+                          value: totalSections.toString(),
+                          label: 'Sections',
+                        ),
                       ),
+                      const Expanded(child: SizedBox.shrink()),
                     ],
                   ),
                 ],
@@ -128,54 +146,106 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _metricCardGrid(),
-                    const SizedBox(height: AppSpacing.md),
-                    _chipSection(),
-                    const SizedBox(height: AppSpacing.md),
-                    _insightsCard(),
-                    if (detailedSummary != null) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Theme(
-                        data: Theme.of(context).copyWith(
-                          dividerColor: Colors.transparent,
+                    _sectionTitle('Mismatch Reasons'),
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        ReconciliationReasonChip(
+                          label: 'No 26Q entry',
+                          count: mismatchReasonCounts['No 26Q entry'] ?? 0,
+                          color: const Color(0xFFB45309),
                         ),
-                        child: ExpansionTile(
-                          tilePadding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: 2,
-                          ),
-                          childrenPadding: EdgeInsets.zero,
-                          collapsedBackgroundColor:
-                              AppColorScheme.surfaceVariant,
-                          backgroundColor: AppColorScheme.surfaceVariant,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            side: const BorderSide(color: AppColorScheme.divider),
-                          ),
-                          collapsedShape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            side: const BorderSide(color: AppColorScheme.divider),
-                          ),
-                          title: const Text(
-                            'Detailed Insights',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          subtitle: const Text(
-                            'Expanded buyer-level analytics and mismatch detail',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(AppSpacing.sm),
-                              child: detailedSummary!,
-                            ),
-                          ],
+                        ReconciliationReasonChip(
+                          label: 'Amount mismatch',
+                          count: mismatchReasonCounts['Amount mismatch'] ?? 0,
+                          color: const Color(0xFFDC2626),
                         ),
+                        ReconciliationReasonChip(
+                          label: 'TDS mismatch',
+                          count: mismatchReasonCounts['TDS mismatch'] ?? 0,
+                          color: const Color(0xFF7C3AED),
+                        ),
+                        ReconciliationReasonChip(
+                          label: 'Timing difference',
+                          count: mismatchReasonCounts['Timing difference'] ?? 0,
+                          color: const Color(0xFF0F766E),
+                        ),
+                        ReconciliationReasonChip(
+                          label: 'PAN/name mismatch',
+                          count: mismatchReasonCounts['PAN/name mismatch'] ?? 0,
+                          color: const Color(0xFF1D4ED8),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    const Divider(height: 1),
+                    const SizedBox(height: AppSpacing.md),
+                    _sectionTitle('Seller Exceptions'),
+                    const SizedBox(height: AppSpacing.xxs),
+                    const Text(
+                      'Click controls to filter sellers',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColorScheme.textMuted,
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (sellerExceptions.isEmpty)
+                      const Text(
+                        'No active seller exceptions in the current scope.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColorScheme.textMuted,
+                        ),
+                      )
+                    else
+                      Column(
+                        children: sellerExceptions
+                            .map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.xs,
+                                ),
+                                child: _SellerExceptionActionCard(item: item),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    const SizedBox(height: AppSpacing.sm),
+                    const Divider(height: 1),
+                    const SizedBox(height: AppSpacing.md),
+                    _sectionTitle('Seller Outcomes'),
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        ReconciliationReasonChip(
+                          label: 'Matched sellers',
+                          count: matchedSellersCount,
+                          color: const Color(0xFF15803D),
+                        ),
+                        ReconciliationReasonChip(
+                          label: 'Mismatch sellers',
+                          count: mismatchSellersCount,
+                          color: const Color(0xFFDC2626),
+                        ),
+                        ReconciliationReasonChip(
+                          label: 'Only 26Q sellers',
+                          count: only26QSellersCount,
+                          color: const Color(0xFF6D28D9),
+                        ),
+                        ReconciliationReasonChip(
+                          label: 'Below-threshold only',
+                          count: belowThresholdOnlySellersCount,
+                          color: const Color(0xFF475467),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -186,157 +256,329 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
     );
   }
 
-  Widget _metricCardGrid() {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        _compactMetric('Total Rows', '$totalRows'),
-        _compactMetric('Mismatch Rows', '$mismatchRows'),
-        _compactMetric('Source Amount', _fmt(sourceAmount)),
-        _compactMetric('26Q Amount', _fmt(tds26QAmount)),
-        _compactMetric('Expected TDS', _fmt(expectedTds)),
-        _compactMetric('Actual TDS', _fmt(actualTds)),
-      ],
+  Widget _sectionTitle(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        color: AppColorScheme.textPrimary,
+      ),
     );
   }
 
-  Widget _compactMetric(String label, String value) {
-    return SizedBox(
-      width: 148,
-      child: AppSectionCard(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        backgroundColor: AppColorScheme.surfaceVariant,
-        borderColor: AppColorScheme.divider,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColorScheme.textMuted,
-              ),
+  Widget _topMetricTile({
+    required IconData icon,
+    required String value,
+    required String label,
+    bool emphasize = false,
+  }) {
+    final toneColor = emphasize
+        ? const Color(0xFF1D4ED8)
+        : AppColorScheme.textPrimary;
+    final softColor = emphasize
+        ? const Color(0xFFEFF6FF)
+        : const Color(0xFFF8FAFC);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: softColor,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: toneColor.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: AppColorScheme.textPrimary,
+            alignment: Alignment.center,
+            child: Icon(icon, size: 14, color: toneColor),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColorScheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColorScheme.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_SellerExceptionItem> _buildSellerExceptions() {
+    final items = <_SellerExceptionItem>[];
+
+    if (unsupportedSections.isNotEmpty) {
+      items.add(
+        _SellerExceptionItem(
+          icon: Icons.warning_amber_rounded,
+          toneColor: const Color(0xFFB45309),
+          label: 'Unsupported sections',
+          count: unsupportedSections.length,
+          detail:
+              'Unsupported or unknown 26Q sections in current scope: ${unsupportedSections.join(', ')}',
+        ),
+      );
+    }
+
+    if (skippedSellerCount > 0) {
+      final detail = skippedRowsCount > 0
+          ? '$skippedSellerCount seller(s) affected | $skippedRowsCount row(s) excluded.'
+          : '$skippedSellerCount seller(s) affected.';
+
+      items.add(
+        _SellerExceptionItem(
+          icon: Icons.rule_rounded,
+          toneColor: const Color(0xFF9A3412),
+          label: 'Skipped rows',
+          count: skippedSellerCount,
+          detail: detail,
+          onTap: onSkippedRowsTap,
+          isActive: isSkippedRowsFilterActive,
+        ),
+      );
+    }
+
+    if (applicableButNo26QSellerCount > 0) {
+      final detail = applicableButNo26QRowCount > 0
+          ? '$applicableButNo26QSellerCount seller(s) affected | $applicableButNo26QRowCount row(s) missing in 26Q.'
+          : '$applicableButNo26QSellerCount seller(s) affected.';
+
+      items.add(
+        _SellerExceptionItem(
+          icon: Icons.error_outline_rounded,
+          toneColor: const Color(0xFFB91C1C),
+          label: 'Missing 26Q deductions',
+          count: applicableButNo26QSellerCount,
+          detail: detail,
+          onTap: onMissing26QTap,
+          isActive: isMissing26QFilterActive,
+        ),
+      );
+    }
+
+    return items;
+  }
+}
+
+class _SellerExceptionItem {
+  final IconData icon;
+  final Color toneColor;
+  final String label;
+  final int count;
+  final String detail;
+  final VoidCallback? onTap;
+  final bool isActive;
+
+  const _SellerExceptionItem({
+    required this.icon,
+    required this.toneColor,
+    required this.label,
+    required this.count,
+    required this.detail,
+    this.onTap,
+    this.isActive = false,
+  });
+}
+
+class _SellerExceptionActionCard extends StatefulWidget {
+  final _SellerExceptionItem item;
+
+  const _SellerExceptionActionCard({required this.item});
+
+  @override
+  State<_SellerExceptionActionCard> createState() =>
+      _SellerExceptionActionCardState();
+}
+
+class _SellerExceptionActionCardState
+    extends State<_SellerExceptionActionCard> {
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final backgroundColor = item.isActive
+        ? item.toneColor.withValues(alpha: 0.12)
+        : _isPressed
+        ? item.toneColor.withValues(alpha: 0.1)
+        : _isHovered
+        ? item.toneColor.withValues(alpha: 0.07)
+        : const Color(0xFFFCFCFD);
+    final borderColor = item.isActive
+        ? item.toneColor.withValues(alpha: 0.58)
+        : _isPressed
+        ? item.toneColor.withValues(alpha: 0.46)
+        : _isHovered
+        ? item.toneColor.withValues(alpha: 0.34)
+        : AppColorScheme.border;
+
+    final control = MouseRegion(
+      cursor: item.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: item.isActive
+                    ? 0.06
+                    : _isHovered
+                    ? 0.05
+                    : 0.025,
               ),
+              blurRadius: _isHovered ? 10 : 6,
+              offset: const Offset(0, 2),
             ),
           ],
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: item.onTap,
+            onHighlightChanged: (isPressed) {
+              setState(() => _isPressed = isPressed);
+            },
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            splashColor: item.toneColor.withValues(alpha: 0.12),
+            highlightColor: item.toneColor.withValues(alpha: 0.08),
+            hoverColor: item.toneColor.withValues(alpha: 0.04),
+            child: Ink(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: borderColor, width: 1.15),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: item.toneColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.filter_alt_rounded,
+                      size: 14,
+                      color: item.toneColor,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(item.icon, size: 15, color: item.toneColor),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: item.isActive
+                            ? item.toneColor
+                            : AppColorScheme.textPrimary,
+                        height: 1.05,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xs,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: item.toneColor.withValues(
+                        alpha: item.isActive ? 0.16 : 0.08,
+                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      border: Border.all(
+                        color: item.toneColor.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Text(
+                      '${item.count}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: item.toneColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 140),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: item.isActive
+                          ? item.toneColor
+                          : item.toneColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      item.isActive
+                          ? Icons.check_rounded
+                          : Icons.chevron_right_rounded,
+                      size: 14,
+                      color: item.isActive ? Colors.white : item.toneColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
-  }
 
-  Widget _chipSection() {
-    return AppSectionCard(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      backgroundColor: AppColorScheme.surfaceVariant,
-      borderColor: AppColorScheme.divider,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Mismatch Reasons',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: [
-              ReconciliationReasonChip(
-                label: 'No 26Q entry',
-                count: mismatchReasonCounts['No 26Q entry'] ?? 0,
-                color: const Color(0xFFB45309),
-              ),
-              ReconciliationReasonChip(
-                label: 'Amount mismatch',
-                count: mismatchReasonCounts['Amount mismatch'] ?? 0,
-                color: const Color(0xFFDC2626),
-              ),
-              ReconciliationReasonChip(
-                label: 'TDS mismatch',
-                count: mismatchReasonCounts['TDS mismatch'] ?? 0,
-                color: const Color(0xFF7C3AED),
-              ),
-              ReconciliationReasonChip(
-                label: 'Timing difference',
-                count: mismatchReasonCounts['Timing difference'] ?? 0,
-                color: const Color(0xFF0F766E),
-              ),
-              ReconciliationReasonChip(
-                label: 'PAN/name mismatch',
-                count: mismatchReasonCounts['PAN/name mismatch'] ?? 0,
-                color: const Color(0xFF1D4ED8),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _insightsCard() {
-    final notes = <String>[
-      'Top mismatch section: ${topMismatchSection.isEmpty ? '-' : topMismatchSection}',
-      'Tracked sellers: $totalSellers',
-      'Sections present in scope: $totalSections',
-      'Seller mappings active: $manualMappingsCount',
-      if (unsupportedSections.isNotEmpty)
-        'Unsupported/unknown 26Q sections visible in current scope: ${unsupportedSections.join(', ')}',
-    ];
-
-    return AppSectionCard(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      backgroundColor: unsupportedSections.isNotEmpty
-          ? const Color(0xFFFFF7ED)
-          : AppColorScheme.surfaceVariant,
-      borderColor: unsupportedSections.isNotEmpty
-          ? const Color(0xFFF59E0B)
-          : AppColorScheme.divider,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Notes & Insights',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-                ),
-              ),
-              if (unsupportedSections.isNotEmpty)
-                const AppStatusBadge(
-                  label: 'Attention Needed',
-                  icon: Icons.warning_amber_rounded,
-                  tone: AppStatusBadgeTone.warning,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          ...notes.map(
-            (note) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Text(
-                note,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColorScheme.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return Tooltip(
+      message: item.detail,
+      waitDuration: const Duration(milliseconds: 300),
+      child: control,
     );
   }
 }

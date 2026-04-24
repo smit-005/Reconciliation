@@ -1,11 +1,11 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
 import 'package:reconciliation_app/features/upload/models/ledger_upload_file.dart';
+import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 
 import 'excel_service.dart';
 import 'import_mapping_service.dart';
@@ -42,7 +42,7 @@ class ImportWorkflowResponse<T> {
 
 class PurchaseImportPreparation {
   final List<PurchaseRow> parsedRows;
-  final String mappingStatus;
+  final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
   final String? sheetName;
   final int? headerRowIndex;
@@ -66,7 +66,7 @@ class PurchaseImportPreparation {
 
 class GenericLedgerImportPreparation {
   final List<NormalizedLedgerRow> parsedRows;
-  final String mappingStatus;
+  final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
   final String? sheetName;
   final int? headerRowIndex;
@@ -88,10 +88,22 @@ class GenericLedgerImportPreparation {
 
 class Tds26QImportPreparation {
   final List<Tds26QRow> parsedRows;
+  final UploadMappingStatus mappingStatus;
+  final bool wasManuallyMapped;
+  final String? sheetName;
+  final int? headerRowIndex;
+  final bool? headersTrusted;
+  final Map<String, String> columnMapping;
   final ColumnMappingResult? columnMappingResult;
 
   const Tds26QImportPreparation({
     required this.parsedRows,
+    required this.mappingStatus,
+    required this.wasManuallyMapped,
+    required this.sheetName,
+    required this.headerRowIndex,
+    required this.headersTrusted,
+    required this.columnMapping,
     required this.columnMappingResult,
   });
 }
@@ -108,7 +120,36 @@ class SectionFileRemapPreparation {
   });
 }
 
+class Tds26QRemapPreparation {
+  final List<Tds26QRow> parsedRows;
+  final UploadMappingStatus mappingStatus;
+  final bool wasManuallyMapped;
+  final String sheetName;
+  final int headerRowIndex;
+  final bool headersTrusted;
+  final Map<String, String> columnMapping;
+
+  const Tds26QRemapPreparation({
+    required this.parsedRows,
+    required this.mappingStatus,
+    required this.wasManuallyMapped,
+    required this.sheetName,
+    required this.headerRowIndex,
+    required this.headersTrusted,
+    required this.columnMapping,
+  });
+}
+
 class ImportUploadFlowService {
+  static const List<String> supportedUploadExtensions = [
+    'xlsx',
+    'xls',
+    'xlsm',
+    'csv',
+  ];
+  static const String supportedUploadFilterLabel =
+      'Excel Files (*.xlsx;*.xls;*.xlsm;*.csv)';
+
   static bool shouldAutoOpenColumnMapping({
     required ExcelValidationResult validation,
     required ExcelImportType fileType,
@@ -144,129 +185,151 @@ class ImportUploadFlowService {
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
   }) async {
-    final purchasePreparation = await _preparePurchaseUploadInBackground(
-      bytes: bytes,
-    );
-
-    if (purchasePreparation == null) {
-      return const ImportWorkflowResponse.failure(
-        'Could not inspect 194Q source file',
-      );
+    final preflightError = _preflightUploadFormat(fileName);
+    if (preflightError != null) {
+      return ImportWorkflowResponse.failure(preflightError);
     }
 
-    final inspection = purchasePreparation.inspection;
-
-    final signature = ExcelService.buildSampleSignature(
-      inspection.sheetName,
-      inspection.rawHeaderRow,
-    );
-
-    final matchedProfile = await ExcelService.findMatchingProfile(
-      buyerId: buyerId,
-      fileType: ImportMappingService.purchaseFileType,
-      sheetName: inspection.sheetName,
-      sampleSignature: signature,
-    );
-
-    if (matchedProfile != null) {
-      final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
+    try {
+      final purchasePreparation = await _preparePurchaseUploadInBackground(
         bytes: bytes,
-        sheetName: inspection.sheetName,
-        headerRowIndex: matchedProfile.headerRowIndex,
-        headersTrusted: matchedProfile.headersTrusted,
-        columnMapping: matchedProfile.columnMapping,
       );
+
+      if (purchasePreparation == null) {
+        return ImportWorkflowResponse.failure(
+          _readFailureMessage(
+            fileName: fileName,
+            defaultMessage: 'Could not inspect 194Q source file',
+          ),
+        );
+      }
+
+      final inspection = purchasePreparation.inspection;
+
+      final signature = ExcelService.buildSampleSignature(
+        inspection.sheetName,
+        inspection.rawHeaderRow,
+      );
+
+      final matchedProfile = await ExcelService.findMatchingProfile(
+        buyerId: buyerId,
+        fileType: ImportMappingService.purchaseFileType,
+        sheetName: inspection.sheetName,
+        sampleSignature: signature,
+      );
+
+      if (matchedProfile != null) {
+        final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
+          bytes: bytes,
+          sheetName: inspection.sheetName,
+          headerRowIndex: matchedProfile.headerRowIndex,
+          headersTrusted: matchedProfile.headersTrusted,
+          columnMapping: matchedProfile.columnMapping,
+        );
+
+        return ImportWorkflowResponse.success(
+          PurchaseImportPreparation(
+            parsedRows: parsedRows,
+            mappingStatus: UploadMappingStatus.autoMapped,
+            wasManuallyMapped: false,
+            sheetName: inspection.sheetName,
+            headerRowIndex: matchedProfile.headerRowIndex,
+            headersTrusted: matchedProfile.headersTrusted,
+            columnMapping: Map<String, String>.from(
+              matchedProfile.columnMapping,
+            ),
+            sampleSignature: signature,
+            columnMappingResult: null,
+          ),
+        );
+      }
+
+      final validation = purchasePreparation.validation;
+      final shouldOpenColumnMapping =
+          forceColumnMapping ||
+          shouldAutoOpenColumnMapping(
+            validation: validation,
+            fileType: ExcelImportType.purchase,
+          );
+
+      if (shouldOpenColumnMapping) {
+        final columnMappingResult = await openColumnMapping(
+          bytes: bytes,
+          fileName: fileName,
+          fileType: ExcelImportType.purchase,
+          validation: ExcelValidationResult.manualReview(
+            detectedSheet: validation.detectedSheet ?? inspection.sheetName,
+            headerRowIndex:
+                validation.headerRowIndex ?? inspection.headerRowIndex,
+            detectedType: ExcelImportType.purchase,
+            mappedColumns: initialMappedColumns.isNotEmpty
+                ? initialMappedColumns
+                : validation.mappedColumns,
+            warnings: validation.warnings,
+            confidenceScore: validation.confidenceScore,
+            message: validation.message,
+            unmappedRawHeaders: validation.unmappedRawHeaders,
+          ),
+          sessionCache: sessionCache,
+        );
+
+        if (columnMappingResult == null) {
+          return const ImportWorkflowResponse.cancelled();
+        }
+
+        final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
+          bytes: bytes,
+          sheetName: columnMappingResult.sheetName,
+          headerRowIndex: columnMappingResult.headerRowIndex,
+          headersTrusted: columnMappingResult.headersTrusted,
+          columnMapping: columnMappingResult.columnMapping,
+        );
+
+        return ImportWorkflowResponse.success(
+          PurchaseImportPreparation(
+            parsedRows: parsedRows,
+            mappingStatus: UploadMappingStatus.confirmed,
+            wasManuallyMapped: true,
+            sheetName: columnMappingResult.sheetName,
+            headerRowIndex: columnMappingResult.headerRowIndex,
+            headersTrusted: columnMappingResult.headersTrusted,
+            columnMapping: Map<String, String>.from(
+              columnMappingResult.columnMapping,
+            ),
+            sampleSignature: signature,
+            columnMappingResult: columnMappingResult,
+          ),
+        );
+      }
+
+      if (!validation.isValid) {
+        return ImportWorkflowResponse.failure(validation.message);
+      }
+
+      final parsedRows =
+          purchasePreparation.parsedRows ?? const <PurchaseRow>[];
 
       return ImportWorkflowResponse.success(
         PurchaseImportPreparation(
           parsedRows: parsedRows,
-          mappingStatus: 'Saved profile',
+          mappingStatus: _initialMappingStatusForValidation(validation),
           wasManuallyMapped: false,
           sheetName: inspection.sheetName,
-          headerRowIndex: matchedProfile.headerRowIndex,
-          headersTrusted: matchedProfile.headersTrusted,
-          columnMapping: Map<String, String>.from(matchedProfile.columnMapping),
+          headerRowIndex: validation.headerRowIndex,
+          headersTrusted: null,
+          columnMapping: Map<String, String>.from(initialMappedColumns),
           sampleSignature: signature,
           columnMappingResult: null,
         ),
       );
-    }
-
-    final validation = purchasePreparation.validation;
-    final shouldOpenColumnMapping =
-        forceColumnMapping ||
-        shouldAutoOpenColumnMapping(
-          validation: validation,
-          fileType: ExcelImportType.purchase,
-        );
-
-    if (shouldOpenColumnMapping) {
-      final columnMappingResult = await openColumnMapping(
-        bytes: bytes,
-        fileName: fileName,
-        fileType: ExcelImportType.purchase,
-        validation: ExcelValidationResult.manualReview(
-          detectedSheet: validation.detectedSheet ?? inspection.sheetName,
-          headerRowIndex:
-              validation.headerRowIndex ?? inspection.headerRowIndex,
-          detectedType: ExcelImportType.purchase,
-          mappedColumns: initialMappedColumns.isNotEmpty
-              ? initialMappedColumns
-              : validation.mappedColumns,
-          warnings: validation.warnings,
-          confidenceScore: validation.confidenceScore,
-          message: validation.message,
-          unmappedRawHeaders: validation.unmappedRawHeaders,
-        ),
-        sessionCache: sessionCache,
-      );
-
-      if (columnMappingResult == null) {
-        return const ImportWorkflowResponse.cancelled();
-      }
-
-      final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
-        bytes: bytes,
-        sheetName: columnMappingResult.sheetName,
-        headerRowIndex: columnMappingResult.headerRowIndex,
-        headersTrusted: columnMappingResult.headersTrusted,
-        columnMapping: columnMappingResult.columnMapping,
-      );
-
-      return ImportWorkflowResponse.success(
-        PurchaseImportPreparation(
-          parsedRows: parsedRows,
-          mappingStatus: 'Column mapping',
-          wasManuallyMapped: true,
-          sheetName: columnMappingResult.sheetName,
-          headerRowIndex: columnMappingResult.headerRowIndex,
-          headersTrusted: columnMappingResult.headersTrusted,
-          columnMapping: Map<String, String>.from(columnMappingResult.columnMapping),
-          sampleSignature: signature,
-          columnMappingResult: columnMappingResult,
+    } catch (_) {
+      return ImportWorkflowResponse.failure(
+        _readFailureMessage(
+          fileName: fileName,
+          defaultMessage: 'Could not inspect 194Q source file',
         ),
       );
     }
-
-    if (!validation.isValid) {
-      return ImportWorkflowResponse.failure(validation.message);
-    }
-
-    final parsedRows = purchasePreparation.parsedRows ?? const <PurchaseRow>[];
-
-    return ImportWorkflowResponse.success(
-      PurchaseImportPreparation(
-        parsedRows: parsedRows,
-        mappingStatus: 'Auto detected',
-        wasManuallyMapped: false,
-        sheetName: inspection.sheetName,
-        headerRowIndex: validation.headerRowIndex,
-        headersTrusted: null,
-        columnMapping: Map<String, String>.from(initialMappedColumns),
-        sampleSignature: signature,
-        columnMappingResult: null,
-      ),
-    );
   }
 
   static Future<ImportWorkflowResponse<GenericLedgerImportPreparation>>
@@ -279,46 +342,80 @@ class ImportUploadFlowService {
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
   }) async {
-    final validation = await ExcelService.validateGenericLedgerFileInBackground(
-      sessionCache?.bytes ?? Uint8List.fromList(bytes),
-    );
-    final shouldOpenColumnMapping =
-        forceColumnMapping ||
-        shouldAutoOpenColumnMapping(
-          validation: validation,
+    final preflightError = _preflightUploadFormat(fileName);
+    if (preflightError != null) {
+      return ImportWorkflowResponse.failure(preflightError);
+    }
+
+    try {
+      final validation =
+          await ExcelService.validateGenericLedgerFileInBackground(
+            sessionCache?.bytes ?? Uint8List.fromList(bytes),
+          );
+      final shouldOpenColumnMapping =
+          forceColumnMapping ||
+          shouldAutoOpenColumnMapping(
+            validation: validation,
+            fileType: ExcelImportType.genericLedger,
+          );
+
+      if (shouldOpenColumnMapping) {
+        final columnMappingResult = await openColumnMapping(
+          bytes: bytes,
+          fileName: fileName,
           fileType: ExcelImportType.genericLedger,
+          validation: ExcelValidationResult.manualReview(
+            detectedSheet: validation.detectedSheet ?? '',
+            headerRowIndex: validation.headerRowIndex ?? 0,
+            detectedType: ExcelImportType.genericLedger,
+            mappedColumns: initialMappedColumns.isNotEmpty
+                ? initialMappedColumns
+                : validation.mappedColumns,
+            warnings: validation.warnings,
+            confidenceScore: validation.confidenceScore,
+            message: validation.message,
+            unmappedRawHeaders: validation.unmappedRawHeaders,
+          ),
+          sessionCache: sessionCache,
         );
 
-    if (shouldOpenColumnMapping) {
-      final columnMappingResult = await openColumnMapping(
-        bytes: bytes,
-        fileName: fileName,
-        fileType: ExcelImportType.genericLedger,
-        validation: ExcelValidationResult.manualReview(
-          detectedSheet: validation.detectedSheet ?? '',
-          headerRowIndex: validation.headerRowIndex ?? 0,
-          detectedType: ExcelImportType.genericLedger,
-          mappedColumns: initialMappedColumns.isNotEmpty
-              ? initialMappedColumns
-              : validation.mappedColumns,
-          warnings: validation.warnings,
-          confidenceScore: validation.confidenceScore,
-          message: validation.message,
-          unmappedRawHeaders: validation.unmappedRawHeaders,
-        ),
-        sessionCache: sessionCache,
-      );
+        if (columnMappingResult == null) {
+          return const ImportWorkflowResponse.cancelled();
+        }
 
-      if (columnMappingResult == null) {
-        return const ImportWorkflowResponse.cancelled();
+        final parsedRows =
+            await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
+              sessionCache?.bytes ?? Uint8List.fromList(bytes),
+              sheetName: columnMappingResult.sheetName,
+              headerRowIndex: columnMappingResult.headerRowIndex,
+              headersTrusted: columnMappingResult.headersTrusted,
+              columnMapping: columnMappingResult.columnMapping,
+              defaultSection: sectionCode,
+              sourceFileName: fileName,
+            );
+
+        return ImportWorkflowResponse.success(
+          GenericLedgerImportPreparation(
+            parsedRows: parsedRows,
+            mappingStatus: UploadMappingStatus.confirmed,
+            wasManuallyMapped: true,
+            sheetName: columnMappingResult.sheetName,
+            headerRowIndex: columnMappingResult.headerRowIndex,
+            headersTrusted: columnMappingResult.headersTrusted,
+            columnMapping: Map<String, String>.from(
+              columnMappingResult.columnMapping,
+            ),
+            columnMappingResult: columnMappingResult,
+          ),
+        );
       }
 
-      final parsedRows = await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
+      if (!validation.isValid) {
+        return ImportWorkflowResponse.failure(validation.message);
+      }
+
+      final parsedRows = await ExcelService.parseGenericLedgerRowsInBackground(
         sessionCache?.bytes ?? Uint8List.fromList(bytes),
-        sheetName: columnMappingResult.sheetName,
-        headerRowIndex: columnMappingResult.headerRowIndex,
-        headersTrusted: columnMappingResult.headersTrusted,
-        columnMapping: columnMappingResult.columnMapping,
         defaultSection: sectionCode,
         sourceFileName: fileName,
       );
@@ -326,44 +423,26 @@ class ImportUploadFlowService {
       return ImportWorkflowResponse.success(
         GenericLedgerImportPreparation(
           parsedRows: parsedRows,
-          mappingStatus: 'Column mapping',
-          wasManuallyMapped: true,
-          sheetName: columnMappingResult.sheetName,
-          headerRowIndex: columnMappingResult.headerRowIndex,
-          headersTrusted: columnMappingResult.headersTrusted,
-          columnMapping: Map<String, String>.from(columnMappingResult.columnMapping),
-          columnMappingResult: columnMappingResult,
+          mappingStatus: _initialMappingStatusForValidation(validation),
+          wasManuallyMapped: false,
+          sheetName: validation.detectedSheet,
+          headerRowIndex: validation.headerRowIndex,
+          headersTrusted: null,
+          columnMapping: Map<String, String>.from(initialMappedColumns),
+          columnMappingResult: null,
+        ),
+      );
+    } catch (_) {
+      return ImportWorkflowResponse.failure(
+        _readFailureMessage(
+          fileName: fileName,
+          defaultMessage: 'Could not read ledger workbook',
         ),
       );
     }
-
-    if (!validation.isValid) {
-      return ImportWorkflowResponse.failure(validation.message);
-    }
-
-    final parsedRows = await ExcelService.parseGenericLedgerRowsInBackground(
-      sessionCache?.bytes ?? Uint8List.fromList(bytes),
-      defaultSection: sectionCode,
-      sourceFileName: fileName,
-    );
-
-    return ImportWorkflowResponse.success(
-      GenericLedgerImportPreparation(
-        parsedRows: parsedRows,
-        mappingStatus: 'Auto detected',
-        wasManuallyMapped: false,
-        sheetName: validation.detectedSheet,
-        headerRowIndex: validation.headerRowIndex,
-        headersTrusted: null,
-        columnMapping: Map<String, String>.from(initialMappedColumns),
-        columnMappingResult: null,
-      ),
-    );
   }
 
-  static Future<ExcelValidationResult> validateTds26QImport(
-    Uint8List bytes,
-  ) {
+  static Future<ExcelValidationResult> validateTds26QImport(Uint8List bytes) {
     return ExcelService.validateTds26QFileInBackground(bytes);
   }
 
@@ -376,74 +455,106 @@ class ImportUploadFlowService {
     ImportSessionCache? sessionCache,
     String? preferredSheetName,
   }) async {
-    final effectiveValidation = preferredSheetName == null
-        ? validation
-        : await ExcelService.validateTds26QFileInBackground(
-            sessionCache?.bytes ?? Uint8List.fromList(bytes),
-            preferredSheetName: preferredSheetName,
-          );
+    final preflightError = _preflightUploadFormat(fileName);
+    if (preflightError != null) {
+      return ImportWorkflowResponse.failure(preflightError);
+    }
 
-    if (shouldAutoOpenColumnMapping(
-      validation: effectiveValidation,
-      fileType: ExcelImportType.tds26q,
-    )) {
-      final selectedValidation = preferredSheetName == null
-          ? effectiveValidation
-          : ExcelValidationResult.manualReview(
-              detectedSheet: preferredSheetName,
-              headerRowIndex: effectiveValidation.headerRowIndex ?? 0,
-              detectedType: ExcelImportType.tds26q,
-              mappedColumns: effectiveValidation.mappedColumns,
-              warnings: effectiveValidation.warnings,
-              confidenceScore: effectiveValidation.confidenceScore,
-              message: effectiveValidation.message,
-              unmappedRawHeaders: effectiveValidation.unmappedRawHeaders,
+    try {
+      final effectiveValidation = preferredSheetName == null
+          ? validation
+          : await ExcelService.validateTds26QFileInBackground(
+              sessionCache?.bytes ?? Uint8List.fromList(bytes),
+              preferredSheetName: preferredSheetName,
             );
 
-      final columnMappingResult = await openColumnMapping(
-        bytes: bytes,
-        fileName: fileName,
+      if (shouldAutoOpenColumnMapping(
+        validation: effectiveValidation,
         fileType: ExcelImportType.tds26q,
-        validation: selectedValidation,
-        sessionCache: sessionCache,
-        preferredSheetName: preferredSheetName,
-      );
+      )) {
+        final selectedValidation = preferredSheetName == null
+            ? effectiveValidation
+            : ExcelValidationResult.manualReview(
+                detectedSheet: preferredSheetName,
+                headerRowIndex: effectiveValidation.headerRowIndex ?? 0,
+                detectedType: ExcelImportType.tds26q,
+                mappedColumns: effectiveValidation.mappedColumns,
+                warnings: effectiveValidation.warnings,
+                confidenceScore: effectiveValidation.confidenceScore,
+                message: effectiveValidation.message,
+                unmappedRawHeaders: effectiveValidation.unmappedRawHeaders,
+              );
 
-      if (columnMappingResult == null) {
-        return const ImportWorkflowResponse.cancelled();
+        final columnMappingResult = await openColumnMapping(
+          bytes: bytes,
+          fileName: fileName,
+          fileType: ExcelImportType.tds26q,
+          validation: selectedValidation,
+          sessionCache: sessionCache,
+          preferredSheetName: preferredSheetName,
+        );
+
+        if (columnMappingResult == null) {
+          return const ImportWorkflowResponse.cancelled();
+        }
+
+        final parsedRows = await _parseTdsRowsWithProfileInBackground(
+          bytes: bytes,
+          sheetName: columnMappingResult.sheetName,
+          headerRowIndex: columnMappingResult.headerRowIndex,
+          headersTrusted: columnMappingResult.headersTrusted,
+          columnMapping: columnMappingResult.columnMapping,
+        );
+
+        return ImportWorkflowResponse.success(
+          Tds26QImportPreparation(
+            parsedRows: parsedRows,
+            mappingStatus: UploadMappingStatus.confirmed,
+            wasManuallyMapped: true,
+            sheetName: columnMappingResult.sheetName,
+            headerRowIndex: columnMappingResult.headerRowIndex,
+            headersTrusted: columnMappingResult.headersTrusted,
+            columnMapping: Map<String, String>.from(
+              columnMappingResult.columnMapping,
+            ),
+            columnMappingResult: columnMappingResult,
+          ),
+        );
       }
 
-      final parsedRows = await _parseTdsRowsWithProfileInBackground(
-        bytes: bytes,
-        sheetName: columnMappingResult.sheetName,
-        headerRowIndex: columnMappingResult.headerRowIndex,
-        headersTrusted: columnMappingResult.headersTrusted,
-        columnMapping: columnMappingResult.columnMapping,
+      if (!effectiveValidation.isValid) {
+        return ImportWorkflowResponse.failure(effectiveValidation.message);
+      }
+
+      final parsedRows = await ExcelService.parseTds26QRowsInBackground(
+        sessionCache?.bytes ?? Uint8List.fromList(bytes),
+        sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
       );
 
       return ImportWorkflowResponse.success(
         Tds26QImportPreparation(
           parsedRows: parsedRows,
-          columnMappingResult: columnMappingResult,
+          mappingStatus: _initialMappingStatusForValidation(
+            effectiveValidation,
+          ),
+          wasManuallyMapped: false,
+          sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
+          headerRowIndex: effectiveValidation.headerRowIndex,
+          headersTrusted: null,
+          columnMapping: Map<String, String>.from(
+            effectiveValidation.mappedColumns,
+          ),
+          columnMappingResult: null,
+        ),
+      );
+    } catch (_) {
+      return ImportWorkflowResponse.failure(
+        _readFailureMessage(
+          fileName: fileName,
+          defaultMessage: 'Could not read 26Q workbook',
         ),
       );
     }
-
-    if (!effectiveValidation.isValid) {
-      return ImportWorkflowResponse.failure(effectiveValidation.message);
-    }
-
-    final parsedRows = await ExcelService.parseTds26QRowsInBackground(
-      sessionCache?.bytes ?? Uint8List.fromList(bytes),
-      sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
-    );
-
-    return ImportWorkflowResponse.success(
-      Tds26QImportPreparation(
-        parsedRows: parsedRows,
-        columnMappingResult: null,
-      ),
-    );
   }
 
   static Future<ImportWorkflowResponse<SectionFileRemapPreparation>>
@@ -484,7 +595,7 @@ class ImportUploadFlowService {
             uploadedAt: DateTime.now(),
             parserType: file.parserType,
             rows: normalizedRows,
-            mappingStatus: 'Column mapping',
+            mappingStatus: UploadMappingStatus.confirmed,
             wasManuallyMapped: true,
             sheetName: columnMappingResult.sheetName,
             headerRowIndex: columnMappingResult.headerRowIndex,
@@ -504,15 +615,16 @@ class ImportUploadFlowService {
       );
     }
 
-    final parsedRows = await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
-      Uint8List.fromList(file.bytes),
-      sheetName: columnMappingResult.sheetName,
-      headerRowIndex: columnMappingResult.headerRowIndex,
-      headersTrusted: columnMappingResult.headersTrusted,
-      columnMapping: columnMappingResult.columnMapping,
-      defaultSection: file.sectionCode,
-      sourceFileName: file.fileName,
-    );
+    final parsedRows =
+        await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
+          Uint8List.fromList(file.bytes),
+          sheetName: columnMappingResult.sheetName,
+          headerRowIndex: columnMappingResult.headerRowIndex,
+          headersTrusted: columnMappingResult.headersTrusted,
+          columnMapping: columnMappingResult.columnMapping,
+          defaultSection: file.sectionCode,
+          sourceFileName: file.fileName,
+        );
 
     return ImportWorkflowResponse.success(
       SectionFileRemapPreparation(
@@ -525,7 +637,7 @@ class ImportUploadFlowService {
           uploadedAt: DateTime.now(),
           parserType: file.parserType,
           rows: parsedRows,
-          mappingStatus: 'Column mapping',
+          mappingStatus: UploadMappingStatus.confirmed,
           wasManuallyMapped: true,
           sheetName: columnMappingResult.sheetName,
           headerRowIndex: columnMappingResult.headerRowIndex,
@@ -539,6 +651,88 @@ class ImportUploadFlowService {
       ),
     );
   }
+
+  static Future<ImportWorkflowResponse<Tds26QRemapPreparation>>
+  prepareTds26QRemap({
+    required List<int> bytes,
+    required ColumnMappingResult columnMappingResult,
+  }) async {
+    try {
+      final parsedRows = await _parseTdsRowsWithProfileInBackground(
+        bytes: bytes,
+        sheetName: columnMappingResult.sheetName,
+        headerRowIndex: columnMappingResult.headerRowIndex,
+        headersTrusted: columnMappingResult.headersTrusted,
+        columnMapping: columnMappingResult.columnMapping,
+      );
+
+      return ImportWorkflowResponse.success(
+        Tds26QRemapPreparation(
+          parsedRows: parsedRows,
+          mappingStatus: UploadMappingStatus.confirmed,
+          wasManuallyMapped: true,
+          sheetName: columnMappingResult.sheetName,
+          headerRowIndex: columnMappingResult.headerRowIndex,
+          headersTrusted: columnMappingResult.headersTrusted,
+          columnMapping: Map<String, String>.from(
+            columnMappingResult.columnMapping,
+          ),
+        ),
+      );
+    } catch (_) {
+      return ImportWorkflowResponse.failure('Could not remap 26Q workbook');
+    }
+  }
+}
+
+UploadMappingStatus _initialMappingStatusForValidation(
+  ExcelValidationResult validation,
+) {
+  if (validation.mappedColumns.isEmpty) {
+    return UploadMappingStatus.notMapped;
+  }
+
+  if (validation.requiresManualMapping ||
+      validation.warnings.isNotEmpty ||
+      validation.confidenceScore < 0.75) {
+    return UploadMappingStatus.needsReview;
+  }
+
+  return UploadMappingStatus.autoMapped;
+}
+
+String? _preflightUploadFormat(String fileName) {
+  final extension = p.extension(fileName).toLowerCase().replaceFirst('.', '');
+  if (extension.isEmpty) {
+    return 'Could not determine the file format. Please select an ${ImportUploadFlowService.supportedUploadFilterLabel} file.';
+  }
+
+  if (!ImportUploadFlowService.supportedUploadExtensions.contains(extension)) {
+    return 'Unsupported file format ".$extension". Please select an ${ImportUploadFlowService.supportedUploadFilterLabel} file.';
+  }
+
+  if (extension == 'csv') {
+    return 'CSV files can now be selected in the picker, but the current import parser expects workbook sheets for detection and column mapping. Please export the file as .xlsx, .xls, or .xlsm and retry.';
+  }
+
+  return null;
+}
+
+String _readFailureMessage({
+  required String fileName,
+  required String defaultMessage,
+}) {
+  final extension = p.extension(fileName).toLowerCase();
+  if (extension == '.xls') {
+    return 'The selected .xls file could not be read by the current workbook parser. Please re-save or export it as .xlsx or .xlsm and retry.';
+  }
+  if (extension == '.xlsm') {
+    return 'The selected .xlsm file could not be read. If the workbook contains unsupported macros or workbook features, please save a copy as .xlsx and retry.';
+  }
+  if (extension == '.csv') {
+    return 'CSV files are not yet supported by the current workbook-based import flow. Please export the file as .xlsx, .xls, or .xlsm and retry.';
+  }
+  return defaultMessage;
 }
 
 class _PurchaseUploadPreparation {
@@ -571,10 +765,10 @@ Future<_PurchaseInspectionResult?> _inspectPurchaseFileInBackground({
   required List<int> bytes,
   required String preferredSheetName,
 }) async {
-  final payload = await compute(_computePurchaseInspectionPayload, <String, dynamic>{
-    'bytes': bytes,
-    'preferredSheetName': preferredSheetName,
-  });
+  final payload = await compute(
+    _computePurchaseInspectionPayload,
+    <String, dynamic>{'bytes': bytes, 'preferredSheetName': preferredSheetName},
+  );
   if (payload == null) {
     return null;
   }
@@ -592,9 +786,7 @@ Future<_PurchaseUploadPreparation?> _preparePurchaseUploadInBackground({
   }
 
   final mapPayload = Map<String, dynamic>.from(payload);
-  return _deserializePurchaseUploadPreparation(
-    mapPayload,
-  );
+  return _deserializePurchaseUploadPreparation(mapPayload);
 }
 
 Future<List<PurchaseRow>> _parsePurchaseRowsWithProfileInBackground({
@@ -623,13 +815,14 @@ Future<List<Tds26QRow>> _parseTdsRowsWithProfileInBackground({
   required bool headersTrusted,
   required Map<String, String> columnMapping,
 }) async {
-  final response = await compute(_computeTdsProfileParsePayload, <String, dynamic>{
-    'bytes': bytes,
-    'sheetName': sheetName,
-    'headerRowIndex': headerRowIndex,
-    'headersTrusted': headersTrusted,
-    'columnMapping': columnMapping,
-  });
+  final response =
+      await compute(_computeTdsProfileParsePayload, <String, dynamic>{
+        'bytes': bytes,
+        'sheetName': sheetName,
+        'headerRowIndex': headerRowIndex,
+        'headersTrusted': headersTrusted,
+        'columnMapping': columnMapping,
+      });
 
   return _deserializeTdsRows(response);
 }
@@ -641,14 +834,12 @@ Map<String, dynamic>? _computePurchaseUploadPayload(List<int> bytes) {
   }
 
   return {
-    'inspection': _serializePurchaseInspectionResult(
-      (
-        sheetName: preparation.sheetName,
-        headerRowIndex: preparation.headerRowIndex,
-        rawHeaderRow: preparation.rawHeaderRow,
-        headersTrusted: preparation.headersTrusted,
-      ),
-    ),
+    'inspection': _serializePurchaseInspectionResult((
+      sheetName: preparation.sheetName,
+      headerRowIndex: preparation.headerRowIndex,
+      rawHeaderRow: preparation.rawHeaderRow,
+      headersTrusted: preparation.headersTrusted,
+    )),
     'validation': _serializeExcelValidationResult(preparation.validation),
     'parsedRows': preparation.parsedRows == null
         ? null
@@ -668,14 +859,12 @@ Map<String, dynamic>? _computePurchaseInspectionPayload(
     return null;
   }
 
-  return _serializePurchaseInspectionResult(
-    (
-      sheetName: inspection.sheetName,
-      headerRowIndex: inspection.headerRowIndex,
-      rawHeaderRow: inspection.rawHeaderRow,
-      headersTrusted: inspection.headersTrusted,
-    ),
-  );
+  return _serializePurchaseInspectionResult((
+    sheetName: inspection.sheetName,
+    headerRowIndex: inspection.headerRowIndex,
+    rawHeaderRow: inspection.rawHeaderRow,
+    headersTrusted: inspection.headersTrusted,
+  ));
 }
 
 Map<String, dynamic> _serializePurchaseInspectionResult(
@@ -684,7 +873,8 @@ Map<String, dynamic> _serializePurchaseInspectionResult(
     int headerRowIndex,
     List<dynamic> rawHeaderRow,
     bool headersTrusted,
-  }) inspection,
+  })
+  inspection,
 ) {
   return {
     'sheetName': inspection.sheetName,
@@ -702,7 +892,9 @@ _PurchaseInspectionResult _deserializePurchaseInspectionResult(
   return _PurchaseInspectionResult(
     sheetName: payload['sheetName'] as String? ?? '',
     headerRowIndex: payload['headerRowIndex'] as int? ?? 0,
-    rawHeaderRow: List<String>.from(payload['rawHeaderRow'] as List? ?? const []),
+    rawHeaderRow: List<String>.from(
+      payload['rawHeaderRow'] as List? ?? const [],
+    ),
     headersTrusted: payload['headersTrusted'] as bool? ?? false,
   );
 }

@@ -1,15 +1,22 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
+import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/reconciliation_screen.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
+import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_preparation_service.dart';
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
 import 'package:reconciliation_app/features/upload/models/import_format_profile.dart';
 import 'package:reconciliation_app/features/upload/models/ledger_upload_file.dart';
+import 'package:reconciliation_app/features/upload/models/tds_26q_upload_file.dart';
+import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 import 'package:reconciliation_app/features/upload/presentation/screens/column_mapping_screen.dart';
 import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_mapping_service.dart';
@@ -33,18 +40,29 @@ class ExcelUploadScreen extends StatefulWidget {
 }
 
 class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
+  static const List<String> _allowedUploadExtensions = [
+    'xlsx',
+    'xls',
+    'xlsm',
+    'csv',
+  ];
   static const List<String> _availableSections = [
     '194Q',
     '194C',
     '194H',
-    '194J',
-    '194IB',
+    '194I_A',
+    '194I_B',
+    '194J_A',
+    '194J_B',
   ];
 
   bool isLoadingTds = false;
-  String? tdsFileName;
-  List<int>? tdsFileBytes;
+  Tds26QUploadFile? tdsUploadFile;
   String _activeSectionCode = '194Q';
+  
+  // Seller mapping state
+  bool _isSellerMappingConfirmed = false;
+  bool _isLoadingSellerMapping = false;
 
   final Set<String> selectedSections = {'194Q'};
   final Map<String, bool> sectionLoading = {
@@ -112,6 +130,28 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     final previewData = ExcelService.buildPreviewDataWithProfile(
       file.bytes,
       fileType: fileType,
+      fileName: file.fileName,
+      sheetName: file.sheetName ?? '',
+      headerRowIndex: file.headerRowIndex ?? 0,
+      headersTrusted: file.headersTrusted ?? true,
+      columnMapping: file.columnMapping,
+      sessionCache: ImportSessionCache.fromBytes(file.bytes),
+    );
+
+    if (previewData == null) {
+      _showUploadSnackBar('Could not build mapping preview for this file');
+      return null;
+    }
+
+    return showColumnMappingScreen(previewData: previewData);
+  }
+
+  Future<ColumnMappingResult?> _openStoredTdsColumnMapping({
+    required Tds26QUploadFile file,
+  }) async {
+    final previewData = ExcelService.buildPreviewDataWithProfile(
+      file.bytes,
+      fileType: ExcelImportType.tds26q,
       fileName: file.fileName,
       sheetName: file.sheetName ?? '',
       headerRowIndex: file.headerRowIndex ?? 0,
@@ -218,17 +258,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       ..clearSnackBars()
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.fixed,
-          content: Text(message),
-        ),
+        SnackBar(behavior: SnackBarBehavior.fixed, content: Text(message)),
       );
   }
 
   Future<PlatformFile?> _pickExcelFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx'],
+      allowedExtensions: _allowedUploadExtensions,
       withData: true,
     );
 
@@ -236,7 +273,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return null;
     }
 
-    return result.files.single;
+    final file = result.files.single;
+    final normalizedExtension = p.extension(file.name).toLowerCase();
+    if (normalizedExtension == '.csv') {
+      _showUploadSnackBar(
+        'CSV file selected: ${file.name}. CSV selection is visible now, but the current import parser expects workbook sheets. Please export as .xlsx, .xls, or .xlsm and retry.',
+      );
+    }
+
+    return file;
   }
 
   void _setSectionLoading(String sectionCode, bool isLoading) {
@@ -246,7 +291,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   void _rebuildPurchaseState() {
-    final allPurchaseRows = purchaseRowsByFileId.values.expand((rows) => rows).toList();
+    final allPurchaseRows = purchaseRowsByFileId.values
+        .expand((rows) => rows)
+        .toList();
     purchaseRows = allPurchaseRows;
     normalizedPurchaseRows = allPurchaseRows
         .map(NormalizedTransactionRow.fromPurchaseRow)
@@ -259,14 +306,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   void _removeSectionFile(String sectionCode, LedgerUploadFile file) {
     setState(() {
-      sectionFiles[sectionCode] =
-          sectionFiles[sectionCode]!.where((item) => item.id != file.id).toList();
+      sectionFiles[sectionCode] = sectionFiles[sectionCode]!
+          .where((item) => item.id != file.id)
+          .toList();
       if (sectionCode == '194Q') {
         purchaseRowsByFileId.remove(file.id);
         _rebuildPurchaseState();
       } else {
-        ledgerRowsBySection[sectionCode] =
-            sectionFiles[sectionCode]!.expand((item) => item.rows).toList();
+        ledgerRowsBySection[sectionCode] = sectionFiles[sectionCode]!
+            .expand((item) => item.rows)
+            .toList();
       }
     });
   }
@@ -278,6 +327,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
   }) async {
+    final parseWatch = Stopwatch()..start();
     final response = await ImportUploadFlowService.preparePurchaseImport(
       buyerId: widget.selectedBuyerId,
       bytes: bytes,
@@ -288,12 +338,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
 
     if (response.isFailure) {
+      parseWatch.stop();
       _showUploadSnackBar(response.errorMessage!);
       return null;
     }
 
     final result = response.data;
     if (result == null) {
+      parseWatch.stop();
       return null;
     }
 
@@ -305,7 +357,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
 
     final fileId =
-        existingFileId ?? '194Q_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}';
+        existingFileId ??
+        '194Q_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}';
     final normalizedRows = result.parsedRows
         .map(
           (row) => NormalizedLedgerRow.fromPurchaseRow(
@@ -316,6 +369,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         .toList();
 
     purchaseRowsByFileId[fileId] = result.parsedRows;
+    parseWatch.stop();
+    debugPrint(
+      'UPLOAD PERF => purchase parse ${parseWatch.elapsedMilliseconds} ms | '
+      'file=${pickedFile.name} rows=${result.parsedRows.length} mappingStatus=${result.mappingStatus}',
+    );
 
     return LedgerUploadFile(
       id: fileId,
@@ -343,6 +401,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
   }) async {
+    final parseWatch = Stopwatch()..start();
     final response = await ImportUploadFlowService.prepareGenericLedgerImport(
       sectionCode: sectionCode,
       bytes: bytes,
@@ -353,17 +412,26 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
 
     if (response.isFailure) {
+      parseWatch.stop();
       _showUploadSnackBar(response.errorMessage!);
       return null;
     }
 
     final result = response.data;
     if (result == null) {
+      parseWatch.stop();
       return null;
     }
+    parseWatch.stop();
+    debugPrint(
+      'UPLOAD PERF => source parse ${parseWatch.elapsedMilliseconds} ms | '
+      'section=$sectionCode file=${pickedFile.name} rows=${result.parsedRows.length} '
+      'mappingStatus=${result.mappingStatus}',
+    );
 
     return LedgerUploadFile(
-      id: existingFileId ??
+      id:
+          existingFileId ??
           '${sectionCode}_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}',
       sectionCode: sectionCode,
       fileName: pickedFile.name,
@@ -381,10 +449,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
   }
 
-  Future<void> _remapSectionFile(String sectionCode, LedgerUploadFile file) async {
+  Future<void> _remapSectionFile(
+    String sectionCode,
+    LedgerUploadFile file,
+  ) async {
     _setSectionLoading(sectionCode, true);
     try {
-      final columnMappingResult = await _openStoredFileColumnMapping(file: file);
+      final columnMappingResult = await _openStoredFileColumnMapping(
+        file: file,
+      );
       if (columnMappingResult == null) {
         _setSectionLoading(sectionCode, false);
         return;
@@ -396,7 +469,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
       if (response.isFailure) {
         _setSectionLoading(sectionCode, false);
-        _showUploadSnackBar('Remap failed for ${file.fileName}: ${response.errorMessage!}');
+        _showUploadSnackBar(
+          'Remap failed for ${file.fileName}: ${response.errorMessage!}',
+        );
         return;
       }
 
@@ -429,8 +504,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         if (sectionCode == '194Q') {
           _rebuildPurchaseState();
         } else {
-          ledgerRowsBySection[sectionCode] =
-              sectionFiles[sectionCode]!.expand((item) => item.rows).toList();
+          ledgerRowsBySection[sectionCode] = sectionFiles[sectionCode]!
+              .expand((item) => item.rows)
+              .toList();
         }
         sectionLoading[sectionCode] = false;
       });
@@ -468,16 +544,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
-        sectionFiles['194Q'] = [
-          ...sectionFiles['194Q']!,
-          uploadFile,
-        ];
+        sectionFiles['194Q'] = [...sectionFiles['194Q']!, uploadFile];
         _rebuildPurchaseState();
         sectionLoading['194Q'] = false;
       });
 
       _showUploadSnackBar(
-        '194Q source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}',
+        '194Q source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Review Mapping to confirm columns.',
       );
     } catch (e) {
       _setSectionLoading('194Q', false);
@@ -512,17 +585,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
-        sectionFiles[sectionCode] = [
-          ...sectionFiles[sectionCode]!,
-          uploadFile,
-        ];
-        ledgerRowsBySection[sectionCode] =
-            sectionFiles[sectionCode]!.expand((item) => item.rows).toList();
+        sectionFiles[sectionCode] = [...sectionFiles[sectionCode]!, uploadFile];
+        ledgerRowsBySection[sectionCode] = sectionFiles[sectionCode]!
+            .expand((item) => item.rows)
+            .toList();
         sectionLoading[sectionCode] = false;
       });
 
       _showUploadSnackBar(
-        '$sectionCode source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}',
+        '$sectionCode source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Review Mapping to confirm columns.',
       );
     } catch (e) {
       _setSectionLoading(sectionCode, false);
@@ -536,6 +607,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     });
 
     try {
+      final uploadWatch = Stopwatch()..start();
       final pickedFile = await _pickExcelFile();
       if (pickedFile == null) {
         setState(() => isLoadingTds = false);
@@ -559,9 +631,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         preferredSheetName = await _show26QSheetSelectionDialog(
           validation.candidateSheets.isNotEmpty
               ? validation.candidateSheets
-              : await ExcelService.list26QSelectableSheetsInBackground(
-                  bytes,
-                ),
+              : await ExcelService.list26QSelectableSheetsInBackground(bytes),
         );
         if (preferredSheetName == null || preferredSheetName.trim().isEmpty) {
           return;
@@ -592,6 +662,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       final result = response.data;
       if (result == null) {
+        setState(() => isLoadingTds = false);
         return;
       }
 
@@ -600,8 +671,87 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
-        tdsFileName = pickedFile.name;
-        tdsFileBytes = bytes;
+        tdsUploadFile = Tds26QUploadFile(
+          fileName: pickedFile.name,
+          bytes: bytes,
+          rowCount: result.parsedRows.length,
+          uploadedAt: DateTime.now(),
+          rows: result.parsedRows,
+          mappingStatus: result.mappingStatus,
+          wasManuallyMapped: result.wasManuallyMapped,
+          sheetName: result.sheetName,
+          headerRowIndex: result.headerRowIndex,
+          headersTrusted: result.headersTrusted,
+          columnMapping: result.columnMapping,
+        );
+        tdsRows = result.parsedRows;
+        normalizedTdsRows = result.parsedRows
+            .map(NormalizedTransactionRow.fromTds26QRow)
+            .toList();
+        isLoadingTds = false;
+      });
+      uploadWatch.stop();
+      debugPrint(
+        'UPLOAD PERF => 26Q parse ${uploadWatch.elapsedMilliseconds} ms | '
+        'file=${pickedFile.name} rows=${result.parsedRows.length} '
+        'sheet=${validation.detectedSheet ?? 'manual'}',
+      );
+      debugPrint('UPLOAD COUNT => 26Q rows=${result.parsedRows.length}');
+
+      _showUploadSnackBar(
+        '26Q uploaded: ${result.parsedRows.length} rows. Review Mapping to confirm columns.',
+      );
+    } catch (e) {
+      setState(() => isLoadingTds = false);
+      _showUploadSnackBar('26Q upload error: $e');
+    }
+  }
+
+  Future<void> _reviewTds26QMapping() async {
+    final file = tdsUploadFile;
+    if (file == null) return;
+
+    setState(() {
+      isLoadingTds = true;
+    });
+
+    try {
+      final columnMappingResult = await _openStoredTdsColumnMapping(file: file);
+      if (columnMappingResult == null) {
+        setState(() => isLoadingTds = false);
+        return;
+      }
+
+      final response = await ImportUploadFlowService.prepareTds26QRemap(
+        bytes: file.bytes,
+        columnMappingResult: columnMappingResult,
+      );
+      if (response.isFailure) {
+        setState(() => isLoadingTds = false);
+        _showUploadSnackBar(response.errorMessage ?? '26Q remap failed');
+        return;
+      }
+
+      final result = response.data;
+      if (result == null) {
+        setState(() => isLoadingTds = false);
+        return;
+      }
+
+      setState(() {
+        tdsUploadFile = Tds26QUploadFile(
+          fileName: file.fileName,
+          bytes: file.bytes,
+          rowCount: result.parsedRows.length,
+          uploadedAt: DateTime.now(),
+          rows: result.parsedRows,
+          mappingStatus: result.mappingStatus,
+          wasManuallyMapped: result.wasManuallyMapped,
+          sheetName: result.sheetName,
+          headerRowIndex: result.headerRowIndex,
+          headersTrusted: result.headersTrusted,
+          columnMapping: result.columnMapping,
+        );
         tdsRows = result.parsedRows;
         normalizedTdsRows = result.parsedRows
             .map(NormalizedTransactionRow.fromTds26QRow)
@@ -609,10 +759,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         isLoadingTds = false;
       });
 
-      _showUploadSnackBar('26Q uploaded: ${result.parsedRows.length} rows');
+      _showUploadSnackBar('26Q mapping confirmed');
     } catch (e) {
       setState(() => isLoadingTds = false);
-      _showUploadSnackBar('26Q upload error: $e');
+      _showUploadSnackBar('26Q remap failed: $e');
     }
   }
 
@@ -630,6 +780,29 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return;
     }
 
+    if (!_allRequiredMappingsConfirmed) {
+      _showUploadSnackBar(
+        'Confirm mapping for: ${_pendingMappingReviewLabels.join(', ')}',
+      );
+      return;
+    }
+
+    if (!_isSellerMappingConfirmed) {
+      _showUploadSnackBar(
+        'Please review and confirm seller mappings before opening reconciliation.',
+      );
+      return;
+    }
+
+    final totalSourceRows = sourceRowsBySection.values.fold<int>(
+      0,
+      (sum, rows) => sum + rows.length,
+    );
+    debugPrint(
+      'UPLOAD COUNT => open reconciliation sourceRows=$totalSourceRows '
+      'tdsRows=${tdsRows.length} sections=${sourceRowsBySection.keys.join(',')}',
+    );
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -643,16 +816,88 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           buyerName: widget.selectedBuyerName,
           buyerPan: widget.selectedBuyerPan,
           gstNo: detectedGstNo ?? '',
+          sellerMappingConfirmed: _isSellerMappingConfirmed,
         ),
       ),
     );
+  }
+
+  Future<void> openSellerMappingScreen() async {
+    if (tdsRows.isEmpty) {
+      _showUploadSnackBar('Please upload and map the 26Q file first');
+      return;
+    }
+
+    final sourceRowsBySection = _buildSourceRowsBySection();
+    if (sourceRowsBySection.isEmpty) {
+      _showUploadSnackBar(
+        'Upload at least one source file in any selected section first.',
+      );
+      return;
+    }
+
+    setState(() => _isLoadingSellerMapping = true);
+
+    try {
+      final preparationResult =
+          await SellerMappingPreparationService.prepareMappingData(
+        buyerName: widget.selectedBuyerName,
+        buyerPan: widget.selectedBuyerPan,
+        tdsRows: tdsRows,
+        sourceRowsBySection: sourceRowsBySection,
+      );
+
+      if (!mounted) return;
+
+      final fyLabel =
+          tdsRows.isNotEmpty
+              ? 'FY ${tdsRows.first.financialYear.substring(0, 4)}-${tdsRows.first.financialYear.substring(4, 6)}'
+              : 'FY Unknown';
+
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SellerMappingScreen(
+            buyerName: widget.selectedBuyerName,
+            buyerPan: widget.selectedBuyerPan,
+            financialYearLabel: fyLabel,
+            selectedSectionLabel: 'All',
+            initialViewMode: ReconciliationViewMode.summary,
+            purchaseRows: preparationResult.purchaseRows,
+            tdsParties: preparationResult.tdsParties,
+            existingMappings: preparationResult.existingMappings,
+            blockedAliases: preparationResult.blockedAliases,
+            tdsPartyPans: preparationResult.tdsPartyPans,
+          ),
+        ),
+      );
+
+      if (result == null) {
+        setState(() => _isLoadingSellerMapping = false);
+        _showUploadSnackBar('Seller mapping review cancelled');
+        return;
+      }
+
+      setState(() {
+        _isSellerMappingConfirmed = true;
+        _isLoadingSellerMapping = false;
+      });
+
+      _showUploadSnackBar('Seller mappings confirmed successfully');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingSellerMapping = false);
+        _showUploadSnackBar('Failed to open seller mapping: $e');
+      }
+    }
   }
 
   Map<String, List<NormalizedTransactionRow>> _buildSourceRowsBySection() {
     final groupedRows = <String, List<NormalizedTransactionRow>>{};
 
     for (final section in selectedSections) {
-      final ledgerRows = ledgerRowsBySection[section] ?? const <NormalizedLedgerRow>[];
+      final ledgerRows =
+          ledgerRowsBySection[section] ?? const <NormalizedLedgerRow>[];
       if (ledgerRows.isEmpty) continue;
 
       groupedRows[section] = ledgerRows
@@ -708,14 +953,40 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       sectionFiles.values.fold<int>(0, (sum, files) => sum + files.length);
 
   int get _totalLedgerRows => sectionFiles.values.fold<int>(
-        0,
-        (sum, files) =>
-            sum + files.fold<int>(0, (inner, file) => inner + file.rowCount),
-      );
+    0,
+    (sum, files) =>
+        sum + files.fold<int>(0, (inner, file) => inner + file.rowCount),
+  );
 
-  bool get _has26QReady => tdsRows.isNotEmpty;
+  bool get _has26QReady => tdsUploadFile != null && tdsRows.isNotEmpty;
 
-  bool get canOpenReconciliation => _has26QReady && _buildSourceRowsBySection().isNotEmpty;
+  Iterable<LedgerUploadFile> get _allUploadedSectionFiles =>
+      sectionFiles.values.expand((files) => files);
+
+  List<String> get _pendingMappingReviewLabels {
+    final pending = <String>[];
+
+    final tdsFile = tdsUploadFile;
+    if (tdsFile != null && !tdsFile.mappingStatus.isConfirmed) {
+      pending.add('26Q (${tdsFile.fileName})');
+    }
+
+    for (final file in _allUploadedSectionFiles) {
+      if (!file.mappingStatus.isConfirmed) {
+        pending.add('${file.sectionCode} (${file.fileName})');
+      }
+    }
+
+    return pending;
+  }
+
+  bool get _allRequiredMappingsConfirmed => _pendingMappingReviewLabels.isEmpty;
+
+  bool get canOpenReconciliation =>
+      _has26QReady &&
+      _buildSourceRowsBySection().isNotEmpty &&
+      _allRequiredMappingsConfirmed &&
+      _isSellerMappingConfirmed;
 
   bool get _hasWorkspaceContent => _has26QReady || _totalSectionFiles > 0;
 
@@ -727,15 +998,19 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   String get _workspaceStatusDetail {
     if (canOpenReconciliation) {
-      return '26Q and source files are ready. Continue to reconciliation.';
+      return '26Q and source files are confirmed. Continue to reconciliation.';
     }
     if (!_has26QReady) {
       return 'Upload the mandatory 26Q master file to unlock the workflow.';
     }
+    if (!_allRequiredMappingsConfirmed) {
+      return 'Review and confirm column mapping for every uploaded file before reconciliation.';
+    }
     return 'Add at least one source file in a selected section to continue.';
   }
 
-  int _sectionFileCount(String sectionCode) => sectionFiles[sectionCode]?.length ?? 0;
+  int _sectionFileCount(String sectionCode) =>
+      sectionFiles[sectionCode]?.length ?? 0;
 
   int _sectionRowCount(String sectionCode) {
     if (sectionCode == '194Q') return purchaseRows.length;
@@ -750,10 +1025,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return 'Generic ledger workspace for contractor payment ledgers.';
       case '194H':
         return 'Generic ledger workspace for commission or brokerage ledgers.';
-      case '194J':
-        return 'Generic ledger workspace for professional fee ledgers.';
-      case '194IB':
-        return 'Generic ledger workspace for rent deduction ledgers.';
+      case '194I_A':
+        return 'Generic ledger workspace for machinery, plant, or equipment rent ledgers.';
+      case '194I_B':
+        return 'Generic ledger workspace for land, building, or furniture rent ledgers.';
+      case '194J_A':
+        return 'Generic ledger workspace for technical services ledgers.';
+      case '194J_B':
+        return 'Generic ledger workspace for professional services ledgers.';
       default:
         return 'Generic ledger workspace for the selected section.';
     }
@@ -763,6 +1042,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     if (!_hasWorkspaceContent) {
       _showUploadSnackBar(
         'Add a 26Q file or source files to start building the workspace.',
+      );
+      return;
+    }
+
+    if (_pendingMappingReviewLabels.isNotEmpty) {
+      _showUploadSnackBar(
+        'Pending mapping confirmation: ${_pendingMappingReviewLabels.join(', ')}',
       );
       return;
     }
@@ -780,10 +1066,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return const Color(0xFF0F766E);
       case '194H':
         return const Color(0xFF9333EA);
-      case '194J':
+      case '194I_A':
         return const Color(0xFFEA580C);
-      case '194IB':
+      case '194I_B':
         return const Color(0xFFDC2626);
+      case '194J_A':
+        return const Color(0xFF0891B2);
+      case '194J_B':
+        return const Color(0xFF7C3AED);
       default:
         return const Color(0xFF475569);
     }
@@ -793,24 +1083,28 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return sectionCode == '194Q' ? 'Purchase Parser' : 'Generic Ledger Parser';
   }
 
-  Color _mappingStatusColor(LedgerUploadFile file) {
-    switch (file.mappingStatus) {
-      case 'Column mapping':
-        return const Color(0xFFB45309);
-      case 'Saved profile':
+  Color _mappingStatusColor(UploadMappingStatus status) {
+    switch (status) {
+      case UploadMappingStatus.notMapped:
+        return const Color(0xFF9A3412);
+      case UploadMappingStatus.autoMapped:
         return const Color(0xFF1D4ED8);
-      default:
+      case UploadMappingStatus.needsReview:
+        return const Color(0xFFB45309);
+      case UploadMappingStatus.confirmed:
         return const Color(0xFF166534);
     }
   }
 
-  Color _mappingStatusBackground(LedgerUploadFile file) {
-    switch (file.mappingStatus) {
-      case 'Column mapping':
-        return const Color(0xFFFEF3C7);
-      case 'Saved profile':
+  Color _mappingStatusBackground(UploadMappingStatus status) {
+    switch (status) {
+      case UploadMappingStatus.notMapped:
+        return const Color(0xFFFFEDD5);
+      case UploadMappingStatus.autoMapped:
         return const Color(0xFFDBEAFE);
-      default:
+      case UploadMappingStatus.needsReview:
+        return const Color(0xFFFEF3C7);
+      case UploadMappingStatus.confirmed:
         return const Color(0xFFDCFCE7);
     }
   }
@@ -824,7 +1118,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       color: backgroundColor,
       borderRadius: BorderRadius.circular(22),
       border: Border.all(color: borderColor),
-      boxShadow: shadows ??
+      boxShadow:
+          shadows ??
           [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.18),
@@ -904,7 +1199,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
               const SizedBox(width: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: canOpenReconciliation
                       ? const Color(0xFF052E2B)
@@ -943,13 +1241,18 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
               const SizedBox(width: 12),
               FilledButton.icon(
-                onPressed: canOpenReconciliation ? openReconciliationScreen : null,
+                onPressed: canOpenReconciliation
+                    ? openReconciliationScreen
+                    : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   disabledBackgroundColor: const Color(0xFF1E293B),
                   disabledForegroundColor: const Color(0xFF64748B),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 18,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -1004,7 +1307,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   Widget _buildTdsCard() {
-    final uploaded = tdsRows.isNotEmpty;
+    final file = tdsUploadFile;
+    final uploaded = file != null;
+    final mappingStatus = file?.mappingStatus ?? UploadMappingStatus.notMapped;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1030,7 +1335,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDBEAFE),
                   borderRadius: BorderRadius.circular(999),
@@ -1045,19 +1353,18 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: uploaded
-                      ? const Color(0xFFDCFCE7)
-                      : const Color(0xFFFFEDD5),
+                  color: _mappingStatusBackground(mappingStatus),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  uploaded ? 'Uploaded' : 'Pending',
+                  uploaded ? mappingStatus.label : 'Pending',
                   style: TextStyle(
-                    color: uploaded
-                        ? const Color(0xFF166534)
-                        : const Color(0xFF9A3412),
+                    color: _mappingStatusColor(mappingStatus),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1121,9 +1428,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        uploaded
-                            ? (tdsFileName ?? '26Q uploaded')
-                            : 'No 26Q file uploaded yet',
+                        uploaded ? file.fileName : 'No 26Q file uploaded yet',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -1133,7 +1438,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       const SizedBox(height: 6),
                       Text(
                         uploaded
-                            ? '${tdsRows.length} parsed rows ready for reconciliation'
+                            ? '${tdsRows.length} parsed rows | Mapping ${mappingStatus.label.toLowerCase()}'
                             : 'Upload the statutory 26Q workbook to unlock reconciliation.',
                         style: const TextStyle(
                           color: Color(0xFF94A3B8),
@@ -1145,23 +1450,48 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                FilledButton.icon(
-                  onPressed: isLoadingTds ? null : uploadTds26QFile,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    disabledBackgroundColor: const Color(0xFF1E293B),
-                    disabledForegroundColor: const Color(0xFF64748B),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 16,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: isLoadingTds ? null : uploadTds26QFile,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        disabledBackgroundColor: const Color(0xFF1E293B),
+                        disabledForegroundColor: const Color(0xFF64748B),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: Icon(
+                        uploaded ? Icons.refresh_rounded : Icons.upload_rounded,
+                      ),
+                      label: Text(
+                        isLoadingTds
+                            ? 'Uploading...'
+                            : uploaded
+                            ? 'Replace 26Q'
+                            : 'Upload 26Q',
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: Icon(uploaded ? Icons.refresh_rounded : Icons.upload_rounded),
-                  label: Text(isLoadingTds ? 'Uploading...' : uploaded ? 'Replace 26Q' : 'Upload 26Q'),
+                    if (uploaded) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: isLoadingTds ? null : _reviewTds26QMapping,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF334155)),
+                        ),
+                        icon: const Icon(Icons.tune, size: 16),
+                        label: const Text('Review Mapping'),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -1190,10 +1520,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           const SizedBox(height: 8),
           const Text(
             'Choose the section buckets you want to upload. Each selected section can hold multiple files.',
-            style: TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 13,
-            ),
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -1213,20 +1540,23 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 onLongPress: selected ? () => _toggleSection(section) : null,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: active
                         ? accent.withValues(alpha: 0.18)
                         : selected
-                            ? const Color(0xFF111827)
-                            : const Color(0xFF0B1220),
+                        ? const Color(0xFF111827)
+                        : const Color(0xFF0B1220),
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: active
                           ? accent
                           : selected
-                              ? accent.withValues(alpha: 0.55)
-                              : const Color(0xFF334155),
+                          ? accent.withValues(alpha: 0.55)
+                          : const Color(0xFF334155),
                       width: active ? 1.6 : 1,
                     ),
                     boxShadow: active
@@ -1247,9 +1577,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            section,
+                            sectionDisplayLabel(section),
                             style: TextStyle(
-                              color: selected ? Colors.white : const Color(0xFFE2E8F0),
+                              color: selected
+                                  ? Colors.white
+                                  : const Color(0xFFE2E8F0),
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -1258,7 +1590,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: selected ? accent : const Color(0xFF475569),
+                              color: selected
+                                  ? accent
+                                  : const Color(0xFF475569),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -1298,7 +1632,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           _buildSummaryTile('26Q Rows', tdsRows.length.toString()),
           _buildSummaryTile('Section Files', _totalSectionFiles.toString()),
           _buildSummaryTile('Source Rows', _totalLedgerRows.toString()),
-          _buildSummaryTile('Active Buckets', selectedSections.length.toString()),
+          _buildSummaryTile(
+            'Active Buckets',
+            selectedSections.length.toString(),
+          ),
         ],
       ),
     );
@@ -1351,10 +1688,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         decoration: _panelDecoration(),
         child: const Text(
           'Select one or more section buckets to start building the source-file workspace.',
-          style: TextStyle(
-            color: Color(0xFF94A3B8),
-            height: 1.5,
-          ),
+          style: TextStyle(color: Color(0xFF94A3B8), height: 1.5),
         ),
       );
     }
@@ -1404,17 +1738,17 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  sectionCode,
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  sectionDisplayLabel(sectionCode),
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w800),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1445,8 +1779,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 onPressed: isLoading
                     ? null
                     : () => sectionCode == '194Q'
-                        ? _upload194QFile()
-                        : _uploadGenericSectionFile(sectionCode),
+                          ? _upload194QFile()
+                          : _uploadGenericSectionFile(sectionCode),
                 style: FilledButton.styleFrom(
                   backgroundColor: accent,
                   foregroundColor: Colors.white,
@@ -1460,7 +1794,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           Row(
             children: [
               Text(
-                sectionCode,
+                sectionDisplayLabel(sectionCode),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
@@ -1469,7 +1803,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF111827),
                   borderRadius: BorderRadius.circular(999),
@@ -1523,7 +1860,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                     child: Text(
                       sectionCode == '194Q'
                           ? 'Use this bucket for purchase-parser source files. Add one or more files to stage buyer-side transactions.'
-                          : 'Use this bucket for generic ledger source files mapped to $sectionCode. Add files to complete this workspace.',
+                          : 'Use this bucket for generic ledger source files mapped to ${sectionDisplayLabel(sectionCode)}. Add files to complete this workspace.',
                       style: const TextStyle(
                         color: Color(0xFF94A3B8),
                         height: 1.5,
@@ -1604,13 +1941,19 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: _mappingStatusBackground(file),
-                                        borderRadius: BorderRadius.circular(999),
+                                        color: _mappingStatusBackground(
+                                          file.mappingStatus,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
                                       ),
                                       child: Text(
-                                        file.mappingStatus,
+                                        file.mappingStatus.label,
                                         style: TextStyle(
-                                          color: _mappingStatusColor(file),
+                                          color: _mappingStatusColor(
+                                            file.mappingStatus,
+                                          ),
                                           fontSize: 11,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -1623,7 +1966,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF1F2937),
-                                        borderRadius: BorderRadius.circular(999),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
                                       ),
                                       child: Text(
                                         file.parserType == 'purchase'
@@ -1647,17 +1992,21 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                               OutlinedButton.icon(
                                 onPressed: isLoading
                                     ? null
-                                    : () => _remapSectionFile(sectionCode, file),
+                                    : () =>
+                                          _remapSectionFile(sectionCode, file),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.white,
-                                  side: const BorderSide(color: Color(0xFF334155)),
+                                  side: const BorderSide(
+                                    color: Color(0xFF334155),
+                                  ),
                                 ),
                                 icon: const Icon(Icons.tune, size: 16),
-                                label: const Text('Remap'),
+                                label: const Text('Review Mapping'),
                               ),
                               const SizedBox(height: 8),
                               IconButton(
-                                onPressed: () => _removeSectionFile(sectionCode, file),
+                                onPressed: () =>
+                                    _removeSectionFile(sectionCode, file),
                                 icon: const Icon(Icons.delete_outline),
                                 tooltip: 'Remove file',
                               ),
@@ -1681,9 +2030,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
         decoration: BoxDecoration(
           color: const Color(0xFF07111F).withValues(alpha: 0.98),
-          border: const Border(
-            top: BorderSide(color: Color(0xFF1E293B)),
-          ),
+          border: const Border(top: BorderSide(color: Color(0xFF1E293B))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.28),
@@ -1699,7 +2046,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: Color(0xFF334155)),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 18,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -1718,7 +2068,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       ? const Color(0xFF334155)
                       : const Color(0xFF1E293B),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 18,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -1727,6 +2080,42 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               label: const Text('Check Workspace'),
             ),
             const Spacer(),
+            if (_has26QReady && _allRequiredMappingsConfirmed)
+              OutlinedButton.icon(
+                onPressed: _isLoadingSellerMapping ? null : openSellerMappingScreen,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _isSellerMappingConfirmed
+                      ? Colors.green
+                      : Colors.white,
+                  disabledForegroundColor: const Color(0xFF64748B),
+                  side: BorderSide(
+                    color: _isSellerMappingConfirmed
+                        ? Colors.green.shade600
+                        : const Color(0xFF334155),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 18,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: Icon(
+                  _isSellerMappingConfirmed
+                      ? Icons.check_circle_rounded
+                      : Icons.person_search_rounded,
+                ),
+                label: Text(
+                  _isLoadingSellerMapping
+                      ? 'Loading...'
+                      : (_isSellerMappingConfirmed
+                          ? 'Seller Mappings Confirmed'
+                          : 'Review Seller Mappings'),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            const SizedBox(width: 12),
             FilledButton.icon(
               onPressed: canOpenReconciliation ? openReconciliationScreen : null,
               style: FilledButton.styleFrom(
@@ -1734,17 +2123,18 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 disabledBackgroundColor: const Color(0xFF1E293B),
                 disabledForegroundColor: const Color(0xFF64748B),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 18,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(
-                canOpenReconciliation
-                    ? 'Open Reconciliation'
-                    : 'Open Reconciliation',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              label: const Text(
+                'Open Reconciliation',
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
           ],

@@ -1,6 +1,7 @@
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/resolved_seller_identity.dart';
+import 'package:reconciliation_app/features/reconciliation/services/reconciliation_remark_templates.dart';
 
 class SellerIdentityObservation {
   final String originalName;
@@ -172,7 +173,7 @@ class SellerIdentityResolver {
           mappingHit: mappingHit,
           extraFlags: flags,
           extraNotes:
-              'Section-aware mapping was found for $mappingSectionUsed but ignored because mapped PAN $mappedPan conflicts with row PAN $normalizedPan.',
+              ReconciliationRemarkTemplates.mappedPanConflict,
         );
       }
 
@@ -183,8 +184,8 @@ class SellerIdentityResolver {
           ? 'PAN:$resolvedPan'
           : 'NAME:${normalizeName(mappedResolvedName)}';
       final mappingNotes = mappingHit == 'exact'
-          ? 'Resolved using exact section mapping for $mappingSectionUsed.'
-          : 'Resolved using ALL fallback mapping because no exact section mapping matched $normalizedSectionCode.';
+          ? ReconciliationRemarkTemplates.exactMappingUsed
+          : ReconciliationRemarkTemplates.fallbackMappingUsed;
 
       final mappingFlags = <String>{
         if (mappingHit == 'exact') 'mapping_exact',
@@ -252,10 +253,10 @@ class SellerIdentityResolver {
         identityConfidence: conflictingNames.length > 1 ? 0.78 : 1.0,
         identityNotes: [
           conflictingNames.length > 1
-              ? 'PAN matched directly, but this PAN is associated with multiple normalized seller names in the imported data.'
-              : 'PAN matched directly from source data.',
+              ? ReconciliationRemarkTemplates.panNameMismatch
+              : ReconciliationRemarkTemplates.panMatched,
           extraNotes,
-        ].where((value) => value.trim().isNotEmpty).join(' '),
+        ].where((value) => value.trim().isNotEmpty).join(', '),
         mappingAttempted: mappingAttempted,
         mappingSectionUsed: mappingSectionUsed,
         mappingHit: mappingHit,
@@ -276,9 +277,9 @@ class SellerIdentityResolver {
         identitySource: 'alias',
         identityConfidence: 0.92,
         identityNotes: [
-          'Resolved using saved alias mapping because PAN was missing in the current row.',
+          ReconciliationRemarkTemplates.aliasPanUsed,
           extraNotes,
-        ].where((value) => value.trim().isNotEmpty).join(' '),
+        ].where((value) => value.trim().isNotEmpty).join(', '),
         mappingAttempted: mappingAttempted,
         mappingSectionUsed: mappingSectionUsed,
         mappingHit: mappingHit,
@@ -305,9 +306,9 @@ class SellerIdentityResolver {
           identitySource: 'normalized_name',
           identityConfidence: 0.45,
           identityNotes: [
-            'PAN missing and only one weak PAN observation exists for this normalized seller name, so it was not auto-merged.',
+            ReconciliationRemarkTemplates.weakSellerMatch,
             extraNotes,
-          ].where((value) => value.trim().isNotEmpty).join(' '),
+          ].where((value) => value.trim().isNotEmpty).join(', '),
           mappingAttempted: mappingAttempted,
           mappingSectionUsed: mappingSectionUsed,
           mappingHit: mappingHit,
@@ -325,9 +326,9 @@ class SellerIdentityResolver {
         identitySource: 'normalized_name',
         identityConfidence: 0.8,
         identityNotes: [
-          'PAN missing in this row; resolved to the only PAN repeatedly seen for this normalized seller name.',
+          ReconciliationRemarkTemplates.inferredSellerMatch,
           extraNotes,
-        ].where((value) => value.trim().isNotEmpty).join(' '),
+        ].where((value) => value.trim().isNotEmpty).join(', '),
         mappingAttempted: mappingAttempted,
         mappingSectionUsed: mappingSectionUsed,
         mappingHit: mappingHit,
@@ -348,9 +349,9 @@ class SellerIdentityResolver {
         identitySource: 'normalized_name',
         identityConfidence: 0.35,
         identityNotes: [
-          'PAN missing and the same normalized seller name appears with multiple PANs, so the row was kept name-scoped instead of being merged unsafely.',
+          ReconciliationRemarkTemplates.multiplePansForName,
           extraNotes,
-        ].where((value) => value.trim().isNotEmpty).join(' '),
+        ].where((value) => value.trim().isNotEmpty).join(', '),
         mappingAttempted: mappingAttempted,
         mappingSectionUsed: mappingSectionUsed,
         mappingHit: mappingHit,
@@ -371,9 +372,9 @@ class SellerIdentityResolver {
         identitySource: 'normalized_name',
         identityConfidence: 0.55,
         identityNotes: [
-          'PAN missing; resolved by normalized seller name only.',
+          ReconciliationRemarkTemplates.nameOnlyMatch,
           extraNotes,
-        ].where((value) => value.trim().isNotEmpty).join(' '),
+        ].where((value) => value.trim().isNotEmpty).join(', '),
         mappingAttempted: mappingAttempted,
         mappingSectionUsed: mappingSectionUsed,
         mappingHit: mappingHit,
@@ -392,9 +393,9 @@ class SellerIdentityResolver {
       identitySource: 'fallback',
       identityConfidence: 0.1,
       identityNotes: [
-        'Seller name and PAN were both unavailable after normalization.',
+        ReconciliationRemarkTemplates.sellerIdentityIncomplete,
         extraNotes,
-      ].where((value) => value.trim().isNotEmpty).join(' '),
+      ].where((value) => value.trim().isNotEmpty).join(', '),
       mappingAttempted: mappingAttempted,
       mappingSectionUsed: mappingSectionUsed,
       mappingHit: mappingHit,

@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 
@@ -19,10 +17,7 @@ class ImportSessionCache {
   final Uint8List bytes;
   final SpreadsheetDecoder decoder;
 
-  ImportSessionCache._({
-    required this.bytes,
-    required this.decoder,
-  });
+  ImportSessionCache._({required this.bytes, required this.decoder});
 
   factory ImportSessionCache.fromBytes(List<int> sourceBytes) {
     final bytes = sourceBytes is Uint8List
@@ -73,7 +68,8 @@ class ExcelService {
       final normalizedSheet = sheetName.trim().toLowerCase();
       final matchesSheet =
           sheetPattern.isEmpty || normalizedSheet.contains(sheetPattern);
-      final matchesSignature = profile.sampleSignature.isNotEmpty &&
+      final matchesSignature =
+          profile.sampleSignature.isNotEmpty &&
           profile.sampleSignature == sampleSignature;
 
       if (!_hasRequiredProfileMapping(
@@ -131,10 +127,13 @@ class ExcelService {
     Uint8List bytes, {
     String? preferredSheetName,
   }) async {
-    final payload = await compute(_validateTds26QFileInIsolate, <String, dynamic>{
-      'bytes': bytes,
-      'preferredSheetName': preferredSheetName,
-    });
+    final payload = await compute(
+      _validateTds26QFileInIsolate,
+      <String, dynamic>{
+        'bytes': bytes,
+        'preferredSheetName': preferredSheetName,
+      },
+    );
     return _deserializeValidationForIsolate(payload);
   }
 
@@ -156,14 +155,12 @@ class ExcelService {
     required String defaultSection,
     String sourceFileName = '',
   }) async {
-    final payload = await compute(
-      _parseGenericLedgerRowsInIsolate,
-      <String, dynamic>{
-        'bytes': bytes,
-        'defaultSection': defaultSection,
-        'sourceFileName': sourceFileName,
-      },
-    );
+    final payload =
+        await compute(_parseGenericLedgerRowsInIsolate, <String, dynamic>{
+          'bytes': bytes,
+          'defaultSection': defaultSection,
+          'sourceFileName': sourceFileName,
+        });
     return _deserializeNormalizedLedgerRowsForIsolate(payload);
   }
 
@@ -371,8 +368,7 @@ class ExcelService {
       warnings: List<String>.from(payload['warnings'] as List? ?? const []),
       confidenceScore: (payload['confidenceScore'] as num?)?.toDouble() ?? 0.0,
       requiresManualMapping: payload['requiresManualMapping'] as bool? ?? false,
-      requiresUserSelection:
-          payload['requiresUserSelection'] as bool? ?? false,
+      requiresUserSelection: payload['requiresUserSelection'] as bool? ?? false,
       candidateSheets: List<String>.from(
         payload['candidateSheets'] as List? ?? const [],
       ),
@@ -387,11 +383,11 @@ class ExcelService {
   }
 
   static List<Map<String, dynamic>> excelToMapList(
-      List<int> bytes, {
-        ExcelImportType? forcedType,
-        String? preferredSheetName,
-        ImportSessionCache? sessionCache,
-      }) {
+    List<int> bytes, {
+    ExcelImportType? forcedType,
+    String? preferredSheetName,
+    ImportSessionCache? sessionCache,
+  }) {
     final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
@@ -464,7 +460,8 @@ class ExcelService {
     int headerRowIndex,
     List<dynamic> rawHeaderRow,
     bool headersTrusted,
-  })? inspectExcelFile(
+  })?
+  inspectExcelFile(
     List<int> bytes, {
     ExcelImportType? forcedType,
     String? preferredSheetName,
@@ -616,7 +613,8 @@ class ExcelService {
     bool headersTrusted,
     ExcelValidationResult validation,
     List<PurchaseRow>? parsedRows,
-  })? preparePurchaseUploadData(
+  })?
+  preparePurchaseUploadData(
     List<int> bytes, {
     ImportSessionCache? sessionCache,
   }) {
@@ -715,8 +713,10 @@ class ExcelService {
       );
     }
 
-    final hasSuspiciousAmountCollision =
-        _hasSuspiciousAmountCollision(mappedHeaders, rawHeaderRow);
+    final hasSuspiciousAmountCollision = _hasSuspiciousAmountCollision(
+      mappedHeaders,
+      rawHeaderRow,
+    );
 
     if (hasSuspiciousAmountCollision) {
       warnings.add(
@@ -785,7 +785,10 @@ class ExcelService {
     }
 
     final billAmountSum = parsed.fold<double>(0.0, (s, e) => s + e.billAmount);
-    final basicAmountSum = parsed.fold<double>(0.0, (s, e) => s + e.basicAmount);
+    final basicAmountSum = parsed.fold<double>(
+      0.0,
+      (s, e) => s + e.basicAmount,
+    );
     warnings.addAll(_buildPurchaseWarnings(parsed));
 
     if (billAmountSum > 0 && (billAmountSum - basicAmountSum).abs() < 1) {
@@ -898,7 +901,7 @@ class ExcelService {
     for (final row in deduped.take(5)) {
       _debugVerbose(
         'DEBUG 26Q => month=${row.month}, party=${row.deducteeName}, '
-            'pan=${row.panNumber}, deducted=${row.deductedAmount}, tds=${row.tds}, section=${row.section}',
+        'pan=${row.panNumber}, deducted=${row.deductedAmount}, tds=${row.tds}, section=${row.section}',
       );
     }
 
@@ -938,8 +941,9 @@ class ExcelService {
       forcedType: ExcelImportType.genericLedger,
       sessionCache: sessionCache,
     );
+    final prepared = _prepareGenericLedgerRowMaps(mapList);
 
-    final parsed = mapList
+    final parsed = prepared.rows
         .map(
           (row) => NormalizedLedgerRow.fromMap(
             row,
@@ -948,6 +952,8 @@ class ExcelService {
           ),
         )
         .toList();
+
+    _logGenericLedgerImportAudit(prepared);
 
     return _dedupeNormalizedLedgerRows(parsed);
   }
@@ -971,8 +977,9 @@ class ExcelService {
       columnMapping: columnMapping,
       sessionCache: sessionCache,
     );
+    final prepared = _prepareGenericLedgerRowMaps(mapList);
 
-    final parsed = mapList
+    final parsed = prepared.rows
         .map(
           (row) => NormalizedLedgerRow.fromMap(
             row,
@@ -981,6 +988,8 @@ class ExcelService {
           ),
         )
         .toList();
+
+    _logGenericLedgerImportAudit(prepared);
 
     return _dedupeNormalizedLedgerRows(parsed);
   }
@@ -1010,9 +1019,7 @@ class ExcelService {
 
     final table = decoder.tables[sheetInfo.sheetName];
     if (table == null || table.rows.isEmpty) {
-      return ExcelValidationResult.invalid(
-        'Detected purchase sheet is empty.',
-      );
+      return ExcelValidationResult.invalid('Detected purchase sheet is empty.');
     }
 
     final rawHeaderRow = table.rows[sheetInfo.headerRowIndex];
@@ -1084,8 +1091,10 @@ class ExcelService {
       );
     }
 
-    final hasSuspiciousAmountCollision =
-        _hasSuspiciousAmountCollision(mappedHeaders, rawHeaderRow);
+    final hasSuspiciousAmountCollision = _hasSuspiciousAmountCollision(
+      mappedHeaders,
+      rawHeaderRow,
+    );
 
     if (hasSuspiciousAmountCollision) {
       warnings.add(
@@ -1140,7 +1149,10 @@ class ExcelService {
     }
 
     final billAmountSum = parsed.fold<double>(0.0, (s, e) => s + e.billAmount);
-    final basicAmountSum = parsed.fold<double>(0.0, (s, e) => s + e.basicAmount);
+    final basicAmountSum = parsed.fold<double>(
+      0.0,
+      (s, e) => s + e.basicAmount,
+    );
     warnings.addAll(_buildPurchaseWarnings(parsed));
 
     if (billAmountSum > 0 && (billAmountSum - basicAmountSum).abs() < 1) {
@@ -1187,13 +1199,12 @@ class ExcelService {
     }
 
     final selectableSheets = _list26QSelectableSheetsFromDecoder(decoder);
-    final preferred26QSheet = preferredSheetName ??
-        _detectBest26QSheet(
-          {
-            for (final entry in decoder.tables.entries)
-              entry.key: entry.value.rows,
-          },
-        );
+    final preferred26QSheet =
+        preferredSheetName ??
+        _detectBest26QSheet({
+          for (final entry in decoder.tables.entries)
+            entry.key: entry.value.rows,
+        });
 
     if (preferred26QSheet == null) {
       return ExcelValidationResult.selectionRequired(
@@ -1215,9 +1226,7 @@ class ExcelService {
 
     final table = decoder.tables[sheetInfo.sheetName];
     if (table == null || table.rows.isEmpty) {
-      return ExcelValidationResult.invalid(
-        'Detected 26Q sheet is empty.',
-      );
+      return ExcelValidationResult.invalid('Detected 26Q sheet is empty.');
     }
 
     final mappedHeaders = _resolveMappedHeaders(
@@ -1240,12 +1249,10 @@ class ExcelService {
 
     final missing = <String>[
       if (!presentHeaders.contains('date_month')) 'Date / Month',
-      if (!presentHeaders.contains('party_name') &&
-          !presentHeaders.contains('pan_number'))
-        'Party Name or PAN',
+      if (!presentHeaders.contains('party_name')) 'Party Name',
+      if (!presentHeaders.contains('pan_number')) 'PAN',
       if (!presentHeaders.contains('amount_paid')) 'Amount Paid',
-      if (!presentHeaders.contains('tds_amount'))
-        'TDS',
+      if (!presentHeaders.contains('tds_amount')) 'TDS',
       if (!presentHeaders.contains('section')) 'Section',
     ];
 
@@ -1288,8 +1295,9 @@ class ExcelService {
       );
     }
 
-    final validAmountRows =
-        parsed.where((e) => e.deductedAmount > 0 || e.tds > 0).length;
+    final validAmountRows = parsed
+        .where((e) => e.deductedAmount > 0 || e.tds > 0)
+        .length;
     if (validAmountRows == 0) {
       return ExcelValidationResult.invalid(
         'Amount Paid / TDS Amount columns could not be read correctly. All values are zero.',
@@ -1304,7 +1312,7 @@ class ExcelService {
 
     warnings.addAll(_buildTdsWarnings(parsed));
 
-      return ExcelValidationResult.valid(
+    return ExcelValidationResult.valid(
       detectedSheet: sheetInfo.sheetName,
       headerRowIndex: sheetInfo.headerRowIndex,
       detectedType: sheetInfo.detectedType,
@@ -1344,9 +1352,7 @@ class ExcelService {
 
     final table = decoder.tables[sheetInfo.sheetName];
     if (table == null || table.rows.isEmpty) {
-      return ExcelValidationResult.invalid(
-        'Detected ledger sheet is empty.',
-      );
+      return ExcelValidationResult.invalid('Detected ledger sheet is empty.');
     }
 
     final rawHeaderRow = table.rows[sheetInfo.headerRowIndex];
@@ -1454,19 +1460,16 @@ class ExcelService {
   }
 
   static List<String> getSheetHeaders(
-      List<int> bytes, {
-        ExcelImportType? forcedType,
-      }) {
+    List<int> bytes, {
+    ExcelImportType? forcedType,
+  }) {
     final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
 
     if (decoder.tables.isEmpty) {
       return [];
     }
 
-    final sheetInfo = _findBestSheetAndHeader(
-      decoder,
-      forcedType: forcedType,
-    );
+    final sheetInfo = _findBestSheetAndHeader(decoder, forcedType: forcedType);
 
     if (sheetInfo == null) {
       return [];
@@ -1498,24 +1501,24 @@ class ExcelService {
   }
 
   static ({
-  String sheetName,
-  int headerRowIndex,
-  ExcelImportType detectedType,
-  bool headersTrusted,
-  })? _findBestSheetAndHeader(
-      SpreadsheetDecoder decoder, {
-        ExcelImportType? forcedType,
-        String? preferredSheetName,
-      }) {
-    final preferred26QSheet = preferredSheetName ??
+    String sheetName,
+    int headerRowIndex,
+    ExcelImportType detectedType,
+    bool headersTrusted,
+  })?
+  _findBestSheetAndHeader(
+    SpreadsheetDecoder decoder, {
+    ExcelImportType? forcedType,
+    String? preferredSheetName,
+  }) {
+    final preferred26QSheet =
+        preferredSheetName ??
         (forcedType == ExcelImportType.tds26q
-        ? _detectBest26QSheet(
-            {
-              for (final entry in decoder.tables.entries)
-                entry.key: entry.value.rows,
-            },
-          )
-        : null);
+            ? _detectBest26QSheet({
+                for (final entry in decoder.tables.entries)
+                  entry.key: entry.value.rows,
+              })
+            : null);
 
     if (forcedType == ExcelImportType.tds26q &&
         preferredSheetName == null &&
@@ -1526,12 +1529,13 @@ class ExcelService {
       return null;
     }
     ({
-    String sheetName,
-    int headerRowIndex,
-    ExcelImportType detectedType,
-    bool headersTrusted,
-    int score,
-    })? best;
+      String sheetName,
+      int headerRowIndex,
+      ExcelImportType detectedType,
+      bool headersTrusted,
+      int score,
+    })?
+    best;
 
     for (final entry in decoder.tables.entries) {
       final sheetName = entry.key;
@@ -1553,6 +1557,24 @@ class ExcelService {
         }
       }
 
+      if (forcedType == ExcelImportType.genericLedger) {
+        final ledgerCandidate = _detectGenericLedgerHeaderCandidate(
+          table.rows,
+          sheetName: sheetName,
+        );
+        if (ledgerCandidate != null &&
+            (best == null || ledgerCandidate.score > best.score)) {
+          best = (
+            sheetName: sheetName,
+            headerRowIndex: ledgerCandidate.headerRowIndex,
+            detectedType: ExcelImportType.genericLedger,
+            headersTrusted: ledgerCandidate.headersTrusted,
+            score: ledgerCandidate.score,
+          );
+        }
+        continue;
+      }
+
       for (int i = 0; i < table.rows.length && i < 20; i++) {
         final row = table.rows[i];
 
@@ -1562,10 +1584,7 @@ class ExcelService {
         );
         bool purchaseHeadersTrusted = purchaseScore > 0;
 
-        int tdsScore = _scoreHeaderRow(
-          row,
-          type: ExcelImportType.tds26q,
-        );
+        int tdsScore = _scoreHeaderRow(row, type: ExcelImportType.tds26q);
         bool tdsHeadersTrusted = tdsScore > 0;
 
         if (purchaseScore < 40 && i + 1 < table.rows.length) {
@@ -1611,53 +1630,50 @@ class ExcelService {
           type: ExcelImportType.purchase,
         );
 
-        tdsScore += _sheetNameBonus(
-          sheetName,
-          type: ExcelImportType.tds26q,
-        );
+        tdsScore += _sheetNameBonus(sheetName, type: ExcelImportType.tds26q);
 
         if (forcedType == ExcelImportType.purchase) {
           if (purchaseScore >= 40 &&
               (best == null || purchaseScore > best.score)) {
-              best = (
+            best = (
               sheetName: sheetName,
               headerRowIndex: i,
               detectedType: ExcelImportType.purchase,
               headersTrusted: purchaseHeadersTrusted,
               score: purchaseScore,
-              );
-            }
-          } else if (forcedType == ExcelImportType.tds26q) {
-            if (tdsScore >= 40 && (best == null || tdsScore > best.score)) {
-              best = (
+            );
+          }
+        } else if (forcedType == ExcelImportType.tds26q) {
+          if (tdsScore >= 40 && (best == null || tdsScore > best.score)) {
+            best = (
               sheetName: sheetName,
               headerRowIndex: i,
               detectedType: ExcelImportType.tds26q,
               headersTrusted: tdsHeadersTrusted,
               score: tdsScore,
-              );
-            }
-          } else {
-            if (purchaseScore >= 40 &&
-                (best == null || purchaseScore > best.score)) {
-              best = (
+            );
+          }
+        } else {
+          if (purchaseScore >= 40 &&
+              (best == null || purchaseScore > best.score)) {
+            best = (
               sheetName: sheetName,
               headerRowIndex: i,
               detectedType: ExcelImportType.purchase,
               headersTrusted: purchaseHeadersTrusted,
               score: purchaseScore,
-              );
-            }
+            );
+          }
 
-            if (tdsScore >= 40 && (best == null || tdsScore > best.score)) {
-              best = (
+          if (tdsScore >= 40 && (best == null || tdsScore > best.score)) {
+            best = (
               sheetName: sheetName,
               headerRowIndex: i,
               detectedType: ExcelImportType.tds26q,
               headersTrusted: tdsHeadersTrusted,
               score: tdsScore,
-              );
-            }
+            );
+          }
         }
       }
     }
@@ -1682,10 +1698,10 @@ class ExcelService {
     debugPrint('DETECTION CONFIDENCE => $confidenceScore');
 
     return (
-    sheetName: best.sheetName,
-    headerRowIndex: best.headerRowIndex,
-    detectedType: best.detectedType,
-    headersTrusted: best.headersTrusted,
+      sheetName: best.sheetName,
+      headerRowIndex: best.headerRowIndex,
+      detectedType: best.detectedType,
+      headersTrusted: best.headersTrusted,
     );
   }
 
@@ -1787,10 +1803,13 @@ class ExcelService {
         .where((value) => value.isNotEmpty)
         .toList();
 
-    final hasReferenceHeaders = normalizedHeaders.any(
+    final hasReferenceHeaders =
+        normalizedHeaders.any(
           (header) => header == 'name' || header.contains('deductee'),
         ) &&
-        normalizedHeaders.any((header) => header == 'pan' || header.contains('pan')) &&
+        normalizedHeaders.any(
+          (header) => header == 'pan' || header.contains('pan'),
+        ) &&
         normalizedHeaders.any(
           (header) =>
               header.contains('type of deductee') ||
@@ -1805,7 +1824,8 @@ class ExcelService {
 
     if (!hasReferenceHeaders) return false;
 
-    final hasTransactionSignals = _containsSectionValues(rows) ||
+    final hasTransactionSignals =
+        _containsSectionValues(rows) ||
         _containsDateLikeValues(rows) ||
         _containsLargeAmountColumn(rows) ||
         _containsTdsAmountColumn(rows);
@@ -1854,14 +1874,17 @@ class ExcelService {
     final headerIndex = _findLikely26QHeaderRowIndex(rows);
     final headerRow = rows[headerIndex];
     final dataRows = rows.skip(headerIndex + 1).take(20).toList();
-    final width =
-        rows.fold<int>(0, (max, row) => row.length > max ? row.length : max);
+    final width = rows.fold<int>(
+      0,
+      (max, row) => row.length > max ? row.length : max,
+    );
 
     for (int column = 0; column < width; column++) {
       final header = column < headerRow.length
           ? _normalizeLooseText(headerRow[column]?.toString() ?? '')
           : '';
-      final headerHintsAmountPaid = header.contains('amount paid') ||
+      final headerHintsAmountPaid =
+          header.contains('amount paid') ||
           header.contains('amount credited') ||
           header.contains('amount paid credited') ||
           header.contains('paid credited');
@@ -1895,14 +1918,17 @@ class ExcelService {
     final headerIndex = _findLikely26QHeaderRowIndex(rows);
     final headerRow = rows[headerIndex];
     final dataRows = rows.skip(headerIndex + 1).take(20).toList();
-    final width =
-        rows.fold<int>(0, (max, row) => row.length > max ? row.length : max);
+    final width = rows.fold<int>(
+      0,
+      (max, row) => row.length > max ? row.length : max,
+    );
 
     for (int column = 0; column < width; column++) {
       final header = column < headerRow.length
           ? _normalizeLooseText(headerRow[column]?.toString() ?? '')
           : '';
-      final headerHintsTds = header == 'tds' ||
+      final headerHintsTds =
+          header == 'tds' ||
           header.contains('tds amount') ||
           header.contains('deducted amount') ||
           header.contains('deducted and deposited tax') ||
@@ -1943,10 +1969,7 @@ class ExcelService {
     var bestScore = -1;
 
     for (int i = 0; i < rows.length && i < 10; i++) {
-      final score = _scoreHeaderRow(
-        rows[i],
-        type: ExcelImportType.tds26q,
-      );
+      final score = _scoreHeaderRow(rows[i], type: ExcelImportType.tds26q);
       if (score > bestScore) {
         bestScore = score;
         bestIndex = i;
@@ -1965,15 +1988,15 @@ class ExcelService {
     return double.tryParse(text);
   }
 
-  static String inferSection(
-    double amount,
-    double tds, {
-    String? sectionHint,
-  }) {
+  static String inferSection(double amount, double tds, {String? sectionHint}) {
     final normalizedHint = normalizeSection(sectionHint ?? '');
     if (normalizedHint == '194Q' ||
         normalizedHint == '194C' ||
+        normalizedHint == '194J_A' ||
+        normalizedHint == '194J_B' ||
         normalizedHint == '194J' ||
+        normalizedHint == '194I_A' ||
+        normalizedHint == '194I_B' ||
         normalizedHint == '194I' ||
         normalizedHint == '194A' ||
         normalizedHint == '194H') {
@@ -1992,9 +2015,9 @@ class ExcelService {
   }
 
   static int _sheetNameBonus(
-      String sheetName, {
-        required ExcelImportType type,
-      }) {
+    String sheetName, {
+    required ExcelImportType type,
+  }) {
     final name = sheetName.trim().toLowerCase();
 
     if (type == ExcelImportType.purchase) {
@@ -2027,13 +2050,10 @@ class ExcelService {
   }
 
   static int _scoreHeaderRow(
-      List<dynamic> row, {
-        required ExcelImportType type,
-      }) {
-    final mappedHeaders = _buildMappedHeaders(
-      row,
-      forcedType: type,
-    );
+    List<dynamic> row, {
+    required ExcelImportType type,
+  }) {
+    final mappedHeaders = _buildMappedHeaders(row, forcedType: type);
 
     final presentHeaders = mappedHeaders.whereType<String>().toSet();
 
@@ -2054,13 +2074,14 @@ class ExcelService {
 
     if (type == ExcelImportType.genericLedger) {
       int score = 0;
-      if (presentHeaders.contains('date')) score += 25;
-      if (presentHeaders.contains('party_name')) score += 25;
-      if (presentHeaders.contains('amount')) score += 30;
+      if (presentHeaders.contains('date')) score += 35;
+      if (presentHeaders.contains('party_name')) score += 35;
+      if (presentHeaders.contains('amount')) score += 35;
+      if (presentHeaders.contains('bill_no')) score += 12;
+      if (presentHeaders.contains('description')) score += 10;
       if (presentHeaders.contains('pan_number')) score += 10;
       if (presentHeaders.contains('gst_no')) score += 5;
-      if (presentHeaders.contains('bill_no')) score += 5;
-      if (presentHeaders.contains('description')) score += 5;
+      if (presentHeaders.length >= 4) score += 8;
       return score;
     }
 
@@ -2125,12 +2146,13 @@ class ExcelService {
 
     int matchedRequired = 0;
     if (presentHeaders.contains('date_month')) matchedRequired++;
+    if (presentHeaders.contains('party_name')) matchedRequired++;
     if (presentHeaders.contains('pan_number')) matchedRequired++;
     if (presentHeaders.contains('amount_paid')) matchedRequired++;
     if (presentHeaders.contains('tds_amount')) matchedRequired++;
     if (presentHeaders.contains('section')) matchedRequired++;
 
-    return (matchedRequired / 5.0).clamp(0.0, 1.0);
+    return (matchedRequired / 6.0).clamp(0.0, 1.0);
   }
 
   static List<String> _extractUnmappedRawHeaders(
@@ -2169,10 +2191,7 @@ class ExcelService {
     required bool headersTrusted,
   }) {
     if (headersTrusted) {
-      return _buildMappedHeaders(
-        rows[headerRowIndex],
-        forcedType: forcedType,
-      );
+      return _buildMappedHeaders(rows[headerRowIndex], forcedType: forcedType);
     }
 
     return _inferMappedHeadersFromDataRows(
@@ -2304,10 +2323,9 @@ class ExcelService {
     required Map<String, String> columnMapping,
   }) {
     if (fileType == 'tds26q') {
-      final hasPartyIdentity = columnMapping.containsKey('party_name') ||
-          columnMapping.containsKey('pan_number');
       return columnMapping.containsKey('date_month') &&
-          hasPartyIdentity &&
+          columnMapping.containsKey('party_name') &&
+          columnMapping.containsKey('pan_number') &&
           columnMapping.containsKey('amount_paid') &&
           columnMapping.containsKey('tds_amount') &&
           columnMapping.containsKey('section');
@@ -2328,8 +2346,10 @@ class ExcelService {
   }) {
     if (rows.isEmpty) return const [];
 
-    final width =
-        rows.fold<int>(0, (max, row) => row.length > max ? row.length : max);
+    final width = rows.fold<int>(
+      0,
+      (max, row) => row.length > max ? row.length : max,
+    );
     final mapped = List<String?>.filled(width, null);
     final assigned = <String>{};
     int? bestSectionColumn;
@@ -2431,8 +2451,8 @@ class ExcelService {
       final amountKey = type == ExcelImportType.purchase
           ? 'bill_amount'
           : type == ExcelImportType.genericLedger
-              ? 'amount'
-              : 'amount_paid';
+          ? 'amount'
+          : 'amount_paid';
 
       if (profile.dateCount >= 3) {
         addScore(type == ExcelImportType.purchase ? 'date' : dateKey, 18);
@@ -2459,7 +2479,8 @@ class ExcelService {
             addScore('basic_amount', 8);
           }
         } else if (type == ExcelImportType.genericLedger) {
-          if (profile.largeNumericCount >= 2 || profile.smallNumericCount >= 2) {
+          if (profile.largeNumericCount >= 2 ||
+              profile.smallNumericCount >= 2) {
             addScore('amount', 18);
           }
         } else {
@@ -2518,12 +2539,16 @@ class ExcelService {
     return mapped;
   }
 
-  static List<String> _columnSamples(List<List<dynamic>> rows, int columnIndex) {
+  static List<String> _columnSamples(
+    List<List<dynamic>> rows,
+    int columnIndex,
+  ) {
     return rows
         .take(8)
         .map(
-          (row) =>
-              columnIndex < row.length ? (row[columnIndex]?.toString().trim() ?? '') : '',
+          (row) => columnIndex < row.length
+              ? (row[columnIndex]?.toString().trim() ?? '')
+              : '',
         )
         .where((e) => e.isNotEmpty)
         .toList();
@@ -2540,7 +2565,8 @@ class ExcelService {
       int largeNumericCount,
       int textCount,
       int alphaNumericCount,
-    }) profile,
+    })
+    profile,
   ) {
     final scores = <String, int>{};
 
@@ -2618,7 +2644,8 @@ class ExcelService {
     int largeNumericCount,
     int textCount,
     int alphaNumericCount,
-  }) _analyzeColumnProfile(List<String> samples) {
+  })
+  _analyzeColumnProfile(List<String> samples) {
     var dateCount = 0;
     var panCount = 0;
     var gstCount = 0;
@@ -2661,18 +2688,19 @@ class ExcelService {
   }
 
   static bool _looksLikeDateText(String value) {
-    return RegExp(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$')
-        .hasMatch(value.trim());
+    return RegExp(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$').hasMatch(value.trim());
   }
 
   static bool _looksLikePanText(String value) {
-    return RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$')
-        .hasMatch(value.trim().toUpperCase());
+    return RegExp(
+      r'^[A-Z]{5}[0-9]{4}[A-Z]$',
+    ).hasMatch(value.trim().toUpperCase());
   }
 
   static bool _looksLikeGstText(String value) {
-    return RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9]$')
-        .hasMatch(value.trim().toUpperCase());
+    return RegExp(
+      r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9]$',
+    ).hasMatch(value.trim().toUpperCase());
   }
 
   static bool _looksLikeAmountText(String value) {
@@ -2713,11 +2741,18 @@ class ExcelService {
   }
 
   static List<String?> _buildMappedHeaders(
-      List<dynamic> rawHeaderRow, {
-        required ExcelImportType forcedType,
-      }) {
+    List<dynamic> rawHeaderRow, {
+    required ExcelImportType forcedType,
+  }) {
     final usedCanonical = <String>{};
     final mapped = <String?>[];
+    final preferDebitAmount =
+        forcedType == ExcelImportType.genericLedger &&
+        rawHeaderRow.any(
+          (cell) => _isPreferredDebitHeader(
+            _normalizeLooseText(cell?.toString() ?? ''),
+          ),
+        );
 
     for (final cell in rawHeaderRow) {
       final raw = cell?.toString() ?? '';
@@ -2725,6 +2760,7 @@ class ExcelService {
         raw,
         type: forcedType,
         usedCanonical: usedCanonical,
+        preferDebitAmount: preferDebitAmount,
       );
 
       if (canonical != null) {
@@ -2738,10 +2774,11 @@ class ExcelService {
   }
 
   static String? _detectCanonicalHeader(
-      String raw, {
-        required ExcelImportType type,
-        required Set<String> usedCanonical,
-      }) {
+    String raw, {
+    required ExcelImportType type,
+    required Set<String> usedCanonical,
+    bool preferDebitAmount = false,
+  }) {
     final normalized = _normalizeLooseText(raw);
     if (normalized.isEmpty) return null;
 
@@ -2756,11 +2793,22 @@ class ExcelService {
       }
     }
 
+    if (type == ExcelImportType.genericLedger &&
+        _shouldIgnoreGenericLedgerHeader(normalized)) {
+      return null;
+    }
+
+    if (type == ExcelImportType.genericLedger &&
+        preferDebitAmount &&
+        _isCreditOnlyHeader(normalized)) {
+      return null;
+    }
+
     final dictionary = type == ExcelImportType.purchase
         ? _purchaseHeaderDictionary
         : type == ExcelImportType.genericLedger
-            ? _genericLedgerHeaderDictionary
-            : _tdsHeaderDictionary;
+        ? _genericLedgerHeaderDictionary
+        : _tdsHeaderDictionary;
 
     String? bestKey;
     int bestScore = 0;
@@ -2813,6 +2861,27 @@ class ExcelService {
     return null;
   }
 
+  static bool _shouldIgnoreGenericLedgerHeader(String normalized) {
+    return normalized.contains('closing balance') ||
+        normalized.contains('opening balance') ||
+        normalized == 'balance' ||
+        normalized.contains('running balance');
+  }
+
+  static bool _isPreferredDebitHeader(String normalized) {
+    return normalized == 'debit' ||
+        normalized == 'debit amount' ||
+        normalized == 'dr' ||
+        normalized == 'dr amount';
+  }
+
+  static bool _isCreditOnlyHeader(String normalized) {
+    return normalized == 'credit' ||
+        normalized == 'credit amount' ||
+        normalized == 'cr' ||
+        normalized == 'cr amount';
+  }
+
   static bool _shouldIgnorePurchaseHeader(String normalized) {
     if (normalized.contains('tax amount') && !normalized.contains('taxable')) {
       return true;
@@ -2833,7 +2902,9 @@ class ExcelService {
     final bWords = b.split(' ').where((e) => e.isNotEmpty).toSet();
 
     final common = aWords.intersection(bWords).length;
-    final maxLen = aWords.length > bWords.length ? aWords.length : bWords.length;
+    final maxLen = aWords.length > bWords.length
+        ? aWords.length
+        : bWords.length;
 
     final wordScore = maxLen == 0 ? 0 : ((common / maxLen) * 100).round();
 
@@ -2841,9 +2912,9 @@ class ExcelService {
   }
 
   static bool _hasSuspiciousAmountCollision(
-      List<String?> mappedHeaders,
-      List<dynamic> rawHeaders,
-      ) {
+    List<String?> mappedHeaders,
+    List<dynamic> rawHeaders,
+  ) {
     final hasExplicitBasicAmount = mappedHeaders.contains('basic_amount');
     final hasExplicitBillAmount = mappedHeaders.contains('bill_amount');
 
@@ -2874,9 +2945,9 @@ class ExcelService {
   }
 
   static Map<String, String> _headerPreviewMap(
-      List<dynamic> rawHeaders,
-      List<String?> mappedHeaders,
-      ) {
+    List<dynamic> rawHeaders,
+    List<String?> mappedHeaders,
+  ) {
     final result = <String, String>{};
 
     for (int i = 0; i < rawHeaders.length; i++) {
@@ -2967,7 +3038,9 @@ class ExcelService {
 
     final zeroBasic = rows.where((e) => e.basicAmount <= 0).length;
     if (zeroBasic > 0) {
-      warnings.add('$zeroBasic purchase rows have zero or negative Basic Amount.');
+      warnings.add(
+        '$zeroBasic purchase rows have zero or negative Basic Amount.',
+      );
     }
 
     final missingParty = rows.where((e) => e.partyName.trim().isEmpty).length;
@@ -2981,7 +3054,9 @@ class ExcelService {
     }
 
     final invalidPan = rows
-        .where((e) => e.panNumber.trim().isNotEmpty && !_isValidPan(e.panNumber))
+        .where(
+          (e) => e.panNumber.trim().isNotEmpty && !_isValidPan(e.panNumber),
+        )
         .length;
     if (invalidPan > 0) {
       warnings.add('$invalidPan purchase rows have invalid PAN format.');
@@ -2999,7 +3074,9 @@ class ExcelService {
     }
 
     final invalidPan = rows
-        .where((e) => e.panNumber.trim().isNotEmpty && !_isValidPan(e.panNumber))
+        .where(
+          (e) => e.panNumber.trim().isNotEmpty && !_isValidPan(e.panNumber),
+        )
         .length;
     if (invalidPan > 0) {
       warnings.add('$invalidPan 26Q rows have invalid PAN format.');
@@ -3010,10 +3087,13 @@ class ExcelService {
       warnings.add('$missingMonth 26Q rows have unreadable Date / Month.');
     }
 
-    final zeroAmounts =
-        rows.where((e) => e.deductedAmount <= 0 && e.tds <= 0).length;
+    final zeroAmounts = rows
+        .where((e) => e.deductedAmount <= 0 && e.tds <= 0)
+        .length;
     if (zeroAmounts > 0) {
-      warnings.add('$zeroAmounts 26Q rows have both Amount Paid and TDS Amount as zero.');
+      warnings.add(
+        '$zeroAmounts 26Q rows have both Amount Paid and TDS Amount as zero.',
+      );
     }
 
     final missingSection = rows.where((e) => e.section.trim().isEmpty).length;
@@ -3084,6 +3164,222 @@ class ExcelService {
     }
 
     return map.values.toList();
+  }
+
+  static ({
+    List<Map<String, dynamic>> rows,
+    int sourceRowCount,
+    int parsedTransactionCount,
+    int continuationMergedCount,
+    int invalidRowsSkippedCount,
+  })
+  _prepareGenericLedgerRowMaps(List<Map<String, dynamic>> rawRows) {
+    final preparedRows = <Map<String, dynamic>>[];
+    var continuationMergedCount = 0;
+    var invalidRowsSkippedCount = 0;
+
+    for (int i = 0; i < rawRows.length; i++) {
+      final currentRow = Map<String, dynamic>.from(rawRows[i]);
+      final classification = _classifyGenericLedgerRow(currentRow);
+
+      if (classification == _GenericLedgerRowType.continuation) {
+        if (preparedRows.isNotEmpty) {
+          final previous = preparedRows.last;
+          previous['description'] = _appendGenericLedgerNarration(
+            previous['description']?.toString() ?? '',
+            _extractContinuationNarration(currentRow),
+          );
+          continuationMergedCount++;
+          continue;
+        }
+
+        invalidRowsSkippedCount++;
+        debugPrint(
+          'GENERIC LEDGER ROW CLASS => row=${i + 1} type=continuation skippedReason=noPreviousTransaction',
+        );
+        continue;
+      }
+
+      if (classification == _GenericLedgerRowType.invalid) {
+        invalidRowsSkippedCount++;
+        debugPrint(
+          'GENERIC LEDGER ROW CLASS => row=${i + 1} type=invalid skippedReason=noAmountAndNoNarration',
+        );
+        continue;
+      }
+
+      if (_isSuspiciousPlaceholderLedgerDate(
+        readAny(currentRow, ['date']) ?? '',
+      )) {
+        final rawDate = (readAny(currentRow, ['date']) ?? '').trim();
+        currentRow['date'] = '';
+        currentRow['description'] = _appendGenericLedgerNarration(
+          currentRow['description']?.toString() ?? '',
+          'Placeholder date requires review: $rawDate',
+        );
+      }
+
+      preparedRows.add(currentRow);
+      debugPrint('GENERIC LEDGER ROW CLASS => row=${i + 1} type=transaction');
+    }
+
+    return (
+      rows: preparedRows,
+      sourceRowCount: rawRows.length,
+      parsedTransactionCount: preparedRows.length,
+      continuationMergedCount: continuationMergedCount,
+      invalidRowsSkippedCount: invalidRowsSkippedCount,
+    );
+  }
+
+  static _GenericLedgerRowType _classifyGenericLedgerRow(
+    Map<String, dynamic> row,
+  ) {
+    final rawDate = (readAny(row, ['date']) ?? '').trim();
+    final amount = parseDouble(readAny(row, ['amount']) ?? '');
+    final hasAmount = amount.abs() > 0.0001;
+    final hasValidDate =
+        rawDate.isNotEmpty && !_isSuspiciousPlaceholderLedgerDate(rawDate);
+    final hasSuspiciousPlaceholderDate = _isSuspiciousPlaceholderLedgerDate(
+      rawDate,
+    );
+    final hasNarration = _extractContinuationNarration(row).isNotEmpty;
+
+    if (!hasAmount &&
+        hasNarration &&
+        (!hasValidDate || hasSuspiciousPlaceholderDate)) {
+      return _GenericLedgerRowType.continuation;
+    }
+
+    if (hasAmount) {
+      return _GenericLedgerRowType.transaction;
+    }
+
+    if (hasValidDate && hasNarration) {
+      return _GenericLedgerRowType.transaction;
+    }
+
+    return _GenericLedgerRowType.invalid;
+  }
+
+  static bool _isSuspiciousPlaceholderLedgerDate(String rawDate) {
+    final value = rawDate.trim();
+    if (value.isEmpty) return false;
+
+    final parsed = _tryParseDate(value);
+    if (parsed == null) return false;
+
+    if (parsed.year <= 1900) return true;
+
+    return value == '31/01/1900' ||
+        value == '31-01-1900' ||
+        value == '1900-01-31';
+  }
+
+  static String _extractContinuationNarration(Map<String, dynamic> row) {
+    final parts = <String>[
+      (readAny(row, ['party_name']) ?? '').trim(),
+      (readAny(row, ['description']) ?? '').trim(),
+      (readAny(row, ['bill_no']) ?? '').trim(),
+    ].where((value) => value.isNotEmpty).toList();
+
+    final uniqueParts = <String>[];
+    for (final part in parts) {
+      if (!uniqueParts.any(
+        (existing) => existing.toLowerCase() == part.toLowerCase(),
+      )) {
+        uniqueParts.add(part);
+      }
+    }
+
+    return uniqueParts.join(' | ');
+  }
+
+  static String _appendGenericLedgerNarration(
+    String existing,
+    String addition,
+  ) {
+    final normalizedExisting = existing.trim();
+    final normalizedAddition = addition.trim();
+
+    if (normalizedAddition.isEmpty) return normalizedExisting;
+    if (normalizedExisting.isEmpty) return normalizedAddition;
+
+    final lowerExisting = normalizedExisting.toLowerCase();
+    final lowerAddition = normalizedAddition.toLowerCase();
+    if (lowerExisting.contains(lowerAddition)) {
+      return normalizedExisting;
+    }
+
+    return '$normalizedExisting | $normalizedAddition';
+  }
+
+  static DateTime? _tryParseDate(dynamic value) {
+    if (value == null) return null;
+
+    if (value is DateTime) {
+      return DateTime(value.year, value.month, value.day);
+    }
+
+    if (value is num) {
+      if (_looksLikeExcelDate(value)) {
+        final date = _excelSerialToDate(value);
+        return DateTime(date.year, date.month, date.day);
+      }
+      return null;
+    }
+
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+
+    final direct = DateTime.tryParse(text);
+    if (direct != null) {
+      return DateTime(direct.year, direct.month, direct.day);
+    }
+
+    final numeric = double.tryParse(text);
+    if (numeric != null && _looksLikeExcelDate(numeric)) {
+      final date = _excelSerialToDate(numeric);
+      return DateTime(date.year, date.month, date.day);
+    }
+
+    final normalized = text.replaceAll('/', '-').replaceAll('.', '-');
+    final parts = normalized.split('-');
+    if (parts.length != 3) return null;
+
+    final first = int.tryParse(parts[0]);
+    final second = int.tryParse(parts[1]);
+    final third = int.tryParse(parts[2]);
+    if (first == null || second == null || third == null) return null;
+
+    if (first > 1900) {
+      return DateTime(first, second, third);
+    }
+
+    if (third > 1900) {
+      return DateTime(third, second, first);
+    }
+
+    return null;
+  }
+
+  static void _logGenericLedgerImportAudit(
+    ({
+      List<Map<String, dynamic>> rows,
+      int sourceRowCount,
+      int parsedTransactionCount,
+      int continuationMergedCount,
+      int invalidRowsSkippedCount,
+    })
+    audit,
+  ) {
+    debugPrint(
+      'GENERIC LEDGER IMPORT AUDIT => '
+      'sourceRows=${audit.sourceRowCount} '
+      'parsedTransactions=${audit.parsedTransactionCount} '
+      'continuationMerged=${audit.continuationMergedCount} '
+      'invalidSkipped=${audit.invalidRowsSkippedCount}',
+    );
   }
 
   static dynamic _normalizeCellValue(dynamic value) {
@@ -3172,11 +3468,7 @@ class ExcelService {
       'voucher date',
       'document date',
     ],
-    'eom': [
-      'eom',
-      'end of month',
-      'month end',
-    ],
+    'eom': ['eom', 'end of month', 'month end'],
     'party_name': [
       'party name',
       'party_name',
@@ -3197,13 +3489,7 @@ class ExcelService {
       'gstin number',
       'gst',
     ],
-    'pan_number': [
-      'pan',
-      'pan no',
-      'pan no.',
-      'pan number',
-      'panno',
-    ],
+    'pan_number': ['pan', 'pan no', 'pan no.', 'pan number', 'panno'],
     'productname': [
       'product name',
       'productname',
@@ -3255,13 +3541,7 @@ class ExcelService {
       'supplier',
       'seller name',
     ],
-    'pan_number': [
-      'pan',
-      'pan no',
-      'pan number',
-      'panno',
-      'deductee pan',
-    ],
+    'pan_number': ['pan', 'pan no', 'pan number', 'panno', 'deductee pan'],
     'amount_paid': [
       'deducted amount',
       'deducted amt',
@@ -3293,12 +3573,7 @@ class ExcelService {
       'payment nature',
       'tds nature',
     ],
-    'challan': [
-      'challan',
-      'chalan',
-      'challan id no details',
-      'challan id no',
-    ],
+    'challan': ['challan', 'chalan', 'challan id no details', 'challan id no'],
   };
 
   static const Map<String, List<String>> _genericLedgerHeaderDictionary = {
@@ -3313,6 +3588,7 @@ class ExcelService {
       'transaction date',
     ],
     'party_name': [
+      'particulars',
       'party name',
       'party',
       'ledger name',
@@ -3321,37 +3597,39 @@ class ExcelService {
       'supplier name',
       'name',
     ],
-    'pan_number': [
-      'pan',
-      'pan no',
-      'pan number',
-      'panno',
-    ],
-    'gst_no': [
-      'gst no',
-      'gst number',
-      'gstin',
-      'gst',
-    ],
+    'pan_number': ['pan', 'pan no', 'pan number', 'panno'],
+    'gst_no': ['gst no', 'gst number', 'gstin', 'gst'],
     'bill_no': [
+      'doc chq no',
+      'doc/chq no',
+      'doc no',
+      'document no',
+      'chq no',
+      'cheque no',
       'bill no',
       'bill number',
       'invoice no',
       'voucher no',
-      'document no',
       'ref no',
       'reference no',
     ],
     'amount': [
       'amount',
       'amount paid',
-      'amount',
       'taxable amount',
       'basic amount',
       'gross amount',
       'invoice amount',
       'ledger amount',
       'transaction amount',
+      'debit',
+      'credit',
+      'dr',
+      'cr',
+      'dr amount',
+      'cr amount',
+      'debit amount',
+      'credit amount',
     ],
     'description': [
       'description',
@@ -3361,13 +3639,65 @@ class ExcelService {
       'product name',
     ],
   };
+
+  static ({int headerRowIndex, int score, bool headersTrusted})?
+  _detectGenericLedgerHeaderCandidate(
+    List<List<dynamic>> rows, {
+    required String sheetName,
+  }) {
+    ({int headerRowIndex, int score, bool headersTrusted})? best;
+
+    for (int i = 0; i < rows.length && i < 30; i++) {
+      final row = rows[i];
+      final mappedHeaders = _buildMappedHeaders(
+        row,
+        forcedType: ExcelImportType.genericLedger,
+      );
+      final presentHeaders = mappedHeaders.whereType<String>().toSet();
+      final matchedHeaders = presentHeaders.toList()..sort();
+      var score = _scoreHeaderRow(row, type: ExcelImportType.genericLedger);
+
+      final hasDate = presentHeaders.contains('date');
+      final hasPartyLike =
+          presentHeaders.contains('party_name') ||
+          presentHeaders.contains('description');
+      final hasAmountLike = presentHeaders.contains('amount');
+      final requiredSignalCount = [
+        hasDate,
+        hasPartyLike,
+        hasAmountLike,
+      ].where((value) => value).length;
+
+      if (requiredSignalCount == 3) {
+        score += 15;
+      } else if (requiredSignalCount == 2) {
+        score += 5;
+      }
+
+      debugPrint(
+        'HEADER DETECT => sheet=$sheetName candidateRow=$i score=$score matchedHeaders=${matchedHeaders.join('|')}',
+      );
+
+      if (requiredSignalCount < 2 || score < 40) {
+        continue;
+      }
+
+      if (best == null || score > best.score) {
+        best = (headerRowIndex: i, score: score, headersTrusted: true);
+      }
+    }
+
+    debugPrint(
+      'HEADER DETECT => sheet=$sheetName selectedHeaderRow=${best?.headerRowIndex ?? -1}',
+    );
+
+    return best;
+  }
 }
 
-enum ExcelImportType {
-  purchase,
-  tds26q,
-  genericLedger,
-}
+enum ExcelImportType { purchase, tds26q, genericLedger }
+
+enum _GenericLedgerRowType { transaction, continuation, invalid }
 
 class ExcelValidationResult {
   final bool isValid;
@@ -3498,11 +3828,7 @@ class ExcelValidationResult {
   }
 }
 
-enum ExcelImportDecision {
-  autoImport,
-  manualReview,
-  invalidMapping,
-}
+enum ExcelImportDecision { autoImport, manualReview, invalidMapping }
 
 Future<List<Map<String, dynamic>>> _parsePurchaseRowsInIsolate(
   Uint8List bytes,
@@ -3578,8 +3904,6 @@ Future<Map<String, dynamic>> _validateGenericLedgerFileInIsolate(
   );
 }
 
-Future<List<String>> _list26QSelectableSheetsInIsolate(
-  Uint8List bytes,
-) async {
+Future<List<String>> _list26QSelectableSheetsInIsolate(Uint8List bytes) async {
   return ExcelService.list26QSelectableSheets(bytes);
 }

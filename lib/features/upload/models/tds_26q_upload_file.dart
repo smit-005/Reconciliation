@@ -1,15 +1,12 @@
-import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 
-class LedgerUploadFile {
-  final String id;
-  final String sectionCode;
+class Tds26QUploadFile {
   final String fileName;
   final List<int> bytes;
   final int rowCount;
   final DateTime uploadedAt;
-  final String parserType;
-  final List<NormalizedLedgerRow> rows;
+  final List<Tds26QRow> rows;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
   final String? sheetName;
@@ -17,14 +14,11 @@ class LedgerUploadFile {
   final bool? headersTrusted;
   final Map<String, String> columnMapping;
 
-  const LedgerUploadFile({
-    required this.id,
-    required this.sectionCode,
+  const Tds26QUploadFile({
     required this.fileName,
     required this.bytes,
     required this.rowCount,
     required this.uploadedAt,
-    required this.parserType,
     required this.rows,
     required this.mappingStatus,
     required this.wasManuallyMapped,

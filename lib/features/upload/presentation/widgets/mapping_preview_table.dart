@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
 
-class MappingPreviewTable extends StatelessWidget {
+class MappingPreviewTable extends StatefulWidget {
   final ExcelPreviewData previewData;
   final Map<String, String> selections;
   final Map<String, String> fieldLabels;
@@ -13,6 +13,28 @@ class MappingPreviewTable extends StatelessWidget {
     required this.selections,
     required this.fieldLabels,
   });
+
+  @override
+  State<MappingPreviewTable> createState() => _MappingPreviewTableState();
+}
+
+class _MappingPreviewTableState extends State<MappingPreviewTable> {
+  late final ScrollController _verticalController;
+  late final ScrollController _horizontalController;
+
+  @override
+  void initState() {
+    super.initState();
+    _verticalController = ScrollController();
+    _horizontalController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _verticalController.dispose();
+    _horizontalController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,20 +59,26 @@ class MappingPreviewTable extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: Scrollbar(
+              controller: _verticalController,
               thumbVisibility: true,
               child: SingleChildScrollView(
+                controller: _horizontalController,
                 scrollDirection: Axis.horizontal,
+                primary: false,
                 child: SingleChildScrollView(
+                  controller: _verticalController,
+                  primary: false,
                   child: DataTable(
                     headingRowColor: const WidgetStatePropertyAll(
                       Color(0xFF182235),
                     ),
-                    columns: previewData.columnKeys.map((columnKey) {
-                      final label = previewData.columnLabels[columnKey] ?? columnKey;
-                      final mappedKey = selections[columnKey];
+                    columns: widget.previewData.columnKeys.map((columnKey) {
+                      final label =
+                          widget.previewData.columnLabels[columnKey] ?? columnKey;
+                      final mappedKey = widget.selections[columnKey];
                       final mappedLabel = mappedKey == null || mappedKey.isEmpty
                           ? ''
-                          : fieldLabels[mappedKey] ?? mappedKey;
+                          : widget.fieldLabels[mappedKey] ?? mappedKey;
                       return DataColumn(
                         label: SizedBox(
                           width: 180,
@@ -80,9 +108,9 @@ class MappingPreviewTable extends StatelessWidget {
                         ),
                       );
                     }).toList(),
-                    rows: previewData.sampleRows.map((row) {
+                    rows: widget.previewData.sampleRows.map((row) {
                       return DataRow(
-                        cells: previewData.columnKeys.map((columnKey) {
+                        cells: widget.previewData.columnKeys.map((columnKey) {
                           final value = row[columnKey] ?? '';
                           return DataCell(
                             SizedBox(

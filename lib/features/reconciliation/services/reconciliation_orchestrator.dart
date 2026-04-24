@@ -207,6 +207,8 @@ class _SkippedRowAccumulator {
   static const int _maxSamples = 5;
 
   final Map<String, int> _reasonCounts = <String, int>{};
+  final Map<String, _SkippedSellerImpactAccumulator> _sellerImpacts =
+      <String, _SkippedSellerImpactAccumulator>{};
   final List<SkippedRowSample> _samples = <SkippedRowSample>[];
   int _total = 0;
 
@@ -218,6 +220,16 @@ class _SkippedRowAccumulator {
   }) {
     _total += 1;
     _reasonCounts[reason] = (_reasonCounts[reason] ?? 0) + 1;
+    final sellerKey = normalizeName(sellerName.trim());
+    if (sellerKey.isNotEmpty) {
+      final sellerImpact = _sellerImpacts.putIfAbsent(
+        sellerKey,
+        () => _SkippedSellerImpactAccumulator(
+          sellerName: sellerName.trim(),
+        ),
+      );
+      sellerImpact.add(reason);
+    }
 
     if (_samples.length < _maxSamples) {
       _samples.add(
@@ -245,6 +257,48 @@ class _SkippedRowAccumulator {
         for (final entry in sortedCounts) entry.key: entry.value,
       },
       samples: List<SkippedRowSample>.unmodifiable(_samples),
+      sellerImpacts: List<SkippedSellerImpact>.unmodifiable(
+        _sellerImpacts.values
+            .map((impact) => impact.build())
+            .toList()
+          ..sort((a, b) {
+            final countCompare = b.total.compareTo(a.total);
+            if (countCompare != 0) return countCompare;
+            return a.sellerName.compareTo(b.sellerName);
+          }),
+      ),
+    );
+  }
+}
+
+class _SkippedSellerImpactAccumulator {
+  final String sellerName;
+  final Map<String, int> _reasonCounts = <String, int>{};
+  int _total = 0;
+
+  _SkippedSellerImpactAccumulator({
+    required this.sellerName,
+  });
+
+  void add(String reason) {
+    _total += 1;
+    _reasonCounts[reason] = (_reasonCounts[reason] ?? 0) + 1;
+  }
+
+  SkippedSellerImpact build() {
+    final sortedCounts = _reasonCounts.entries.toList()
+      ..sort((a, b) {
+        final countCompare = b.value.compareTo(a.value);
+        if (countCompare != 0) return countCompare;
+        return a.key.compareTo(b.key);
+      });
+
+    return SkippedSellerImpact(
+      sellerName: sellerName,
+      total: _total,
+      reasonCounts: {
+        for (final entry in sortedCounts) entry.key: entry.value,
+      },
     );
   }
 }
@@ -262,9 +316,10 @@ class CalculationService {
     '194Q',
     '194C',
     '194H',
-    '194J',
-    '194I',
-    '194IB',
+    '194I_A',
+    '194I_B',
+    '194J_A',
+    '194J_B',
   ];
 
   static int compareMonthLabels(String a, String b) {
@@ -284,6 +339,7 @@ class CalculationService {
     bool includeAllRows = false,
     List<String>? sections,
   }) async {
+    final totalWatch = Stopwatch()..start();
     final normalizedBuyerPan = normalizePan(buyerPan);
     final normalizedMapping = _normalizeNameMapping(nameMapping ?? {});
     final skippedRows = _SkippedRowAccumulator();
@@ -321,13 +377,24 @@ class CalculationService {
         ),
       ),
     ];
+    debugPrint(
+      'RECON ORCH INPUT => sourceRows=${sourceRows.length} tdsRows=${tdsRows.length} '
+      'savedMappings=${savedMappings.length} observations=${observations.length}',
+    );
 
+    final resolverWatch = Stopwatch()..start();
     final resolver = SellerIdentityResolver.build(
       observations: observations,
       savedMappings: savedMappings,
       savedAliasToPan: savedAliasToPan,
     );
+    resolverWatch.stop();
+    debugPrint(
+      'RECON ORCH PERF => identity resolver ${resolverWatch.elapsedMilliseconds} ms',
+    );
+    await Future<void>.delayed(Duration.zero);
 
+    final resolveSourceWatch = Stopwatch()..start();
     final resolvedPurchases = sourceRows
         .map(
           (row) => _resolvePurchaseRow(
@@ -353,6 +420,11 @@ class CalculationService {
         )
         .whereType<_ResolvedSourceRow>()
         .toList();
+    resolveSourceWatch.stop();
+    debugPrint(
+      'RECON ORCH PERF => source resolve ${resolveSourceWatch.elapsedMilliseconds} ms | '
+      'resolvedPurchases=${resolvedPurchases.length} resolvedTds=${resolvedTdsRows.length}',
+    );
 
     debugPrint(
       'SECTION RECON SOURCE ROWS => '
@@ -362,7 +434,21 @@ class CalculationService {
       'SECTION RECON 26Q ROWS => '
       '${_debugSectionCounts(_debugResolvedSectionCounts(resolvedTdsRows))}',
     );
+    for (final section in activeSections) {
+      final sectionSourceRows = resolvedPurchases
+          .where((row) => row.section.trim() == section)
+          .length;
+      final sectionTdsRows = resolvedTdsRows
+          .where((row) => row.section.trim() == section)
+          .length;
+      debugPrint(
+        'SECTION INPUT ROWS => section=$section sourceRows=$sectionSourceRows tdsRows=$sectionTdsRows',
+      );
+    }
+    _debugDuplicateSourceSectionLeakage(resolvedPurchases);
+    await Future<void>.delayed(Duration.zero);
 
+    final aggregationWatch = Stopwatch()..start();
     final purchaseBuckets = _aggregatePurchaseBuckets(resolvedPurchases);
     final tdsBuckets = _aggregateTdsBuckets(resolvedTdsRows);
     final allKeys = <_MonthlyBucketKey>{
@@ -370,7 +456,14 @@ class CalculationService {
       ...tdsBuckets.keys,
     }.toList()
       ..sort(_compareMonthlyBucketKeys);
+    aggregationWatch.stop();
+    debugPrint(
+      'RECON ORCH PERF => aggregation ${aggregationWatch.elapsedMilliseconds} ms | '
+      'purchaseBuckets=${purchaseBuckets.length} tdsBuckets=${tdsBuckets.length} keys=${allKeys.length}',
+    );
+    await Future<void>.delayed(Duration.zero);
 
+    final rowBuildWatch = Stopwatch()..start();
     final rows = <ReconciliationRow>[];
     for (final key in allKeys) {
       final purchase = purchaseBuckets[key];
@@ -392,7 +485,12 @@ class CalculationService {
 
       rows.add(row);
     }
+    rowBuildWatch.stop();
+    debugPrint(
+      'RECON ORCH PERF => row build ${rowBuildWatch.elapsedMilliseconds} ms | rows=${rows.length}',
+    );
 
+    final timingWatch = Stopwatch()..start();
     final timedRows = _applyTimingBySeller(rows);
     final rowsBySection = _groupRowsBySection(timedRows);
     final sectionSummaries = <String, ReconciliationSummary>{};
@@ -408,9 +506,32 @@ class CalculationService {
         rows: entry.value,
       );
     }
+    timingWatch.stop();
+    debugPrint(
+      'RECON ORCH PERF => timing+summary ${timingWatch.elapsedMilliseconds} ms | '
+      'timedRows=${timedRows.length} sections=${rowsBySection.length}',
+    );
 
     debugPrint(
       'SECTION RECON FINAL SUMMARIES => ${_debugSummaryMap(sectionSummaries)}',
+    );
+    for (final section in activeSections) {
+      final sectionRows = rowsBySection[section] ?? const <ReconciliationRow>[];
+      final no26QCount = sectionRows
+          .where(
+            (row) =>
+                row.status.trim() == ReconciliationStatus.applicableButNo26Q ||
+                row.status.trim() == CalculationService.sellerStatusNo26Q,
+          )
+          .length;
+      debugPrint(
+        'SECTION OUTPUT ROWS => section=$section resultRows=${sectionRows.length} no26Q=$no26QCount',
+      );
+    }
+
+    totalWatch.stop();
+    debugPrint(
+      'RECON ORCH PERF => total ${totalWatch.elapsedMilliseconds} ms',
     );
 
     return SectionReconciliationResult(
@@ -1115,16 +1236,6 @@ class CalculationService {
     return compareMonthKeys(a.month, b.month);
   }
 
-  static Map<String, List<dynamic>> _debugResolvedSectionCounts(
-    List<_ResolvedSourceRow> rows,
-  ) {
-    final map = <String, List<dynamic>>{};
-    for (final row in rows) {
-      map.putIfAbsent(row.section, () => <dynamic>[]).add(row);
-    }
-    return map;
-  }
-
   static String _buildApplicableReason({
     required String section,
     required double amount,
@@ -1164,7 +1275,9 @@ class CalculationService {
       return 'Applicable under 194H because cumulative section amount ${round2(currentCumulative)} exceeds 15000.';
     }
 
-    if (normalizedSection == '194J') {
+    if (normalizedSection == '194J' ||
+        normalizedSection == '194J_A' ||
+        normalizedSection == '194J_B') {
       if (applicableAmount <= 0) {
         return '194J threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
       }
@@ -1174,7 +1287,9 @@ class CalculationService {
       return 'Applicable under 194J because cumulative section amount ${round2(currentCumulative)} exceeds 30000.';
     }
 
-    if (normalizedSection == '194I') {
+    if (normalizedSection == '194I' ||
+        normalizedSection == '194I_A' ||
+        normalizedSection == '194I_B') {
       if (applicableAmount <= 0) {
         return '194I threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
       }
@@ -1209,10 +1324,16 @@ class CalculationService {
       if (normalizedSection == '194C' && applicableAmount <= 0) {
         return 'Expected TDS is zero because the 194C threshold is not crossed.';
       }
-      if (normalizedSection == '194J' && applicableAmount <= 0) {
+      if ((normalizedSection == '194J' ||
+              normalizedSection == '194J_A' ||
+              normalizedSection == '194J_B') &&
+          applicableAmount <= 0) {
         return 'Expected TDS is zero because the 194J threshold is not crossed.';
       }
-      if (normalizedSection == '194I' && applicableAmount <= 0) {
+      if ((normalizedSection == '194I' ||
+              normalizedSection == '194I_A' ||
+              normalizedSection == '194I_B') &&
+          applicableAmount <= 0) {
         return 'Expected TDS is zero because the 194I threshold is not crossed.';
       }
       return 'Expected TDS is zero because the row is not yet applicable.';
@@ -1259,7 +1380,15 @@ class CalculationService {
 }
 
 String sortKeyForSection(String value) {
-  const preferredOrder = ['194Q', '194C', '194J', '194I', '194H', '194IB'];
+  const preferredOrder = [
+    '194Q',
+    '194C',
+    '194H',
+    '194I_A',
+    '194I_B',
+    '194J_A',
+    '194J_B',
+  ];
   final normalized = value.trim();
   final index = preferredOrder.indexOf(normalized);
   if (index == -1) {

@@ -2,6 +2,7 @@ import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/parse_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
+import 'package:reconciliation_app/features/reconciliation/services/reconciliation_remark_templates.dart';
 
 class ReconciliationComputedAmounts {
   final double applicableAmount;
@@ -182,25 +183,22 @@ class ReconciliationEngine {
 
     if (!hasValidSection) {
       if (sellerPan.trim().isEmpty) {
-        remarks.add('PAN missing -> high TDS risk');
+        remarks.add(ReconciliationRemarkTemplates.panMissingHighRisk);
       }
-      remarks.add('Section unresolved - review required');
-      remarks.add(
-        'Applicability and expected TDS may be incomplete because section-based rules could not be confirmed',
-      );
+      remarks.add(ReconciliationRemarkTemplates.sectionReviewRequired);
       return remarks.join(', ');
     }
 
     if (manualReviewRequired) {
       if (sellerPan.trim().isEmpty) {
-        remarks.add('PAN missing -> high TDS risk');
+        remarks.add(ReconciliationRemarkTemplates.panMissingHighRisk);
       }
-      remarks.add(_manualReviewHeadline(normalizedSection));
+      remarks.add(ReconciliationRemarkTemplates.manualReview(normalizedSection));
       if (manualReviewReason.trim().isNotEmpty) {
         remarks.add(manualReviewReason.trim());
       }
       if (!purchaseMissing && tdsMissing) {
-        remarks.add('No 26Q entry');
+        remarks.add(ReconciliationRemarkTemplates.no26QEntry);
       }
       return remarks.join(', ');
     }
@@ -212,30 +210,24 @@ class ReconciliationEngine {
         actualTds.abs() <= tdsTolerance;
 
     if (isBelowThresholdPurchase) {
-      if (normalizedSection.isNotEmpty) {
-        remarks.add(
-          'TDS not applicable yet because the $normalizedSection threshold/rule is not met',
-        );
-      } else {
-        remarks.add('TDS not applicable yet because the section threshold/rule is not met');
-      }
+      remarks.add(ReconciliationRemarkTemplates.thresholdNotCrossed);
       return remarks.join(', ');
     }
 
     if (sellerPan.trim().isEmpty) {
-      remarks.add('PAN missing -> high TDS risk');
+      remarks.add(ReconciliationRemarkTemplates.panMissingHighRisk);
     }
 
     if (purchaseMissing && !tdsMissing) {
-      remarks.add(ReconciliationStatus.onlyIn26Q);
+      remarks.add(ReconciliationRemarkTemplates.onlyIn26Q);
       return remarks.join(', ');
     }
 
     if (!purchaseMissing && tdsMissing) {
       if (amountDifference > amountTolerance) {
-        remarks.add('No 26Q entry');
+        remarks.add(ReconciliationRemarkTemplates.applicableNo26Q);
       } else {
-        remarks.add('TDS not required');
+        remarks.add(ReconciliationRemarkTemplates.noDeductionRequired);
       }
       return remarks.join(', ');
     }
@@ -244,12 +236,12 @@ class ReconciliationEngine {
     final tdsDiffAbs = tdsDifference.abs();
 
     if (amountDiffAbs > amountTolerance) {
-      remarks.add('Purchase vs 26Q amount mismatch');
+      remarks.add(ReconciliationRemarkTemplates.amountMismatch);
     } else if (tdsDiffAbs > tdsTolerance) {
       if (tdsDiffAbs <= minorTdsTolerance) {
-        remarks.add('Minor rounding difference');
+        remarks.add(ReconciliationRemarkTemplates.minorRoundingGap);
       } else {
-        remarks.add('Rate mismatch');
+        remarks.add(ReconciliationRemarkTemplates.tdsMismatch);
       }
     }
 
@@ -315,14 +307,14 @@ class ReconciliationEngine {
     final lowConfidenceRemarks = isLowConfidenceMatch
         ? [
             remarks,
-            'Low confidence match: matched using normalized name only',
+            ReconciliationRemarkTemplates.lowConfidenceMatch,
           ].where((e) => e.trim().isNotEmpty).join(', ')
         : remarks;
 
     final finalRemarks = panDerivedFromGstin
         ? [
             lowConfidenceRemarks,
-            'PAN derived from GSTIN; verify if seller PAN is correct',
+            ReconciliationRemarkTemplates.panFromGstin,
           ].where((e) => e.trim().isNotEmpty).join(', ')
         : lowConfidenceRemarks;
 
@@ -375,21 +367,8 @@ class ReconciliationEngine {
 
     return row.copyWith(
       status: ReconciliationStatus.belowThreshold,
-      remarks:
-          'TDS not applicable yet because the ${normalizeSection(row.section).isEmpty ? 'section' : normalizeSection(row.section)} threshold/rule is not met',
+      remarks: ReconciliationRemarkTemplates.thresholdNotCrossed,
     );
-  }
-
-  static String _manualReviewHeadline(String normalizedSection) {
-    switch (normalizedSection) {
-      case '194J':
-      case '194I':
-        return '$normalizedSection subtype/rate unresolved - review required';
-      case '194C':
-        return '$normalizedSection rate unresolved - review required';
-      default:
-        return '${normalizedSection.isEmpty ? 'Section' : normalizedSection} rule unresolved - review required';
-    }
   }
 
   static ReconciliationRow buildRow({

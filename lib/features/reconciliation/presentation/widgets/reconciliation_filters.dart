@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
-import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
 import 'package:reconciliation_app/core/widgets/app_filter_bar.dart';
+import 'package:reconciliation_app/core/widgets/app_search_autocomplete_field.dart';
 
 class ReconciliationFilters extends StatelessWidget {
   final String selectedSeller;
@@ -16,10 +16,10 @@ class ReconciliationFilters extends StatelessWidget {
   final List<String> sectionOptions;
   final List<String> statusOptions;
 
-  final Function(String?) onSellerChanged;
-  final Function(String?) onFinancialYearChanged;
-  final Function(String?) onSectionChanged;
-  final Function(String?) onStatusChanged;
+  final ValueChanged<String> onSellerChanged;
+  final ValueChanged<String> onFinancialYearChanged;
+  final ValueChanged<String> onSectionChanged;
+  final ValueChanged<String> onStatusChanged;
   final bool showSectionFilter;
 
   const ReconciliationFilters({
@@ -43,61 +43,55 @@ class ReconciliationFilters extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxWidth < 920;
+        final isCompact = constraints.maxWidth < 760;
         final normalizedWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : 920.0;
-        final fieldWidth = isCompact
-            ? normalizedWidth
-            : (normalizedWidth - (showSectionFilter ? 36 : 24)) /
-                (showSectionFilter ? 4 : 3);
+        final sellerFieldWidth = isCompact ? normalizedWidth : 360.0;
+        final financialYearFieldWidth = isCompact ? normalizedWidth : 200.0;
+        final statusFieldWidth = isCompact ? normalizedWidth : 190.0;
+        final sectionFieldWidth = isCompact ? normalizedWidth : 190.0;
 
         return AppFilterBar(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
             _buildField(
-              width: fieldWidth,
-              child: DropdownButtonFormField<String>(
-                initialValue: selectedSeller,
-                decoration: _decoration('Seller Filter'),
-                items: sellerOptions
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
+              width: sellerFieldWidth,
+              child: AppSearchAutocompleteField(
+                value: selectedSeller,
+                options: sellerOptions,
+                hintText: 'Search seller or PAN...',
+                labelText: 'Seller Search',
                 onChanged: onSellerChanged,
+                searchableTermsBuilder: (option) => <String>[option],
               ),
             ),
             _buildField(
-              width: fieldWidth,
-              child: DropdownButtonFormField<String>(
-                initialValue: selectedFinancialYear,
-                decoration: _decoration('Financial Year'),
-                items: financialYearOptions
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
+              width: financialYearFieldWidth,
+              child: AppCompactSelectField(
+                value: selectedFinancialYear,
+                options: financialYearOptions,
+                labelText: 'Financial Year',
                 onChanged: onFinancialYearChanged,
               ),
             ),
             if (showSectionFilter)
               _buildField(
-                width: fieldWidth,
-                child: DropdownButtonFormField<String>(
-                  initialValue: selectedSection,
-                  decoration: _decoration('Section'),
-                  items: sectionOptions
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
+                width: sectionFieldWidth,
+                child: AppCompactSelectField(
+                  value: selectedSection,
+                  options: sectionOptions,
+                  labelText: 'Section',
                   onChanged: onSectionChanged,
                 ),
-              ),
+            ),
             _buildField(
-              width: fieldWidth,
-              child: DropdownButtonFormField<String>(
-                initialValue: selectedStatus,
-                decoration: _decoration('Status'),
-                items: statusOptions
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
+              width: statusFieldWidth,
+              child: AppCompactSelectField(
+                value: selectedStatus,
+                options: statusOptions,
+                labelText: 'Status',
                 onChanged: onStatusChanged,
               ),
             ),
@@ -109,36 +103,5 @@ class ReconciliationFilters extends StatelessWidget {
 
   Widget _buildField({required double width, required Widget child}) {
     return SizedBox(width: width, child: child);
-  }
-
-  InputDecoration _decoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      isDense: true,
-      labelStyle: const TextStyle(
-        fontWeight: FontWeight.w700,
-        color: AppColorScheme.textMuted,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        borderSide: const BorderSide(color: AppColorScheme.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        borderSide: const BorderSide(
-          color: AppColorScheme.primary,
-          width: 1.2,
-        ),
-      ),
-      filled: true,
-      fillColor: const Color(0xFFFDFEFF),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 14,
-      ),
-    );
   }
 }

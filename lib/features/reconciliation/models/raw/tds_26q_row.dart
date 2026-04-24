@@ -55,6 +55,13 @@ class Tds26QRow {
     final resolvedSection = normalizeSection(
       explicitSection.isNotEmpty ? explicitSection : inferredSection,
     );
+    final fallbackSection =
+        explicitSection.isNotEmpty ? explicitSection : inferredSection;
+    final storedSection = resolvedSection.isNotEmpty
+        ? resolvedSection
+        : (isLegacyUnsupportedSection(fallbackSection)
+            ? '194IB'
+            : fallbackSection.trim().toUpperCase());
 
     return Tds26QRow(
       month: map['date_month']?.toString() ?? map['month']?.toString() ?? '',
@@ -64,13 +71,43 @@ class Tds26QRow {
       panNumber: map['pan_number']?.toString() ?? map['pan']?.toString() ?? '',
       deductedAmount: amountPaid,
       tds: tdsAmount,
-      section: resolvedSection,
+      section: storedSection,
     );
   }
 
   static String _extractSectionFromText(String text) {
     final t = text.toUpperCase();
 
+    if (t.contains('194I(A)') ||
+        t.contains('194I A') ||
+        t.contains('194I_A') ||
+        (t.contains('194I') &&
+            (t.contains('MACHINERY') ||
+                t.contains('PLANT') ||
+                t.contains('EQUIPMENT')))) {
+      return '194I_A';
+    }
+    if (t.contains('194I(B)') ||
+        t.contains('194I B') ||
+        t.contains('194I_B') ||
+        (t.contains('194I') &&
+            (t.contains('LAND') ||
+                t.contains('BUILDING') ||
+                t.contains('FURNITURE')))) {
+      return '194I_B';
+    }
+    if (t.contains('194J(A)') ||
+        t.contains('194J A') ||
+        t.contains('194J_A') ||
+        (t.contains('194J') && t.contains('TECHNICAL'))) {
+      return '194J_A';
+    }
+    if (t.contains('194J(B)') ||
+        t.contains('194J B') ||
+        t.contains('194J_B') ||
+        (t.contains('194J') && t.contains('PROFESSIONAL'))) {
+      return '194J_B';
+    }
     if (t.contains('194IB')) return '194IB';
     if (t.contains('194I')) return '194I';
     if (t.contains('194Q')) return '194Q';
@@ -104,8 +141,12 @@ class Tds26QRow {
   static bool _isKnownSection(String value) {
     return value == '194Q' ||
         value == '194C' ||
+        value == '194I_A' ||
+        value == '194I_B' ||
         value == '194I' ||
         value == '194H' ||
+        value == '194J_A' ||
+        value == '194J_B' ||
         value == '194J' ||
         value == '194IB';
   }
