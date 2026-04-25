@@ -27,4 +27,32 @@ class Tds26QUploadFile {
     this.headerRowIndex,
     this.headersTrusted,
   });
+
+  Tds26QUploadFile copyWith({
+    String? fileName,
+    List<int>? bytes,
+    int? rowCount,
+    DateTime? uploadedAt,
+    List<Tds26QRow>? rows,
+    UploadMappingStatus? mappingStatus,
+    bool? wasManuallyMapped,
+    String? sheetName,
+    int? headerRowIndex,
+    bool? headersTrusted,
+    Map<String, String>? columnMapping,
+  }) {
+    return Tds26QUploadFile(
+      fileName: fileName ?? this.fileName,
+      bytes: bytes ?? this.bytes,
+      rowCount: rowCount ?? this.rowCount,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      rows: rows ?? this.rows,
+      mappingStatus: mappingStatus ?? this.mappingStatus,
+      wasManuallyMapped: wasManuallyMapped ?? this.wasManuallyMapped,
+      columnMapping: columnMapping ?? this.columnMapping,
+      sheetName: sheetName ?? this.sheetName,
+      headerRowIndex: headerRowIndex ?? this.headerRowIndex,
+      headersTrusted: headersTrusted ?? this.headersTrusted,
+    );
+  }
 }

@@ -33,4 +33,38 @@ class LedgerUploadFile {
     this.headerRowIndex,
     this.headersTrusted,
   });
+
+  LedgerUploadFile copyWith({
+    String? id,
+    String? sectionCode,
+    String? fileName,
+    List<int>? bytes,
+    int? rowCount,
+    DateTime? uploadedAt,
+    String? parserType,
+    List<NormalizedLedgerRow>? rows,
+    UploadMappingStatus? mappingStatus,
+    bool? wasManuallyMapped,
+    String? sheetName,
+    int? headerRowIndex,
+    bool? headersTrusted,
+    Map<String, String>? columnMapping,
+  }) {
+    return LedgerUploadFile(
+      id: id ?? this.id,
+      sectionCode: sectionCode ?? this.sectionCode,
+      fileName: fileName ?? this.fileName,
+      bytes: bytes ?? this.bytes,
+      rowCount: rowCount ?? this.rowCount,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      parserType: parserType ?? this.parserType,
+      rows: rows ?? this.rows,
+      mappingStatus: mappingStatus ?? this.mappingStatus,
+      wasManuallyMapped: wasManuallyMapped ?? this.wasManuallyMapped,
+      sheetName: sheetName ?? this.sheetName,
+      headerRowIndex: headerRowIndex ?? this.headerRowIndex,
+      headersTrusted: headersTrusted ?? this.headersTrusted,
+      columnMapping: columnMapping ?? this.columnMapping,
+    );
+  }
 }

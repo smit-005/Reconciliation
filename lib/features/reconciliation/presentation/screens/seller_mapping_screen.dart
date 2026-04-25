@@ -13,6 +13,7 @@ class SellerMappingScreenRowData {
   final String normalizedAlias;
   final String sectionCode;
   final String purchasePan;
+  final String purchaseGstNo;
   final SellerMappingResolvedSuggestion? resolvedSuggestion;
   final bool isReadOnly;
   final bool isAboveThreshold;
@@ -21,12 +22,17 @@ class SellerMappingScreenRowData {
   final bool hasApplicableTdsImpact;
   final bool is26QUnmatched;
   final bool hasMissingOrUncertainPan;
+  final String preflightReasonCode;
+  final String preflightReasonLabel;
+  final String preflightReasonDetail;
+  final bool requiresDangerousReview;
 
   const SellerMappingScreenRowData({
     required this.purchasePartyDisplayName,
     required this.normalizedAlias,
     required this.sectionCode,
     required this.purchasePan,
+    this.purchaseGstNo = '',
     this.resolvedSuggestion,
     this.isReadOnly = false,
     this.isAboveThreshold = false,
@@ -35,6 +41,10 @@ class SellerMappingScreenRowData {
     this.hasApplicableTdsImpact = false,
     this.is26QUnmatched = false,
     this.hasMissingOrUncertainPan = false,
+    this.preflightReasonCode = '',
+    this.preflightReasonLabel = '',
+    this.preflightReasonDetail = '',
+    this.requiresDangerousReview = false,
   });
 }
 
@@ -53,6 +63,7 @@ class SellerMappingResolvedSuggestion {
 }
 
 class SellerMappingScreen extends StatefulWidget {
+  final SellerMappingScreenMode mode;
   final String buyerName;
   final String buyerPan;
   final String financialYearLabel;
@@ -66,6 +77,7 @@ class SellerMappingScreen extends StatefulWidget {
 
   const SellerMappingScreen({
     super.key,
+    this.mode = SellerMappingScreenMode.standard,
     required this.buyerName,
     required this.buyerPan,
     required this.financialYearLabel,
@@ -82,11 +94,14 @@ class SellerMappingScreen extends StatefulWidget {
   State<SellerMappingScreen> createState() => _SellerMappingScreenState();
 }
 
+enum SellerMappingScreenMode { standard, preflight }
+
 class _SellerMappingRowVm {
   final String purchasePartyDisplayName;
   final String normalizedAlias;
   final String sectionCode;
   final String purchasePan;
+  final String purchaseGstNo;
   final SellerMapping? exactMapping;
   final SellerMapping? fallbackMapping;
   final SellerMappingResolvedSuggestion? resolvedSuggestion;
@@ -97,12 +112,17 @@ class _SellerMappingRowVm {
   final bool hasApplicableTdsImpact;
   final bool is26QUnmatched;
   final bool hasMissingOrUncertainPan;
+  final String preflightReasonCode;
+  final String preflightReasonLabel;
+  final String preflightReasonDetail;
+  final bool requiresDangerousReview;
 
   const _SellerMappingRowVm({
     required this.purchasePartyDisplayName,
     required this.normalizedAlias,
     required this.sectionCode,
     required this.purchasePan,
+    required this.purchaseGstNo,
     this.exactMapping,
     this.fallbackMapping,
     this.resolvedSuggestion,
@@ -113,9 +133,13 @@ class _SellerMappingRowVm {
     this.hasApplicableTdsImpact = false,
     this.is26QUnmatched = false,
     this.hasMissingOrUncertainPan = false,
+    this.preflightReasonCode = '',
+    this.preflightReasonLabel = '',
+    this.preflightReasonDetail = '',
+    this.requiresDangerousReview = false,
   });
 
-  String get rowKey => '${normalizedAlias}|${sectionCode}';
+  String get rowKey => '$normalizedAlias|$sectionCode';
 }
 
 enum _SellerMappingListView {
@@ -174,10 +198,7 @@ class _CandidateScore {
   final _TdsPartyCandidate candidate;
   final double score;
 
-  const _CandidateScore({
-    required this.candidate,
-    required this.score,
-  });
+  const _CandidateScore({required this.candidate, required this.score});
 }
 
 class _SellerMappingScreenState extends State<SellerMappingScreen> {
@@ -216,10 +237,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     'COMPANY',
   };
 
-  static const Set<String> _ignoredNameTokens = {
-    'AND',
-    'THE',
-  };
+  static const Set<String> _ignoredNameTokens = {'AND', 'THE'};
 
   late Map<String, String> selectedMappings;
   late Map<String, _AutoMapDecision> autoMapDetails;
@@ -240,6 +258,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return '${normalizePan(widget.buyerPan)}|'
         '${normalizeName(alias.trim())}|'
         '${normalizeSellerMappingSectionCode(sectionCode)}';
+  }
+
+  bool get _isPreflightMode => widget.mode == SellerMappingScreenMode.preflight;
+
+  String _separateSelectionValue(_SellerMappingRowVm row) {
+    return '__SEPARATE__:${row.rowKey}';
+  }
+
+  bool _isSeparateSelection(_SellerMappingRowVm row, String? value) {
+    return value == _separateSelectionValue(row);
   }
 
   List<String> get _availableSectionCodes {
@@ -266,8 +294,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   List<_SellerMappingRowVm> _buildRowsForSection(String sectionCode) {
     final sourceRows = sectionCode == _allSectionsAuditCode
         ? _sectionTabOrder
-            .expand((section) => _rowDataBySection[section] ?? const [])
-            .toList()
+              .expand((section) => _rowDataBySection[section] ?? const [])
+              .toList()
         : List<SellerMappingScreenRowData>.from(
             _rowDataBySection[sectionCode] ?? const [],
           );
@@ -294,12 +322,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         purchasePan: purchasePan.isNotEmpty
             ? purchasePan
             : (existing?.purchasePan ?? ''),
+        purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
+            ? row.purchaseGstNo.trim()
+            : (existing?.purchaseGstNo ?? ''),
         exactMapping: _exactMappingsByKey[rowKey] ?? existing?.exactMapping,
         fallbackMapping:
             _fallbackMappingsByAlias[aliasKey] ?? existing?.fallbackMapping,
-        resolvedSuggestion: row.resolvedSuggestion ?? existing?.resolvedSuggestion,
+        resolvedSuggestion:
+            row.resolvedSuggestion ?? existing?.resolvedSuggestion,
         isReadOnly: row.isReadOnly || (existing?.isReadOnly ?? false),
-        isAboveThreshold: row.isAboveThreshold || (existing?.isAboveThreshold ?? false),
+        isAboveThreshold:
+            row.isAboveThreshold || (existing?.isAboveThreshold ?? false),
         hasReconciliationMismatch:
             row.hasReconciliationMismatch ||
             (existing?.hasReconciliationMismatch ?? false),
@@ -309,10 +342,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         hasApplicableTdsImpact:
             row.hasApplicableTdsImpact ||
             (existing?.hasApplicableTdsImpact ?? false),
-        is26QUnmatched: row.is26QUnmatched || (existing?.is26QUnmatched ?? false),
+        is26QUnmatched:
+            row.is26QUnmatched || (existing?.is26QUnmatched ?? false),
         hasMissingOrUncertainPan:
             row.hasMissingOrUncertainPan ||
             (existing?.hasMissingOrUncertainPan ?? false),
+        preflightReasonCode: row.preflightReasonCode.trim().isNotEmpty
+            ? row.preflightReasonCode.trim()
+            : (existing?.preflightReasonCode ?? ''),
+        preflightReasonLabel: row.preflightReasonLabel.trim().isNotEmpty
+            ? row.preflightReasonLabel.trim()
+            : (existing?.preflightReasonLabel ?? ''),
+        preflightReasonDetail: row.preflightReasonDetail.trim().isNotEmpty
+            ? row.preflightReasonDetail.trim()
+            : (existing?.preflightReasonDetail ?? ''),
+        requiresDangerousReview:
+            row.requiresDangerousReview ||
+            (existing?.requiresDangerousReview ?? false),
       );
     }
 
@@ -399,6 +445,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (pans.length == 1) return pans.first;
 
     return 'Multiple PANs';
+  }
+
+  String _getPanForSelection(_SellerMappingRowVm row, String? selectedValue) {
+    if (_isSeparateSelection(row, selectedValue)) {
+      return row.purchasePan;
+    }
+    return _getPanForTdsParty(selectedValue);
   }
 
   String? _normalizeToKnownTdsParty(String? mappedName) {
@@ -518,8 +571,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required _SellerMappingRowVm row,
     required List<_TdsPartyCandidate> candidates,
   }) {
-    final normalizedPurchaseName =
-        _normalizeBusinessName(row.purchasePartyDisplayName);
+    final normalizedPurchaseName = _normalizeBusinessName(
+      row.purchasePartyDisplayName,
+    );
     final purchaseTokens = _tokenizeBusinessName(row.purchasePartyDisplayName);
     final purchasePan = normalizePan(row.purchasePan);
 
@@ -556,8 +610,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     List<_TdsPartyCandidate> candidates,
   ) {
     final purchasePan = normalizePan(row.purchasePan);
-    final normalizedPurchaseName =
-        _normalizeBusinessName(row.purchasePartyDisplayName);
+    final normalizedPurchaseName = _normalizeBusinessName(
+      row.purchasePartyDisplayName,
+    );
     final purchaseTokens = _tokenizeBusinessName(row.purchasePartyDisplayName);
 
     _TdsPartyCandidate? candidateByName(String mappedName) {
@@ -615,10 +670,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (fallbackSavedDecision != null) return fallbackSavedDecision;
 
     if (purchasePan.isNotEmpty) {
-      final samePanCandidates = candidates
-          .where((candidate) => candidate.pans.contains(purchasePan))
-          .toList()
-        ..sort((a, b) => a.partyName.compareTo(b.partyName));
+      final samePanCandidates =
+          candidates
+              .where((candidate) => candidate.pans.contains(purchasePan))
+              .toList()
+            ..sort((a, b) => a.partyName.compareTo(b.partyName));
 
       final strongSamePanCandidates = samePanCandidates
           .where(
@@ -647,11 +703,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
     }
 
-    final exactNameCandidates = candidates
-        .where((candidate) => candidate.normalizedName.isNotEmpty)
-        .where((candidate) => candidate.normalizedName == normalizedPurchaseName)
-        .toList()
-      ..sort((a, b) => a.partyName.compareTo(b.partyName));
+    final exactNameCandidates =
+        candidates
+            .where((candidate) => candidate.normalizedName.isNotEmpty)
+            .where(
+              (candidate) => candidate.normalizedName == normalizedPurchaseName,
+            )
+            .toList()
+          ..sort((a, b) => a.partyName.compareTo(b.partyName));
 
     if (exactNameCandidates.length == 1) {
       return _AutoMapDecision(
@@ -669,15 +728,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       );
     }
 
-    final strongTokenCandidates = candidates
-        .where(
-          (candidate) => _isStrongTokenMatch(
-            purchaseTokens,
-            candidate.tokens,
-          ),
-        )
-        .toList()
-      ..sort((a, b) => a.partyName.compareTo(b.partyName));
+    final strongTokenCandidates =
+        candidates
+            .where(
+              (candidate) =>
+                  _isStrongTokenMatch(purchaseTokens, candidate.tokens),
+            )
+            .toList()
+          ..sort((a, b) => a.partyName.compareTo(b.partyName));
 
     if (strongTokenCandidates.length == 1) {
       return _AutoMapDecision(
@@ -745,16 +803,27 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required _SellerMappingRowVm row,
     required String? selectedValue,
   }) {
+    if (_isPreflightMode &&
+        selectedValue != null &&
+        _isSeparateSelection(row, selectedValue)) {
+      return 'Marked Separate';
+    }
+
     if (row.is26QUnmatched) {
       return '26Q Unmatched';
     }
 
     if (selectedValue == null || selectedValue.trim().isEmpty) {
+      if (_isPreflightMode &&
+          row.requiresDangerousReview &&
+          row.preflightReasonLabel.trim().isNotEmpty) {
+        return row.preflightReasonLabel.trim();
+      }
       return 'Unmapped';
     }
 
     final purchasePan = normalizePan(row.purchasePan);
-    final targetPan = _getPanForTdsParty(selectedValue);
+    final targetPan = _getPanForSelection(row, selectedValue);
 
     if (purchasePan.isEmpty ||
         targetPan.isEmpty ||
@@ -829,13 +898,35 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
   }
 
+  bool _isDangerousPreflightStatus(String status) {
+    return status == 'Conflicting PAN' ||
+        status == 'Ambiguous Identity' ||
+        status == 'Unresolved Identity' ||
+        status == 'PAN Conflict';
+  }
+
+  String _statusChipLabel(String status) {
+    if (status == 'Conflicting PAN' ||
+        status == 'Ambiguous Identity' ||
+        status == 'Unresolved Identity') {
+      return 'Needs Review';
+    }
+    return status;
+  }
+
   String? _getExplicitSelectedValue(_SellerMappingRowVm row) {
     if (_clearedRowKeys.contains(row.rowKey)) {
       return null;
     }
 
     final selectedValue = selectedMappings[row.rowKey];
-    if (selectedValue == null || !uniqueTdsParties.contains(selectedValue)) {
+    if (selectedValue == null) {
+      return null;
+    }
+    if (_isSeparateSelection(row, selectedValue)) {
+      return selectedValue;
+    }
+    if (!uniqueTdsParties.contains(selectedValue)) {
       selectedMappings.remove(row.rowKey);
       return null;
     }
@@ -844,10 +935,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   String? _getResolvedSuggestionValue(_SellerMappingRowVm row) {
     if (_clearedRowKeys.contains(row.rowKey)) {
-      return null;
-    }
-
-    if ((row.exactMapping?.mappedName.trim() ?? '').isNotEmpty) {
       return null;
     }
 
@@ -864,21 +951,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     return activeRows.where((row) {
       final selectedValue = _getSelectedValue(row);
-      final selectedPan = _getPanForTdsParty(selectedValue);
-      final status = _getStatus(
-        row: row,
-        selectedValue: selectedValue,
-      );
+      final selectedPan = _getPanForSelection(row, selectedValue);
+      final status = _getStatus(row: row, selectedValue: selectedValue);
       final autoMapDetail = autoMapDetails[row.rowKey];
 
-      if (
-          !_matchesListView(
-            row: row,
-            status: status,
-            selectedValue: selectedValue,
-            autoMapDetail: autoMapDetail,
-            view: _activeListView,
-          )) {
+      if (!_matchesListView(
+        row: row,
+        status: status,
+        selectedValue: selectedValue,
+        autoMapDetail: autoMapDetail,
+        view: _activeListView,
+      )) {
         return false;
       }
 
@@ -901,7 +984,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         row.resolvedSuggestion?.helperText ?? '',
         row.is26QUnmatched ? '26Q Unmatched' : '',
         row.isAboveThreshold ? 'Above Threshold' : 'Below Threshold',
-        widget.blockedAliases.contains(row.normalizedAlias) ? 'Blocked Alias' : '',
+        widget.blockedAliases.contains(row.normalizedAlias)
+            ? 'Blocked Alias'
+            : '',
       ].join(' ').toUpperCase();
 
       return searchHaystack.contains(query);
@@ -957,20 +1042,22 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   void initState() {
     super.initState();
 
-    uniqueTdsParties = widget.tdsParties
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    uniqueTdsParties =
+        widget.tdsParties
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     _exactMappingsByKey = <String, SellerMapping>{};
     _fallbackMappingsByAlias = <String, SellerMapping>{};
 
     for (final mapping in widget.existingMappings) {
       final aliasKey = normalizeName(mapping.aliasName.trim());
-      final sectionCode =
-          normalizeSellerMappingSectionCode(mapping.sectionCode);
+      final sectionCode = normalizeSellerMappingSectionCode(
+        mapping.sectionCode,
+      );
       if (aliasKey.isEmpty || mapping.mappedName.trim().isEmpty) continue;
 
       if (sectionCode == 'ALL') {
@@ -982,12 +1069,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
 
     _rowDataBySection = <String, List<SellerMappingScreenRowData>>{
-      for (final section in _sectionTabOrder) section: <SellerMappingScreenRowData>[],
+      for (final section in _sectionTabOrder)
+        section: <SellerMappingScreenRowData>[],
     };
 
     for (final row in widget.purchaseRows) {
-      final sectionCode =
-          normalizeSellerMappingSectionCode(row.sectionCode);
+      final sectionCode = normalizeSellerMappingSectionCode(row.sectionCode);
       if (!_rowDataBySection.containsKey(sectionCode)) {
         _rowDataBySection[sectionCode] = <SellerMappingScreenRowData>[];
       }
@@ -1002,15 +1089,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         ? preferredSection
         : (availableSections.isNotEmpty ? availableSections.first : '194Q');
 
-    selectedMappings = {
-      for (final mapping in widget.existingMappings)
-        if (normalizeSellerMappingSectionCode(mapping.sectionCode) != 'ALL' &&
-            mapping.mappedName.trim().isNotEmpty)
-          _rowKey(
-            mapping.aliasName,
-            normalizeSellerMappingSectionCode(mapping.sectionCode),
-          ): mapping.mappedName.trim(),
-    };
+    selectedMappings = <String, String>{};
+    for (final sectionCode in _availableSectionCodes) {
+      if (sectionCode == _allSectionsAuditCode) continue;
+      for (final row in _rowsForSection(sectionCode)) {
+        final hydratedValue =
+            _normalizeToKnownTdsParty(row.exactMapping?.mappedName) ??
+            _normalizeToKnownTdsParty(row.fallbackMapping?.mappedName);
+        if (hydratedValue == null || hydratedValue.trim().isEmpty) continue;
+        selectedMappings[row.rowKey] = hydratedValue.trim();
+      }
+    }
 
     autoMapDetails = {};
   }
@@ -1036,7 +1125,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
 
       if (currentMappedName.isEmpty) {
-        if (existingExactName.isNotEmpty && _clearedRowKeys.contains(row.rowKey)) {
+        if (existingExactName.isNotEmpty &&
+            _clearedRowKeys.contains(row.rowKey)) {
           deleted.add({
             'aliasName': row.normalizedAlias,
             'sectionCode': row.sectionCode,
@@ -1053,14 +1143,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         'aliasName': row.normalizedAlias,
         'sectionCode': row.sectionCode,
         'mappedName': currentMappedName,
-        'mappedPan': _getPanForTdsParty(currentMappedName),
+        'mappedPan': _isSeparateSelection(row, currentMappedName)
+            ? row.purchasePan
+            : _getPanForTdsParty(currentMappedName),
       });
     }
 
-    Navigator.pop(context, {
-      'upserts': upserts,
-      'deleted': deleted,
-    });
+    Navigator.pop(context, {'upserts': upserts, 'deleted': deleted});
   }
 
   String _buyerInitials() {
@@ -1097,7 +1186,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     return [
       _SellerMappingSummaryMetric(
-        label: _activeListView == _SellerMappingListView.allSellers ? 'Total' : 'Visible',
+        label: _activeListView == _SellerMappingListView.allSellers
+            ? 'Total'
+            : 'Visible',
         value: visibleRows.length,
         icon: Icons.inventory_2_outlined,
         color: const Color(0xFF344054),
@@ -1139,10 +1230,15 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     switch (status) {
       case 'Mapped':
         return _successColor;
+      case 'Marked Separate':
+        return const Color(0xFF0F766E);
       case '26Q Unmatched':
         return const Color(0xFF7C3AED);
+      case 'Conflicting PAN':
+      case 'Ambiguous Identity':
+      case 'Unresolved Identity':
       case 'Mapped (PAN missing)':
-        return _warningColor;
+        return status == 'Mapped (PAN missing)' ? _warningColor : _dangerColor;
       case 'PAN Conflict':
         return _dangerColor;
       default:
@@ -1167,8 +1263,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     switch (status) {
       case 'Mapped':
         return Icons.check_circle_rounded;
+      case 'Marked Separate':
+        return Icons.account_tree_rounded;
       case '26Q Unmatched':
         return Icons.link_off_rounded;
+      case 'Conflicting PAN':
+        return Icons.warning_rounded;
+      case 'Ambiguous Identity':
+        return Icons.help_center_rounded;
+      case 'Unresolved Identity':
+        return Icons.person_off_rounded;
       case 'Mapped (PAN missing)':
         return Icons.help_outline_rounded;
       case 'PAN Conflict':
@@ -1178,36 +1282,24 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
   }
 
-  Color _rowBackgroundColor({
-    required String status,
-    required int index,
-  }) {
+  Color _rowBackgroundColor({required String status, required int index}) {
     final base = index.isEven ? Colors.white : const Color(0xFFFBFCFE);
     if (status == 'PAN Conflict') {
-      return Color.alphaBlend(
-        _dangerColor.withValues(alpha: 0.08),
-        base,
-      );
+      return Color.alphaBlend(_dangerColor.withValues(alpha: 0.08), base);
     }
     if (status == 'Mapped • Verify PAN') {
-      return Color.alphaBlend(
-        _warningColor.withValues(alpha: 0.08),
-        base,
-      );
+      return Color.alphaBlend(_warningColor.withValues(alpha: 0.08), base);
     }
     return base;
   }
 
-  Color _rowBackgroundColorSafe({
-    required String status,
-    required int index,
-  }) {
+  Color _rowBackgroundColorSafe({required String status, required int index}) {
     final base = index.isEven ? Colors.white : const Color(0xFFFBFCFE);
-    if (status == 'PAN Conflict') {
-      return Color.alphaBlend(
-        _dangerColor.withValues(alpha: 0.08),
-        base,
-      );
+    if (status == 'PAN Conflict' ||
+        status == 'Conflicting PAN' ||
+        status == 'Ambiguous Identity' ||
+        status == 'Unresolved Identity') {
+      return Color.alphaBlend(_dangerColor.withValues(alpha: 0.08), base);
     }
     if (status == '26Q Unmatched') {
       return Color.alphaBlend(
@@ -1216,10 +1308,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       );
     }
     if (status == 'Mapped (PAN missing)') {
-      return Color.alphaBlend(
-        _warningColor.withValues(alpha: 0.08),
-        base,
-      );
+      return Color.alphaBlend(_warningColor.withValues(alpha: 0.08), base);
     }
     return base;
   }
@@ -1239,13 +1328,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final fallbackName = row.fallbackMapping?.mappedName.trim() ?? '';
     final suggestion = row.resolvedSuggestion;
     final explicitSelectedValue = _getExplicitSelectedValue(row);
-    final exactMappedName = row.exactMapping?.mappedName.trim() ?? '';
 
     if (explicitSelectedValue != null && autoMapDetail == null) {
-      if (exactMappedName.isNotEmpty && explicitSelectedValue == exactMappedName) {
-        messages.add('Exact section mapping saved');
-      } else if (explicitSelectedValue.isNotEmpty) {
-        messages.add('Manual selection made; save to store exact section mapping');
+      if (_isDangerousPreflightStatus(status)) {
+        messages.add('Review this saved selection before reconciliation');
+      } else if (status == 'Unmapped') {
+        messages.add('Select a 26Q party for this alias and section');
       }
     }
 
@@ -1285,27 +1373,36 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         suggestion.mappedName.trim().isNotEmpty &&
         explicitSelectedValue == null) {
       switch (suggestion.source) {
-        case 'saved_fallback':
-          messages.add('Global fallback currently used in reconciliation');
-          break;
-        case 'backend_inferred':
+        case 'tds_only':
           messages.add(
-            'Currently resolved in reconciliation as ${suggestion.mappedName}',
+            '26Q seller is currently unmatched to any purchase alias',
           );
           break;
-        case 'tds_only':
-          messages.add('26Q seller is currently unmatched to any purchase alias');
+        case 'saved_exact':
+        case 'saved_fallback':
+        case 'backend_inferred':
+        case 'preflight_resolved':
           break;
       }
-      messages.add(
-        suggestion.helperText.trim().isNotEmpty
-            ? suggestion.helperText.trim()
-            : 'Visible as a suggestion only; save to store as exact section mapping',
-      );
+      if (_isDangerousPreflightStatus(status) ||
+          status == 'Unmapped' ||
+          status == '26Q Unmatched') {
+        messages.add(
+          suggestion.helperText.trim().isNotEmpty
+              ? suggestion.helperText.trim()
+              : 'Visible as a suggestion only; save to store as exact section mapping',
+        );
+      }
     }
 
     if (status == '26Q Unmatched') {
       messages.add('Review the 26Q-only seller and link it manually if needed');
+    } else if (status == 'Marked Separate') {
+      messages.add('This seller will stay separate from 26Q after saving');
+    } else if (_isPreflightMode &&
+        row.preflightReasonDetail.trim().isNotEmpty &&
+        _isDangerousPreflightStatus(status)) {
+      messages.add(row.preflightReasonDetail.trim());
     } else if (status == 'PAN Conflict') {
       messages.add('Conflict: purchase PAN and 26Q PAN differ');
     } else if (status == 'Mapped (PAN missing)') {
@@ -1316,13 +1413,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       } else {
         messages.add('Select a 26Q party for this alias and section');
       }
-    } else if (selectedValue != null && selectedValue.isNotEmpty) {
+    } else if (selectedValue != null &&
+        selectedValue.isNotEmpty &&
+        _isDangerousPreflightStatus(status)) {
       messages.add('PAN verified against selected 26Q party');
     }
 
     if (fallbackName.isNotEmpty &&
         (row.exactMapping?.mappedName.trim() ?? '').isEmpty &&
-        !messages.contains('Global fallback mapping available')) {
+        !messages.contains('Global fallback mapping available') &&
+        (status == 'Unmapped' || _isDangerousPreflightStatus(status))) {
       messages.add('Global fallback mapping available');
     }
 
@@ -1351,7 +1451,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return _mutedTextColor;
   }
 
-  bool rowHasResolvedSuggestion(String status, _AutoMapDecision? autoMapDetail) {
+  bool rowHasResolvedSuggestion(
+    String status,
+    _AutoMapDecision? autoMapDetail,
+  ) {
     return autoMapDetail == null &&
         (status == 'Mapped' || status == 'Mapped (PAN missing)');
   }
@@ -1361,16 +1464,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       return 0;
     }
 
-    return _rowsForActiveSection().length - _filteredRowsForViewModeOnly().length;
+    return _rowsForActiveSection().length -
+        _filteredRowsForViewModeOnly().length;
   }
 
   List<_SellerMappingRowVm> _filteredRowsForViewModeOnly() {
     return _rowsForActiveSection().where((row) {
       final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(
-        row: row,
-        selectedValue: selectedValue,
-      );
+      final status = _getStatus(row: row, selectedValue: selectedValue);
       final autoMapDetail = autoMapDetails[row.rowKey];
 
       return _matchesListView(
@@ -1500,8 +1601,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Rows remain section-aware. Existing ALL mappings are shown as guidance only, and saving continues to create or update exact section mappings.',
+                Text(
+                  _isPreflightMode
+                      ? 'Preflight is 26Q-centered. Only same-section source aliases relevant to 26Q sellers are shown here, and ledger-only sellers are handled later in reconciliation.'
+                      : 'Rows remain section-aware. Existing ALL mappings are shown as guidance only, and saving continues to create or update exact section mappings.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.45,
@@ -1531,13 +1634,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       side: const BorderSide(color: _borderColor),
       foregroundColor: _titleTextColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      textStyle: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
     );
     final viewModeHelperText = _viewModeHelperText();
 
@@ -1583,7 +1681,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                     selectedColor: _primarySoft,
                     backgroundColor: Colors.white,
                     side: BorderSide(
-                      color: isSelected ? const Color(0xFFBFCCF5) : _borderColor,
+                      color: isSelected
+                          ? const Color(0xFFBFCCF5)
+                          : _borderColor,
                     ),
                     labelStyle: TextStyle(
                       fontSize: 12,
@@ -1617,7 +1717,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                     selectedColor: _primarySoft,
                     backgroundColor: Colors.white,
                     side: BorderSide(
-                      color: isSelected ? const Color(0xFFBFCCF5) : _borderColor,
+                      color: isSelected
+                          ? const Color(0xFFBFCCF5)
+                          : _borderColor,
                     ),
                     labelStyle: TextStyle(
                       fontSize: 12,
@@ -1686,8 +1788,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: _primaryColor, width: 1.2),
+                  borderSide: const BorderSide(
+                    color: _primaryColor,
+                    width: 1.2,
+                  ),
                 ),
               ),
             ),
@@ -1759,41 +1863,79 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   Widget _buildTableHeader() {
-    Widget headerCell(String title, int flex, {Alignment? alignment}) {
+    Widget headerCell(
+      String title,
+      int flex, {
+      Alignment? alignment,
+      String? tooltipMessage,
+    }) {
       return Expanded(
         flex: flex,
         child: Align(
           alignment: alignment ?? Alignment.centerLeft,
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF344054),
-              letterSpacing: 0.3,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF344054),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              if (tooltipMessage != null &&
+                  tooltipMessage.trim().isNotEmpty) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: tooltipMessage,
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: _mutedTextColor,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       );
     }
 
+    const sourcePanTooltip =
+        'PAN from source file, or inferred from GSTIN when available.';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: const BoxDecoration(
         color: Color(0xFFF8FAFC),
-        border: Border(
-          bottom: BorderSide(color: _borderColor),
-        ),
+        border: Border(bottom: BorderSide(color: _borderColor)),
       ),
       child: Row(
         children: [
-          headerCell('Purchase Party', 4),
+          headerCell(_isPreflightMode ? 'Source Seller' : 'Purchase Party', 4),
           headerCell('Section', 2),
-          headerCell('Purchase PAN', 2),
-          headerCell('Mapped 26Q Party', 4),
+          headerCell(
+            _isPreflightMode ? 'Source/Inferred PAN' : 'Purchase PAN',
+            2,
+            tooltipMessage: _isPreflightMode ? sourcePanTooltip : null,
+          ),
+          headerCell(
+            _isPreflightMode
+                ? 'Matched / Selected 26Q Seller'
+                : 'Mapped 26Q Party',
+            4,
+          ),
           headerCell('26Q PAN', 2),
           headerCell('Status', 2),
-          headerCell('Actions', 1, alignment: Alignment.center),
+          headerCell(
+            'Actions',
+            _isPreflightMode ? 2 : 1,
+            alignment: Alignment.center,
+          ),
         ],
       ),
     );
@@ -1811,6 +1953,30 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = normalizedValue;
       }
+    });
+  }
+
+  bool _canAcceptSuggestion(_SellerMappingRowVm row) {
+    final suggested = _normalizeToKnownTdsParty(
+      row.resolvedSuggestion?.mappedName,
+    );
+    return suggested != null && suggested.trim().isNotEmpty;
+  }
+
+  void _acceptSuggestedMapping(_SellerMappingRowVm row) {
+    final suggested = _normalizeToKnownTdsParty(
+      row.resolvedSuggestion?.mappedName,
+    );
+    if (suggested == null || suggested.trim().isEmpty) return;
+    _setMappedParty(row, suggested);
+  }
+
+  void _markSeparate(_SellerMappingRowVm row) {
+    if (row.isReadOnly) return;
+    setState(() {
+      autoMapDetails.remove(row.rowKey);
+      _clearedRowKeys.remove(row.rowKey);
+      selectedMappings[row.rowKey] = _separateSelectionValue(row);
     });
   }
 
@@ -1915,16 +2081,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }) {
       return Expanded(
         flex: flex,
-        child: Align(
-          alignment: alignment,
-          child: child,
-        ),
+        child: Align(alignment: alignment, child: child),
       );
     }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
         color: _rowBackgroundColorSafe(status: status, index: index),
         border: Border(
@@ -1939,7 +2102,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           cell(
             flex: 4,
             child: Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
                 row.purchasePartyDisplayName,
                 maxLines: 2,
@@ -1956,7 +2119,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           cell(
             flex: 2,
             child: Padding(
-              padding: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.only(top: 2),
               child: _SellerMappingPill(
                 icon: Icons.grid_view_rounded,
                 label: sectionDisplayLabel(row.sectionCode),
@@ -1967,7 +2130,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           cell(
             flex: 2,
             child: Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
                 row.purchasePan.isEmpty ? 'Not available' : row.purchasePan,
                 maxLines: 2,
@@ -1985,22 +2148,18 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildPartyAutocomplete(
-                  row: row,
-                  selectedValue: selectedValue,
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 34,
-                  child: Align(
+                _buildPartyAutocomplete(row: row, selectedValue: selectedValue),
+                if (helperMessages.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Align(
                     alignment: Alignment.topLeft,
                     child: Text(
                       helperMessages.join('\n'),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 11.5,
-                        height: 1.35,
+                        fontSize: 11,
+                        height: 1.2,
                         fontWeight: FontWeight.w600,
                         color: _helperTextColor(
                           status: status,
@@ -2009,14 +2168,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
           cell(
             flex: 2,
             child: Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
                 selectedPan.isEmpty ? 'Not available' : selectedPan,
                 maxLines: 2,
@@ -2032,34 +2191,86 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           cell(
             flex: 2,
             child: Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.only(top: 1),
               child: _SellerMappingStatusChip(
                 icon: _statusIconSafe(status),
-                label: status,
+                label: _statusChipLabel(status),
                 color: _statusAccentColor(status),
               ),
             ),
           ),
           cell(
-            flex: 1,
+            flex: _isPreflightMode ? 2 : 1,
             alignment: Alignment.topCenter,
-            child: IconButton(
-              tooltip: row.isReadOnly
-                  ? '26Q-only row cannot be cleared here'
-                  : 'Clear Seller Mapping',
-              onPressed: row.isReadOnly ? null : () => _clearMapping(row),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white.withValues(alpha: 0.88),
-                foregroundColor: _dangerColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: _dangerColor.withValues(alpha: 0.18),
+            child: _isPreflightMode
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_canAcceptSuggestion(row))
+                        TextButton(
+                          onPressed: row.isReadOnly
+                              ? null
+                              : () => _acceptSuggestedMapping(row),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Accept'),
+                        ),
+                      if (!_isSeparateSelection(row, selectedValue))
+                        TextButton(
+                          onPressed: row.isReadOnly
+                              ? null
+                              : () => _markSeparate(row),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Separate'),
+                        ),
+                      IconButton(
+                        tooltip: row.isReadOnly
+                            ? '26Q-only row cannot be cleared here'
+                            : 'Clear Seller Mapping',
+                        onPressed: row.isReadOnly
+                            ? null
+                            : () => _clearMapping(row),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.88),
+                          foregroundColor: _dangerColor,
+                          minimumSize: const Size(32, 32),
+                          padding: const EdgeInsets.all(6),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: _dangerColor.withValues(alpha: 0.18),
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  )
+                : IconButton(
+                    tooltip: row.isReadOnly
+                        ? '26Q-only row cannot be cleared here'
+                        : 'Clear Seller Mapping',
+                    onPressed: row.isReadOnly ? null : () => _clearMapping(row),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.88),
+                      foregroundColor: _dangerColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: _dangerColor.withValues(alpha: 0.18),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.close_rounded),
                   ),
-                ),
-              ),
-              icon: const Icon(Icons.close_rounded),
-            ),
           ),
         ],
       ),
@@ -2160,8 +2371,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                                 final row = visibleRows[index];
                                 final isLast = index == visibleRows.length - 1;
                                 final selectedValue = _getSelectedValue(row);
-                                final selectedPan =
-                                    _getPanForTdsParty(selectedValue);
+                                final selectedPan = _getPanForSelection(
+                                  row,
+                                  selectedValue,
+                                );
                                 final status = _getStatus(
                                   row: row,
                                   selectedValue: selectedValue,
@@ -2209,14 +2422,19 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final reviewText = conflictCount > 0
         ? '$conflictCount conflict ${conflictCount == 1 ? 'needs' : 'need'} review before final reconciliation.'
         : missingPanCount > 0
-            ? '$missingPanCount row ${missingPanCount == 1 ? 'has' : 'have'} mapped selections that still need PAN verification.'
-            : 'All visible mappings are ready for reconciliation review.';
+        ? '$missingPanCount row ${missingPanCount == 1 ? 'has' : 'have'} mapped selections that still need PAN verification.'
+        : 'All visible mappings are ready for reconciliation review.';
+    final preflightReviewCount = visibleRows.where((row) {
+      final selectedValue = _getSelectedValue(row);
+      final status = _getStatus(row: row, selectedValue: selectedValue);
+      return _isDangerousPreflightStatus(status);
+    }).length;
 
     final reviewColor = conflictCount > 0
         ? _dangerColor
         : missingPanCount > 0
-            ? _warningColor
-            : _successColor;
+        ? _warningColor
+        : _successColor;
 
     return SafeArea(
       top: false,
@@ -2224,9 +2442,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
         decoration: BoxDecoration(
           color: _surfaceColor.withValues(alpha: 0.96),
-          border: const Border(
-            top: BorderSide(color: _borderColor),
-          ),
+          border: const Border(top: BorderSide(color: _borderColor)),
           boxShadow: const [
             BoxShadow(
               color: Color(0x140F172A),
@@ -2252,7 +2468,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    reviewText,
+                    _isPreflightMode
+                        ? (preflightReviewCount > 0
+                              ? '$preflightReviewCount 26Q seller ${preflightReviewCount == 1 ? 'still needs' : 'still need'} dangerous identity review before reconciliation.'
+                              : 'No dangerous 26Q seller identity issues remain in preflight review.')
+                        : reviewText,
                     style: TextStyle(
                       fontSize: 12.5,
                       height: 1.35,
@@ -2290,7 +2510,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 ),
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
-              label: const Text('Proceed to Reconciliation'),
+              label: Text(
+                _isPreflightMode ? 'Save Review' : 'Proceed to Reconciliation',
+              ),
             ),
           ],
         ),
@@ -2305,6 +2527,24 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required _AutoMapDecision? autoMapDetail,
     required _SellerMappingListView view,
   }) {
+    if (_isPreflightMode) {
+      final needsAction =
+          _isDangerousPreflightStatus(status) ||
+          (selectedValue == null || selectedValue.trim().isEmpty) &&
+              row.requiresDangerousReview;
+
+      switch (view) {
+        case _SellerMappingListView.needsAction:
+          return needsAction;
+        case _SellerMappingListView.aboveThreshold:
+          return false;
+        case _SellerMappingListView.unmatched26Q:
+          return false;
+        case _SellerMappingListView.allSellers:
+          return true;
+      }
+    }
+
     final isBlockedAlias = widget.blockedAliases.contains(row.normalizedAlias);
     final wasCleared = _clearedRowKeys.contains(row.rowKey);
     final isUnmapped = selectedValue == null || selectedValue.trim().isEmpty;
@@ -2366,9 +2606,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               const SizedBox(height: 14),
               _buildTopToolbar(),
               const SizedBox(height: 16),
-              Expanded(
-                child: _buildTableSection(visibleRows),
-              ),
+              Expanded(child: _buildTableSection(visibleRows)),
             ],
           ),
         ),
@@ -2394,9 +2632,7 @@ class _SellerMappingSummaryMetric {
 class _SellerMappingMetricCard extends StatelessWidget {
   final _SellerMappingSummaryMetric metric;
 
-  const _SellerMappingMetricCard({
-    required this.metric,
-  });
+  const _SellerMappingMetricCard({required this.metric});
 
   @override
   Widget build(BuildContext context) {
@@ -2406,9 +2642,7 @@ class _SellerMappingMetricCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: metric.color.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: metric.color.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2510,9 +2744,7 @@ class _SellerMappingStatusChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: color.withValues(alpha: 0.24),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

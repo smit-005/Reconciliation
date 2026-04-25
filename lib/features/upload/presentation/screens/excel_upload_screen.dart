@@ -7,17 +7,22 @@ import 'package:reconciliation_app/features/reconciliation/models/normalized/nor
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/reconciliation_screen.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
-import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_preparation_service.dart';
+import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_preflight_service.dart';
+import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
+import 'package:reconciliation_app/features/upload/models/batch_mapping_review_item.dart';
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
 import 'package:reconciliation_app/features/upload/models/import_format_profile.dart';
 import 'package:reconciliation_app/features/upload/models/ledger_upload_file.dart';
 import 'package:reconciliation_app/features/upload/models/tds_26q_upload_file.dart';
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
+import 'package:reconciliation_app/features/upload/presentation/screens/batch_mapping_review_screen.dart';
 import 'package:reconciliation_app/features/upload/presentation/screens/column_mapping_screen.dart';
+import 'package:reconciliation_app/features/upload/services/batch_mapping_review_service.dart';
 import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_mapping_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_profile_service.dart';
@@ -37,6 +42,20 @@ class ExcelUploadScreen extends StatefulWidget {
 
   @override
   State<ExcelUploadScreen> createState() => _ExcelUploadScreenState();
+}
+
+String formatSellerMappingFinancialYearLabel(List<Tds26QRow> tdsRows) {
+  if (tdsRows.isEmpty) return 'FY Unknown';
+
+  final rawFinancialYear = tdsRows.first.financialYear.trim();
+  if (rawFinancialYear.isEmpty) return 'FY Unknown';
+
+  final compactDigits = rawFinancialYear.replaceAll(RegExp(r'[^0-9]'), '');
+  if (compactDigits.length >= 6) {
+    return 'FY ${compactDigits.substring(0, 4)}-${compactDigits.substring(4, 6)}';
+  }
+
+  return 'FY $rawFinancialYear';
 }
 
 class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
@@ -59,10 +78,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   bool isLoadingTds = false;
   Tds26QUploadFile? tdsUploadFile;
   String _activeSectionCode = '194Q';
-  
+
   // Seller mapping state
   bool _isSellerMappingConfirmed = false;
   bool _isLoadingSellerMapping = false;
+  SellerMappingPreflightResult? _sellerMappingPreflight;
 
   final Set<String> selectedSections = {'194Q'};
   final Map<String, bool> sectionLoading = {
@@ -290,6 +310,116 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     });
   }
 
+  void _invalidateSellerMappingConfirmation() {
+    if (_isSellerMappingConfirmed) {
+      _isSellerMappingConfirmed = false;
+    }
+    _sellerMappingPreflight = null;
+  }
+
+  bool get _canReviewSellerMappings =>
+      _has26QReady &&
+      _allRequiredMappingsConfirmed &&
+      _buildSourceRowsBySection().isNotEmpty;
+
+  int get _pendingSellerMappingReviewCount =>
+      _sellerMappingPreflight?.pendingReviewCount ?? 0;
+
+  Future<void> _refreshSellerMappingPreflight() async {
+    if (!_canReviewSellerMappings) {
+      if (!mounted) return;
+      setState(() {
+        _sellerMappingPreflight = null;
+        _isSellerMappingConfirmed = false;
+        _isLoadingSellerMapping = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingSellerMapping = true;
+      });
+    }
+
+    try {
+      final result = await SellerMappingPreflightService.analyze(
+        buyerName: widget.selectedBuyerName,
+        buyerPan: widget.selectedBuyerPan,
+        tdsRows: tdsRows,
+        sourceRowsBySection: _buildSourceRowsBySection(),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _sellerMappingPreflight = result;
+        _isSellerMappingConfirmed = result.isSafeForReconciliation;
+        _isLoadingSellerMapping = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sellerMappingPreflight = null;
+        _isSellerMappingConfirmed = false;
+        _isLoadingSellerMapping = false;
+      });
+      _showUploadSnackBar('Failed to prepare seller mapping review: $e');
+    }
+  }
+
+  void _refreshSellerMappingPreflightIfReady() {
+    if (_canReviewSellerMappings) {
+      _refreshSellerMappingPreflight();
+    }
+  }
+
+  @visibleForTesting
+  Future<void> refreshSellerMappingPreflightForTest() {
+    return _refreshSellerMappingPreflight();
+  }
+
+  @visibleForTesting
+  bool get isSellerMappingConfirmedForTest => _isSellerMappingConfirmed;
+
+  Future<void> _applySellerMappingChanges(Map<String, dynamic> result) async {
+    final upserts = List<Map<String, String>>.from(
+      result['upserts'] as List? ?? const <Map<String, String>>[],
+    );
+    final deleted = List<Map<String, String>>.from(
+      result['deleted'] as List? ?? const <Map<String, String>>[],
+    );
+
+    for (final entry in deleted) {
+      final aliasName = entry['aliasName']?.trim() ?? '';
+      final sectionCode = entry['sectionCode']?.trim() ?? 'ALL';
+      if (aliasName.isEmpty) continue;
+      await SellerMappingService.deleteMapping(
+        buyerPan: widget.selectedBuyerPan,
+        aliasName: aliasName,
+        sectionCode: sectionCode,
+      );
+    }
+
+    for (final entry in upserts) {
+      final aliasName = entry['aliasName']?.trim() ?? '';
+      final sectionCode = entry['sectionCode']?.trim() ?? 'ALL';
+      final mappedName = entry['mappedName']?.trim() ?? '';
+      if (aliasName.isEmpty || mappedName.isEmpty) continue;
+
+      await SellerMappingService.saveMapping(
+        SellerMapping(
+          buyerName: widget.selectedBuyerName,
+          buyerPan: widget.selectedBuyerPan,
+          aliasName: aliasName,
+          sectionCode: sectionCode,
+          mappedPan: entry['mappedPan']?.trim() ?? '',
+          mappedName: mappedName,
+        ),
+      );
+    }
+  }
+
   void _rebuildPurchaseState() {
     final allPurchaseRows = purchaseRowsByFileId.values
         .expand((rows) => rows)
@@ -309,6 +439,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       sectionFiles[sectionCode] = sectionFiles[sectionCode]!
           .where((item) => item.id != file.id)
           .toList();
+      _invalidateSellerMappingConfirmation();
       if (sectionCode == '194Q') {
         purchaseRowsByFileId.remove(file.id);
         _rebuildPurchaseState();
@@ -318,6 +449,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             .toList();
       }
     });
+    _refreshSellerMappingPreflightIfReady();
   }
 
   Future<LedgerUploadFile?> _buildPurchaseUploadFile({
@@ -501,6 +633,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               (item) => item.id == file.id ? resolvedUpdatedFile : item,
             )
             .toList();
+        _invalidateSellerMappingConfirmation();
         if (sectionCode == '194Q') {
           _rebuildPurchaseState();
         } else {
@@ -510,6 +643,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         }
         sectionLoading[sectionCode] = false;
       });
+      _refreshSellerMappingPreflightIfReady();
 
       _showUploadSnackBar('${file.fileName} remapped successfully');
     } catch (e) {
@@ -545,12 +679,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       setState(() {
         sectionFiles['194Q'] = [...sectionFiles['194Q']!, uploadFile];
+        _invalidateSellerMappingConfirmation();
         _rebuildPurchaseState();
         sectionLoading['194Q'] = false;
       });
+      _refreshSellerMappingPreflightIfReady();
 
       _showUploadSnackBar(
-        '194Q source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Review Mapping to confirm columns.',
+        '194Q source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Open Review All Mappings to confirm it.',
       );
     } catch (e) {
       _setSectionLoading('194Q', false);
@@ -586,14 +722,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       setState(() {
         sectionFiles[sectionCode] = [...sectionFiles[sectionCode]!, uploadFile];
+        _invalidateSellerMappingConfirmation();
         ledgerRowsBySection[sectionCode] = sectionFiles[sectionCode]!
             .expand((item) => item.rows)
             .toList();
         sectionLoading[sectionCode] = false;
       });
+      _refreshSellerMappingPreflightIfReady();
 
       _showUploadSnackBar(
-        '$sectionCode source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Review Mapping to confirm columns.',
+        '$sectionCode source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Open Review All Mappings to confirm it.',
       );
     } catch (e) {
       _setSectionLoading(sectionCode, false);
@@ -671,6 +809,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
+        _invalidateSellerMappingConfirmation();
         tdsUploadFile = Tds26QUploadFile(
           fileName: pickedFile.name,
           bytes: bytes,
@@ -690,6 +829,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             .toList();
         isLoadingTds = false;
       });
+      _refreshSellerMappingPreflightIfReady();
       uploadWatch.stop();
       debugPrint(
         'UPLOAD PERF => 26Q parse ${uploadWatch.elapsedMilliseconds} ms | '
@@ -699,7 +839,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       debugPrint('UPLOAD COUNT => 26Q rows=${result.parsedRows.length}');
 
       _showUploadSnackBar(
-        '26Q uploaded: ${result.parsedRows.length} rows. Review Mapping to confirm columns.',
+        '26Q uploaded: ${result.parsedRows.length} rows. Continue uploading files, then open Review All Mappings.',
       );
     } catch (e) {
       setState(() => isLoadingTds = false);
@@ -739,6 +879,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
+        _invalidateSellerMappingConfirmation();
         tdsUploadFile = Tds26QUploadFile(
           fileName: file.fileName,
           bytes: file.bytes,
@@ -758,6 +899,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             .toList();
         isLoadingTds = false;
       });
+      _refreshSellerMappingPreflightIfReady();
 
       _showUploadSnackBar('26Q mapping confirmed');
     } catch (e) {
@@ -789,7 +931,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     if (!_isSellerMappingConfirmed) {
       _showUploadSnackBar(
-        'Please review and confirm seller mappings before opening reconciliation.',
+        _pendingSellerMappingReviewCount > 0
+            ? 'Resolve $_pendingSellerMappingReviewCount dangerous 26Q seller review ${_pendingSellerMappingReviewCount == 1 ? 'issue' : 'issues'} before opening reconciliation.'
+            : 'Please wait for seller mapping review to complete.',
       );
       return;
     }
@@ -823,15 +967,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   Future<void> openSellerMappingScreen() async {
-    if (tdsRows.isEmpty) {
-      _showUploadSnackBar('Please upload and map the 26Q file first');
-      return;
-    }
-
-    final sourceRowsBySection = _buildSourceRowsBySection();
-    if (sourceRowsBySection.isEmpty) {
+    if (!_canReviewSellerMappings) {
       _showUploadSnackBar(
-        'Upload at least one source file in any selected section first.',
+        'Complete file uploads and column mapping before reviewing seller mappings.',
       );
       return;
     }
@@ -840,30 +978,29 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     try {
       final preparationResult =
-          await SellerMappingPreparationService.prepareMappingData(
-        buyerName: widget.selectedBuyerName,
-        buyerPan: widget.selectedBuyerPan,
-        tdsRows: tdsRows,
-        sourceRowsBySection: sourceRowsBySection,
-      );
+          _sellerMappingPreflight ??
+          await SellerMappingPreflightService.analyze(
+            buyerName: widget.selectedBuyerName,
+            buyerPan: widget.selectedBuyerPan,
+            tdsRows: tdsRows,
+            sourceRowsBySection: _buildSourceRowsBySection(),
+          );
 
       if (!mounted) return;
 
-      final fyLabel =
-          tdsRows.isNotEmpty
-              ? 'FY ${tdsRows.first.financialYear.substring(0, 4)}-${tdsRows.first.financialYear.substring(4, 6)}'
-              : 'FY Unknown';
+      final fyLabel = _sellerMappingFinancialYearLabel();
 
       final result = await Navigator.push<Map<String, dynamic>>(
         context,
         MaterialPageRoute(
           builder: (_) => SellerMappingScreen(
+            mode: SellerMappingScreenMode.preflight,
             buyerName: widget.selectedBuyerName,
             buyerPan: widget.selectedBuyerPan,
             financialYearLabel: fyLabel,
             selectedSectionLabel: 'All',
             initialViewMode: ReconciliationViewMode.summary,
-            purchaseRows: preparationResult.purchaseRows,
+            purchaseRows: preparationResult.reviewRows,
             tdsParties: preparationResult.tdsParties,
             existingMappings: preparationResult.existingMappings,
             blockedAliases: preparationResult.blockedAliases,
@@ -878,18 +1015,27 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
-      setState(() {
-        _isSellerMappingConfirmed = true;
-        _isLoadingSellerMapping = false;
-      });
+      await _applySellerMappingChanges(result);
+      _invalidateSellerMappingConfirmation();
+      await _refreshSellerMappingPreflight();
 
-      _showUploadSnackBar('Seller mappings confirmed successfully');
+      if (!mounted) return;
+
+      _showUploadSnackBar(
+        _isSellerMappingConfirmed
+            ? 'Seller mapping review completed. No dangerous unresolved identities remain.'
+            : 'Seller mapping review saved. $_pendingSellerMappingReviewCount dangerous 26Q seller ${_pendingSellerMappingReviewCount == 1 ? 'item remains' : 'items remain'}.',
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingSellerMapping = false);
         _showUploadSnackBar('Failed to open seller mapping: $e');
       }
     }
+  }
+
+  String _sellerMappingFinancialYearLabel() {
+    return formatSellerMappingFinancialYearLabel(tdsRows);
   }
 
   Map<String, List<NormalizedTransactionRow>> _buildSourceRowsBySection() {
@@ -960,24 +1106,22 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   bool get _has26QReady => tdsUploadFile != null && tdsRows.isNotEmpty;
 
+  bool get _canUploadSectionFiles => _has26QReady;
+
   Iterable<LedgerUploadFile> get _allUploadedSectionFiles =>
       sectionFiles.values.expand((files) => files);
 
+  List<BatchMappingReviewItem> get _batchMappingReviewItems =>
+      BatchMappingReviewService.buildItems(
+        tdsFile: tdsUploadFile,
+        sectionFiles: _allUploadedSectionFiles,
+      );
+
   List<String> get _pendingMappingReviewLabels {
-    final pending = <String>[];
-
-    final tdsFile = tdsUploadFile;
-    if (tdsFile != null && !tdsFile.mappingStatus.isConfirmed) {
-      pending.add('26Q (${tdsFile.fileName})');
-    }
-
-    for (final file in _allUploadedSectionFiles) {
-      if (!file.mappingStatus.isConfirmed) {
-        pending.add('${file.sectionCode} (${file.fileName})');
-      }
-    }
-
-    return pending;
+    return _batchMappingReviewItems
+        .where((item) => !item.isConfirmed)
+        .map((item) => '${item.sectionCode} (${item.fileName})')
+        .toList();
   }
 
   bool get _allRequiredMappingsConfirmed => _pendingMappingReviewLabels.isEmpty;
@@ -1005,6 +1149,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
     if (!_allRequiredMappingsConfirmed) {
       return 'Review and confirm column mapping for every uploaded file before reconciliation.';
+    }
+    if (_canReviewSellerMappings && !_isSellerMappingConfirmed) {
+      return _pendingSellerMappingReviewCount > 0
+          ? 'Review seller mappings. $_pendingSellerMappingReviewCount dangerous 26Q seller ${_pendingSellerMappingReviewCount == 1 ? 'still needs' : 'still need'} action.'
+          : 'Preparing seller mapping preflight review.';
     }
     return 'Add at least one source file in a selected section to continue.';
   }
@@ -1038,24 +1187,109 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
   }
 
-  void _reviewWorkspaceStatus() {
-    if (!_hasWorkspaceContent) {
+  int get _safeBatchMappingCount => _batchMappingReviewItems
+      .where((item) => item.canConfirmSafely)
+      .length;
+
+  int get _reviewRequiredBatchMappingCount => _batchMappingReviewItems
+      .where((item) => !item.isConfirmed)
+      .length;
+
+  Future<void> _openBatchMappingReviewScreen() async {
+    if (_batchMappingReviewItems.isEmpty) {
       _showUploadSnackBar(
-        'Add a 26Q file or source files to start building the workspace.',
+        'Upload a 26Q file or source files before opening mapping review.',
       );
       return;
     }
 
-    if (_pendingMappingReviewLabels.isNotEmpty) {
-      _showUploadSnackBar(
-        'Pending mapping confirmation: ${_pendingMappingReviewLabels.join(', ')}',
-      );
-      return;
-    }
-
-    _showUploadSnackBar(
-      'Workspace status: $_workspaceStatusLabel. $_workspaceStatusDetail',
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BatchMappingReviewScreen(
+          loadItems: () async => _batchMappingReviewItems,
+          onReviewItem: _handleBatchReviewItem,
+          onConfirmItem: _confirmSingleSafeMapping,
+          onConfirmAllSafe: _confirmAllSafeMappings,
+        ),
+      ),
     );
+
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<bool> _handleBatchReviewItem(BatchMappingReviewItem item) async {
+    if (item.type == BatchMappingReviewItemType.tds26q) {
+      final previousStatus = tdsUploadFile?.mappingStatus;
+      await _reviewTds26QMapping();
+      return previousStatus != tdsUploadFile?.mappingStatus;
+    }
+
+    final fileId = item.itemKey.replaceFirst('section:', '');
+    final file = _findSectionFileById(fileId);
+    if (file == null) return false;
+
+    final previousStatus = file.mappingStatus;
+    await _remapSectionFile(file.sectionCode, file);
+    final updatedFile = _findSectionFileById(fileId);
+    return previousStatus != updatedFile?.mappingStatus;
+  }
+
+  Future<bool> _confirmSingleSafeMapping(BatchMappingReviewItem item) async {
+    if (!item.canConfirmSafely) return false;
+
+    if (item.type == BatchMappingReviewItemType.tds26q) {
+      final file = tdsUploadFile;
+      if (file == null) return false;
+      setState(() {
+        tdsUploadFile = file.copyWith(
+          mappingStatus: UploadMappingStatus.confirmed,
+        );
+      });
+      _refreshSellerMappingPreflightIfReady();
+      return true;
+    }
+
+    final fileId = item.itemKey.replaceFirst('section:', '');
+    final target = _findSectionFileById(fileId);
+    if (target == null) return false;
+
+    setState(() {
+      sectionFiles[target.sectionCode] = sectionFiles[target.sectionCode]!
+          .map(
+            (file) => file.id == target.id
+                ? file.copyWith(mappingStatus: UploadMappingStatus.confirmed)
+                : file,
+          )
+          .toList();
+    });
+    _refreshSellerMappingPreflightIfReady();
+    return true;
+  }
+
+  Future<int> _confirmAllSafeMappings() async {
+    final safeItems = _batchMappingReviewItems
+        .where((item) => item.canConfirmSafely)
+        .toList();
+    if (safeItems.isEmpty) return 0;
+
+    var confirmedCount = 0;
+    for (final item in safeItems) {
+      final changed = await _confirmSingleSafeMapping(item);
+      if (changed) {
+        confirmedCount += 1;
+      }
+    }
+    return confirmedCount;
+  }
+
+  LedgerUploadFile? _findSectionFileById(String fileId) {
+    for (final file in _allUploadedSectionFiles) {
+      if (file.id == fileId) {
+        return file;
+      }
+    }
+    return null;
   }
 
   Color _sectionAccent(String sectionCode) {
@@ -1641,6 +1875,281 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
   }
 
+  Widget _buildBatchMappingReviewCard() {
+    final hasFiles = _batchMappingReviewItems.isNotEmpty;
+    final reviewPendingCount = _reviewRequiredBatchMappingCount;
+    final safeCount = _safeBatchMappingCount;
+    final allConfirmed = hasFiles && reviewPendingCount == 0;
+
+    final statusLabel = !hasFiles
+        ? 'Locked'
+        : allConfirmed
+        ? 'Confirmed'
+        : safeCount > 0
+        ? 'Safe files ready'
+        : 'Review required';
+    final statusBackground = !hasFiles
+        ? const Color(0xFF1E293B)
+        : allConfirmed
+        ? const Color(0xFFDCFCE7)
+        : const Color(0xFFFEF3C7);
+    final statusColor = !hasFiles
+        ? const Color(0xFF94A3B8)
+        : allConfirmed
+        ? const Color(0xFF166534)
+        : const Color(0xFFB45309);
+
+    final detailText = !hasFiles
+        ? 'Upload the 26Q file and source files first. Batch Mapping Review aggregates current mapping state without reparsing files.'
+        : allConfirmed
+        ? 'All uploaded files have confirmed mappings. Seller Mapping and Reconciliation can continue when seller review is safe.'
+        : safeCount > 0
+        ? '$safeCount file${safeCount == 1 ? '' : 's'} can be confirmed in one click. Remaining files still need detailed review.'
+        : '$reviewPendingCount file${reviewPendingCount == 1 ? '' : 's'} still need mapping review before Seller Mapping and Reconciliation unlock.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: _panelDecoration(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Batch Mapping Review',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusBackground,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  detailText,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _buildInfoChip(
+                      'Uploaded Files',
+                      _batchMappingReviewItems.length.toString(),
+                    ),
+                    _buildInfoChip(
+                      'Need Review',
+                      reviewPendingCount.toString(),
+                      accentColor: allConfirmed
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFFF59E0B),
+                    ),
+                    _buildInfoChip(
+                      'Safe to Confirm',
+                      safeCount.toString(),
+                      accentColor: safeCount > 0
+                          ? const Color(0xFF38BDF8)
+                          : const Color(0xFF94A3B8),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              OutlinedButton.icon(
+                onPressed: hasFiles ? _openBatchMappingReviewScreen : null,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF334155)),
+                ),
+                icon: const Icon(Icons.rule_folder_outlined),
+                label: const Text('Review All Mappings'),
+              ),
+              FilledButton.icon(
+                onPressed: safeCount > 0
+                    ? () async {
+                        final count = await _confirmAllSafeMappings();
+                        if (!mounted) return;
+                        _showUploadSnackBar(
+                          count <= 0
+                              ? 'No safe mappings were ready to confirm.'
+                              : 'Confirmed $count safe mapping${count == 1 ? '' : 's'}.',
+                        );
+                      }
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  disabledBackgroundColor: const Color(0xFF1E293B),
+                  disabledForegroundColor: const Color(0xFF64748B),
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.done_all_rounded),
+                label: const Text('Confirm All Safe Mappings'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSellerMappingCard() {
+    final isLocked = !_canReviewSellerMappings;
+    final isSafe = _isSellerMappingConfirmed;
+    final pendingCount = _pendingSellerMappingReviewCount;
+
+    final statusLabel = isLocked
+        ? 'Locked'
+        : _isLoadingSellerMapping
+        ? 'Checking'
+        : isSafe
+        ? 'Safe'
+        : pendingCount > 0
+        ? 'Needs Review'
+        : 'Pending';
+    final statusColor = isLocked
+        ? const Color(0xFF94A3B8)
+        : isSafe
+        ? const Color(0xFF166534)
+        : const Color(0xFFB45309);
+    final statusBackground = isLocked
+        ? const Color(0xFF1E293B)
+        : isSafe
+        ? const Color(0xFFDCFCE7)
+        : const Color(0xFFFEF3C7);
+
+    final detailText = isLocked
+        ? 'Complete 26Q and file column mapping before seller identity review starts.'
+        : _isLoadingSellerMapping
+        ? 'Refreshing seller identity preflight from the current uploaded data.'
+        : isSafe
+        ? 'No dangerous unresolved seller identity issues were detected.'
+        : pendingCount > 0
+        ? '$pendingCount seller ${pendingCount == 1 ? 'identity needs' : 'identities need'} review before reconciliation.'
+        : 'Open Seller Mapping Review to validate seller identity safety.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: _panelDecoration(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Seller Mapping Review',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusBackground,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  detailText,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _buildInfoChip(
+                      'Pending Review',
+                      isLocked ? '-' : pendingCount.toString(),
+                      accentColor: isSafe
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFFF59E0B),
+                    ),
+                    _buildInfoChip(
+                      'Dangerous Statuses',
+                      'conflicting PAN, ambiguous identity, unresolved identity',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          OutlinedButton.icon(
+            onPressed: isLocked || _isLoadingSellerMapping
+                ? null
+                : openSellerMappingScreen,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFF334155)),
+            ),
+            icon: const Icon(Icons.person_search_rounded),
+            label: Text(isSafe ? 'Review Again' : 'Review Seller Mappings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSummaryTile(String label, String value) {
     return Container(
       constraints: const BoxConstraints(minWidth: 180, minHeight: 112),
@@ -1674,6 +2183,39 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value, {Color? accentColor}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1220),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF273247)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: accentColor ?? Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -1776,7 +2318,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 ),
               ),
               FilledButton.icon(
-                onPressed: isLoading
+                onPressed: isLoading || !_canUploadSectionFiles
                     ? null
                     : () => sectionCode == '194Q'
                           ? _upload194QFile()
@@ -1786,7 +2328,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.add),
-                label: Text(isLoading ? 'Uploading...' : 'Add File'),
+                label: Text(
+                  isLoading
+                      ? 'Uploading...'
+                      : _canUploadSectionFiles
+                      ? 'Add File'
+                      : 'Complete 26Q First',
+                ),
               ),
             ],
           ),
@@ -1826,7 +2374,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           const SizedBox(height: 14),
           Text(
             files.isEmpty
-                ? 'No files added to this bucket yet.'
+                ? _canUploadSectionFiles
+                      ? 'No files added to this bucket yet.'
+                      : 'Upload 26Q before adding source files.'
                 : 'Review uploaded files for this section and adjust mapping if required.',
             style: const TextStyle(
               color: Color(0xFF94A3B8),
@@ -1858,7 +2408,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      sectionCode == '194Q'
+                      !_canUploadSectionFiles
+                          ? 'This bucket unlocks after the 26Q file is uploaded.'
+                          : sectionCode == '194Q'
                           ? 'Use this bucket for purchase-parser source files. Add one or more files to stage buyer-side transactions.'
                           : 'Use this bucket for generic ledger source files mapped to ${sectionDisplayLabel(sectionCode)}. Add files to complete this workspace.',
                       style: const TextStyle(
@@ -2059,7 +2611,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: _hasWorkspaceContent ? _reviewWorkspaceStatus : null,
+              onPressed: _hasWorkspaceContent ? _openBatchMappingReviewScreen : null,
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 disabledForegroundColor: const Color(0xFF64748B),
@@ -2076,13 +2628,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              icon: const Icon(Icons.fact_check_outlined),
-              label: const Text('Check Workspace'),
+              icon: const Icon(Icons.rule_folder_outlined),
+              label: const Text('Review All Mappings'),
             ),
             const Spacer(),
             if (_has26QReady && _allRequiredMappingsConfirmed)
               OutlinedButton.icon(
-                onPressed: _isLoadingSellerMapping ? null : openSellerMappingScreen,
+                onPressed: _isLoadingSellerMapping
+                    ? null
+                    : openSellerMappingScreen,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _isSellerMappingConfirmed
                       ? Colors.green
@@ -2110,14 +2664,18 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   _isLoadingSellerMapping
                       ? 'Loading...'
                       : (_isSellerMappingConfirmed
-                          ? 'Seller Mappings Confirmed'
-                          : 'Review Seller Mappings'),
+                            ? 'Seller Mappings Confirmed'
+                            : _pendingSellerMappingReviewCount > 0
+                            ? 'Review Seller Mappings ($_pendingSellerMappingReviewCount)'
+                            : 'Review Seller Mappings'),
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             const SizedBox(width: 12),
             FilledButton.icon(
-              onPressed: canOpenReconciliation ? openReconciliationScreen : null,
+              onPressed: canOpenReconciliation
+                  ? openReconciliationScreen
+                  : null,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
                 disabledBackgroundColor: const Color(0xFF1E293B),
@@ -2164,7 +2722,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   const SizedBox(height: 18),
                   _buildSummaryCard(),
                   const SizedBox(height: 18),
+                  _buildBatchMappingReviewCard(),
+                  const SizedBox(height: 18),
                   _buildSectionPanel(),
+                  const SizedBox(height: 18),
+                  _buildSellerMappingCard(),
                   const SizedBox(height: 24),
                 ],
               ),

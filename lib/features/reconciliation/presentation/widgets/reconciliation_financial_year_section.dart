@@ -6,6 +6,7 @@ import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_row_explanation_builder.dart';
 import 'package:reconciliation_app/features/reconciliation/services/reconciliation_orchestrator.dart';
 
 const double _monthColumnWidth = 92;
@@ -43,15 +44,30 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalBasic = rows.fold<double>(0.0, (sum, row) => sum + row.basicAmount);
+    final totalBasic = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.basicAmount,
+    );
     final totalApplicable = rows.fold<double>(
       0.0,
       (sum, row) => sum + row.applicableAmount,
     );
-    final total26Q = rows.fold<double>(0.0, (sum, row) => sum + row.tds26QAmount);
-    final totalExpected = rows.fold<double>(0.0, (sum, row) => sum + row.expectedTds);
-    final totalActual = rows.fold<double>(0.0, (sum, row) => sum + row.actualTds);
-    final totalTdsDiff = rows.fold<double>(0.0, (sum, row) => sum + row.tdsDifference);
+    final total26Q = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.tds26QAmount,
+    );
+    final totalExpected = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.expectedTds,
+    );
+    final totalActual = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.actualTds,
+    );
+    final totalTdsDiff = rows.fold<double>(
+      0.0,
+      (sum, row) => sum + row.tdsDifference,
+    );
     final totalAmountDiff = rows.fold<double>(
       0.0,
       (sum, row) => sum + row.amountDifference,
@@ -202,9 +218,7 @@ class _HeaderRow extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: const Color(0xFFF1F5F9),
-        border: const Border(
-          bottom: BorderSide(color: AppColorScheme.border),
-        ),
+        border: const Border(bottom: BorderSide(color: AppColorScheme.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -259,67 +273,241 @@ class _DataRowCardState extends State<_DataRowCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(
-          horizontal: _rowHorizontalPadding,
-          vertical: 7,
-        ),
-      decoration: BoxDecoration(
-        color: _isHovered ? hover : zebra,
-        border: const Border(
-          bottom: BorderSide(color: AppColorScheme.divider),
-        ),
-      ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: _buildTableColumns(
-            month: _primaryText(widget.row.month.isEmpty ? '-' : widget.row.month),
-            section: _secondaryText(normalizeSection(widget.row.section)),
-            basic: _amountText(widget.formatAmount(widget.row.basicAmount)),
-            applicable: _amountText(
-              widget.formatAmount(widget.row.applicableAmount),
+      child: InkWell(
+        onTap: () => _showRowExplanationDialog(context),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(
+            horizontal: _rowHorizontalPadding,
+            vertical: 7,
+          ),
+          decoration: BoxDecoration(
+            color: _isHovered ? hover : zebra,
+            border: const Border(
+              bottom: BorderSide(color: AppColorScheme.divider),
             ),
-            tds26Q: _amountText(widget.formatAmount(widget.row.tds26QAmount)),
-            expected: _amountText(
-              widget.formatAmount(widget.row.expectedTds),
-              emphasize: true,
-            ),
-            actual: _amountText(
-              widget.formatAmount(widget.row.actualTds),
-              emphasize: true,
-            ),
-            tdsDiff: _amountText(
-              widget.formatAmount(widget.row.tdsDifference),
-              emphasize: true,
-              color: _deltaColor(widget.row.tdsDifference),
-            ),
-            amountDiff: _amountText(
-              widget.formatAmount(widget.row.amountDifference),
-              emphasize: true,
-              color: _deltaColor(widget.row.amountDifference),
-            ),
-            status: _statusBadge(
-              _statusDisplayLabel(widget.row.status),
-              backgroundColor: widget.statusColor(widget.row.status),
-              textColor: widget.statusTextColor(widget.row.status),
-            ),
-            remarks: Tooltip(
-              message: remarks.isEmpty ? '-' : remarks,
-              child: Text(
-                remarks.isEmpty ? '-' : remarks,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  height: 1.3,
-                  color: AppColorScheme.textMuted,
-                  fontSize: 11.5,
-                ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: _buildTableColumns(
+              month: _primaryText(
+                widget.row.month.isEmpty ? '-' : widget.row.month,
               ),
+              section: _secondaryText(normalizeSection(widget.row.section)),
+              basic: _amountText(widget.formatAmount(widget.row.basicAmount)),
+              applicable: _amountText(
+                widget.formatAmount(widget.row.applicableAmount),
+              ),
+              tds26Q: _amountText(widget.formatAmount(widget.row.tds26QAmount)),
+              expected: _amountText(
+                widget.formatAmount(widget.row.expectedTds),
+                emphasize: true,
+              ),
+              actual: _amountText(
+                widget.formatAmount(widget.row.actualTds),
+                emphasize: true,
+              ),
+              tdsDiff: _amountText(
+                widget.formatAmount(widget.row.tdsDifference),
+                emphasize: true,
+                color: _deltaColor(widget.row.tdsDifference),
+              ),
+              amountDiff: _amountText(
+                widget.formatAmount(widget.row.amountDifference),
+                emphasize: true,
+                color: _deltaColor(widget.row.amountDifference),
+              ),
+              status: _statusWithAction(),
+              remarks: _remarksWithAction(remarks),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _statusWithAction() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: _statusBadge(
+            _statusDisplayLabel(widget.row.status),
+            backgroundColor: widget.statusColor(widget.row.status),
+            textColor: widget.statusTextColor(widget.row.status),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Icon(
+          Icons.info_outline_rounded,
+          size: 14,
+          color: AppColorScheme.textMuted,
+        ),
+      ],
+    );
+  }
+
+  Widget _remarksWithAction(String remarks) {
+    return Tooltip(
+      message: remarks.isEmpty
+          ? 'Open row explanation'
+          : '$remarks\n\nClick for explanation',
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              remarks.isEmpty ? '-' : remarks,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                height: 1.3,
+                color: AppColorScheme.textMuted,
+                fontSize: 11.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 16,
+            color: AppColorScheme.textMuted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRowExplanationDialog(BuildContext context) async {
+    final explanation = ReconciliationRowExplanationBuilder.build(
+      row: widget.row,
+      formatAmount: widget.formatAmount,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(explanation.reasonCategory),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${widget.row.sellerName} • ${widget.row.month} • ${normalizeSection(widget.row.section).isEmpty ? widget.row.section : normalizeSection(widget.row.section)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColorScheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    explanation.explanation,
+                    style: const TextStyle(
+                      color: AppColorScheme.textPrimary,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Values Compared',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColorScheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...explanation.comparedValues.map(
+                    (value) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 190,
+                            child: Text(
+                              value.label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: AppColorScheme.textSecondary,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              value.value,
+                              style: const TextStyle(
+                                color: AppColorScheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${explanation.computedDifferenceLabel}: ${explanation.computedDifferenceValue}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColorScheme.textPrimary,
+                    ),
+                  ),
+                  if (explanation.identityImpact.trim().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Identity Impact',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColorScheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      explanation.identityImpact,
+                      style: const TextStyle(
+                        color: AppColorScheme.textPrimary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                  if (explanation.supportingNotes.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Supporting Notes',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColorScheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...explanation.supportingNotes.map(
+                      (note) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '• $note',
+                          style: const TextStyle(
+                            color: AppColorScheme.textPrimary,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -360,10 +548,9 @@ class _DataRowCardState extends State<_DataRowCard> {
         style: TextStyle(
           fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
           fontSize: emphasize ? 12 : 11.5,
-          color: color ??
-              (emphasize
-                  ? const Color(0xFF0F172A)
-                  : const Color(0xFF334155)),
+          color:
+              color ??
+              (emphasize ? const Color(0xFF0F172A) : const Color(0xFF334155)),
         ),
       ),
     );
@@ -412,9 +599,7 @@ class _TotalRowCard extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        border: const Border(
-          top: BorderSide(color: AppColorScheme.border),
-        ),
+        border: const Border(top: BorderSide(color: AppColorScheme.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -511,10 +696,7 @@ Widget _tableCell({
     width: width,
     child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: _cellMinHeight),
-      child: Align(
-        alignment: alignment,
-        child: child,
-      ),
+      child: Align(alignment: alignment, child: child),
     ),
   );
 }
@@ -546,10 +728,7 @@ class _NumericHeaderText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: _HeaderText(label),
-    );
+    return Align(alignment: Alignment.centerRight, child: _HeaderText(label));
   }
 }
 
@@ -607,9 +786,7 @@ Widget _statusBadge(
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: textColor.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: textColor.withValues(alpha: 0.18)),
       ),
       child: Text(
         label,

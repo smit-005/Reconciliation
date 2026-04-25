@@ -6,6 +6,7 @@ import 'package:reconciliation_app/core/utils/parse_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
+import 'package:reconciliation_app/features/upload/models/import_audit_record.dart';
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
 import 'package:reconciliation_app/features/upload/models/import_format_profile.dart';
 
@@ -28,6 +29,13 @@ class ImportSessionCache {
       decoder: SpreadsheetDecoder.decodeBytes(bytes, update: false),
     );
   }
+}
+
+class _ImportedRowCandidate {
+  final Map<String, dynamic> rowMap;
+  final int rowNumber;
+
+  const _ImportedRowCandidate({required this.rowMap, required this.rowNumber});
 }
 
 class ExcelService {
@@ -546,34 +554,189 @@ class ExcelService {
     return rows;
   }
 
+  static ({
+    String sheetName,
+    List<_ImportedRowCandidate> rows,
+    List<ImportAuditRecord> auditRecords,
+  })
+  _extractImportedRowCandidates(
+    List<int> bytes, {
+    required ExcelImportType forcedType,
+    required String sourceFileName,
+    String? preferredSheetName,
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
+    final sheetInfo = _findBestSheetAndHeader(
+      decoder,
+      forcedType: forcedType,
+      preferredSheetName: preferredSheetName,
+    );
+    if (sheetInfo == null) {
+      return (
+        sheetName: preferredSheetName ?? '',
+        rows: const <_ImportedRowCandidate>[],
+        auditRecords: const <ImportAuditRecord>[],
+      );
+    }
+
+    final table = decoder.tables[sheetInfo.sheetName];
+    if (table == null || table.rows.isEmpty) {
+      return (
+        sheetName: sheetInfo.sheetName,
+        rows: const <_ImportedRowCandidate>[],
+        auditRecords: const <ImportAuditRecord>[],
+      );
+    }
+
+    final mappedHeaders = _resolveMappedHeaders(
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      forcedType: sheetInfo.detectedType,
+      headersTrusted: sheetInfo.headersTrusted,
+    );
+
+    final extracted = _buildRowCandidatesFromMappedHeaders(
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: sheetInfo.headersTrusted,
+      sourceFileName: sourceFileName,
+      sheetName: sheetInfo.sheetName,
+      rowType: forcedType == ExcelImportType.tds26q
+          ? ImportAuditRowType.tds26q
+          : ImportAuditRowType.ledgerSource,
+      sectionBucket: forcedType == ExcelImportType.purchase ? '194Q' : '',
+    );
+
+    return (
+      sheetName: sheetInfo.sheetName,
+      rows: extracted.rows,
+      auditRecords: extracted.auditRecords,
+    );
+  }
+
+  static ({
+    String sheetName,
+    List<_ImportedRowCandidate> rows,
+    List<ImportAuditRecord> auditRecords,
+  })
+  _extractImportedRowCandidatesWithProfile(
+    List<int> bytes, {
+    required ExcelImportType forcedType,
+    required String sourceFileName,
+    required String sheetName,
+    required int headerRowIndex,
+    required bool headersTrusted,
+    required Map<String, String> columnMapping,
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
+    final table = decoder.tables[sheetName];
+    if (table == null || table.rows.isEmpty) {
+      return (
+        sheetName: sheetName,
+        rows: const <_ImportedRowCandidate>[],
+        auditRecords: const <ImportAuditRecord>[],
+      );
+    }
+
+    final normalizedColumnMapping = _normalizeCanonicalColumnMappingByType(
+      columnMapping,
+      type: forcedType,
+    );
+    final mappedHeaders = _buildMappedHeadersFromProfile(
+      rawHeaderRow: table.rows[headerRowIndex],
+      columnMapping: normalizedColumnMapping,
+    );
+
+    final extracted = _buildRowCandidatesFromMappedHeaders(
+      rows: table.rows,
+      headerRowIndex: headerRowIndex,
+      mappedHeaders: mappedHeaders,
+      headersTrusted: headersTrusted,
+      sourceFileName: sourceFileName,
+      sheetName: sheetName,
+      rowType: forcedType == ExcelImportType.tds26q
+          ? ImportAuditRowType.tds26q
+          : ImportAuditRowType.ledgerSource,
+      sectionBucket: forcedType == ExcelImportType.purchase ? '194Q' : '',
+    );
+
+    return (
+      sheetName: sheetName,
+      rows: extracted.rows,
+      auditRecords: extracted.auditRecords,
+    );
+  }
+
+  static ({
+    List<_ImportedRowCandidate> rows,
+    List<ImportAuditRecord> auditRecords,
+  })
+  _buildRowCandidatesFromMappedHeaders({
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required List<String?> mappedHeaders,
+    required bool headersTrusted,
+    required String sourceFileName,
+    required String sheetName,
+    required ImportAuditRowType rowType,
+    required String sectionBucket,
+  }) {
+    final dataStartIndex = headersTrusted ? headerRowIndex + 1 : headerRowIndex;
+    final result = <_ImportedRowCandidate>[];
+    final auditRecords = <ImportAuditRecord>[];
+
+    for (int i = dataStartIndex; i < rows.length; i++) {
+      final row = rows[i];
+      bool isEmptyRow = true;
+      final rowMap = <String, dynamic>{};
+
+      for (int j = 0; j < mappedHeaders.length; j++) {
+        final header = mappedHeaders[j];
+        if (header == null || header.isEmpty) continue;
+
+        final value = j < row.length ? row[j] : null;
+        final normalizedValue = _normalizeCellValue(value);
+        final textValue = normalizedValue.toString().trim();
+
+        if (textValue.isNotEmpty) {
+          isEmptyRow = false;
+        }
+
+        rowMap[header] = normalizedValue;
+      }
+
+      if (!isEmptyRow) {
+        result.add(_ImportedRowCandidate(rowMap: rowMap, rowNumber: i + 1));
+      } else {
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: i + 1,
+            rowType: rowType,
+            sectionBucket: sectionBucket,
+            reason: ImportAuditReason.emptyRowIgnored,
+            message: 'Completely blank row ignored during import.',
+          ),
+        );
+      }
+    }
+
+    return (rows: result, auditRecords: auditRecords);
+  }
+
   static List<PurchaseRow> parsePurchaseRows(
     List<int> bytes, {
     ImportSessionCache? sessionCache,
   }) {
-    final mapList = excelToMapList(
+    final deduped = parsePurchaseRowsWithAudit(
       bytes,
-      forcedType: ExcelImportType.purchase,
+      sourceFileName: '',
       sessionCache: sessionCache,
-    );
-
-    final parsed = mapList.map((row) {
-      final parsedRow = PurchaseRow.fromMap(row);
-
-      if (parsedRow.partyName.trim().toLowerCase() == 'ganesh cattle feed') {
-        _debugVerbose(
-          'DEBUG PURCHASE PARSE => seller=${parsedRow.partyName}, '
-          'rawDate=${(readAny(row, ['date', 'eom']) ?? '').trim()}, '
-          'dateCol=${(row['date'] ?? '').toString().trim()}, '
-          'eomCol=${(row['eom'] ?? '').toString().trim()}, '
-          'month=${parsedRow.month}, '
-          'basicAmount=${parsedRow.basicAmount}, '
-          'billAmount=${parsedRow.billAmount}',
-        );
-      }
-
-      return parsedRow;
-    }).toList();
-    final deduped = _dedupePurchaseRows(parsed);
+    ).rows;
 
     for (final row in deduped.take(10)) {
       _debugVerbose(
@@ -584,26 +747,86 @@ class ExcelService {
     return deduped;
   }
 
+  static ({List<PurchaseRow> rows, List<ImportAuditRecord> auditRecords})
+  parsePurchaseRowsWithAudit(
+    List<int> bytes, {
+    required String sourceFileName,
+    ImportSessionCache? sessionCache,
+    String? sheetName,
+    int? headerRowIndex,
+    bool? headersTrusted,
+    Map<String, String>? columnMapping,
+  }) {
+    final extracted = columnMapping == null
+        ? _extractImportedRowCandidates(
+            bytes,
+            forcedType: ExcelImportType.purchase,
+            sourceFileName: sourceFileName,
+            preferredSheetName: sheetName,
+            sessionCache: sessionCache,
+          )
+        : _extractImportedRowCandidatesWithProfile(
+            bytes,
+            forcedType: ExcelImportType.purchase,
+            sourceFileName: sourceFileName,
+            sheetName: sheetName ?? '',
+            headerRowIndex: headerRowIndex ?? 0,
+            headersTrusted: headersTrusted ?? true,
+            columnMapping: columnMapping,
+            sessionCache: sessionCache,
+          );
+
+    final parsedCandidates = extracted.rows.map((candidate) {
+      final parsedRow = PurchaseRow.fromMap(candidate.rowMap);
+
+      if (parsedRow.partyName.trim().toLowerCase() == 'ganesh cattle feed') {
+        _debugVerbose(
+          'DEBUG PURCHASE PARSE => seller=${parsedRow.partyName}, '
+          'rawDate=${(readAny(candidate.rowMap, ['date', 'eom']) ?? '').trim()}, '
+          'dateCol=${(candidate.rowMap['date'] ?? '').toString().trim()}, '
+          'eomCol=${(candidate.rowMap['eom'] ?? '').toString().trim()}, '
+          'month=${parsedRow.month}, '
+          'basicAmount=${parsedRow.basicAmount}, '
+          'billAmount=${parsedRow.billAmount}',
+        );
+      }
+
+      return (row: parsedRow, rowNumber: candidate.rowNumber);
+    }).toList();
+
+    final deduped = _dedupeImportedPurchaseRows(
+      parsedCandidates,
+      sourceFileName: sourceFileName,
+      sheetName: extracted.sheetName,
+    );
+
+    return (
+      rows: deduped.rows,
+      auditRecords: <ImportAuditRecord>[
+        ...extracted.auditRecords,
+        ...deduped.auditRecords,
+      ],
+    );
+  }
+
   static List<PurchaseRow> parsePurchaseRowsWithProfile(
     List<int> bytes, {
     required String sheetName,
     required int headerRowIndex,
     required bool headersTrusted,
     required Map<String, String> columnMapping,
+    String sourceFileName = '',
     ImportSessionCache? sessionCache,
   }) {
-    final mapList = excelToMapListWithProfile(
+    return parsePurchaseRowsWithAudit(
       bytes,
-      forcedType: ExcelImportType.purchase,
+      sourceFileName: sourceFileName,
       sheetName: sheetName,
       headerRowIndex: headerRowIndex,
       headersTrusted: headersTrusted,
       columnMapping: columnMapping,
       sessionCache: sessionCache,
-    );
-
-    final parsed = mapList.map((row) => PurchaseRow.fromMap(row)).toList();
-    return _dedupePurchaseRows(parsed);
+    ).rows;
   }
 
   static ({
@@ -888,15 +1111,12 @@ class ExcelService {
     String? sheetName,
     ImportSessionCache? sessionCache,
   }) {
-    final mapList = excelToMapList(
+    final deduped = parseTds26QRowsWithAudit(
       bytes,
-      forcedType: ExcelImportType.tds26q,
-      preferredSheetName: sheetName,
+      sourceFileName: '',
+      sheetName: sheetName,
       sessionCache: sessionCache,
-    );
-
-    final parsed = mapList.map((row) => Tds26QRow.fromMap(row)).toList();
-    final deduped = _dedupeTdsRows(parsed);
+    ).rows;
 
     for (final row in deduped.take(5)) {
       _debugVerbose(
@@ -908,26 +1128,68 @@ class ExcelService {
     return deduped;
   }
 
+  static ({List<Tds26QRow> rows, List<ImportAuditRecord> auditRecords})
+  parseTds26QRowsWithAudit(
+    List<int> bytes, {
+    required String sourceFileName,
+    String? sheetName,
+    ImportSessionCache? sessionCache,
+    int? headerRowIndex,
+    bool? headersTrusted,
+    Map<String, String>? columnMapping,
+  }) {
+    final extracted = columnMapping == null
+        ? _extractImportedRowCandidates(
+            bytes,
+            forcedType: ExcelImportType.tds26q,
+            sourceFileName: sourceFileName,
+            preferredSheetName: sheetName,
+            sessionCache: sessionCache,
+          )
+        : _extractImportedRowCandidatesWithProfile(
+            bytes,
+            forcedType: ExcelImportType.tds26q,
+            sourceFileName: sourceFileName,
+            sheetName: sheetName ?? '',
+            headerRowIndex: headerRowIndex ?? 0,
+            headersTrusted: headersTrusted ?? true,
+            columnMapping: columnMapping,
+            sessionCache: sessionCache,
+          );
+
+    final deduped = _dedupeImportedTdsRows(
+      extracted.rows,
+      sourceFileName: sourceFileName,
+      sheetName: extracted.sheetName,
+    );
+
+    return (
+      rows: deduped.rows,
+      auditRecords: <ImportAuditRecord>[
+        ...extracted.auditRecords,
+        ...deduped.auditRecords,
+      ],
+    );
+  }
+
   static List<Tds26QRow> parseTds26QRowsWithProfile(
     List<int> bytes, {
     required String sheetName,
     required int headerRowIndex,
     required bool headersTrusted,
     required Map<String, String> columnMapping,
+    String sourceFileName = '',
     ImportSessionCache? sessionCache,
   }) {
-    final mapList = excelToMapListWithProfile(
+    return parseTds26QRowsWithAudit(
       bytes,
-      forcedType: ExcelImportType.tds26q,
+      sourceFileName: sourceFileName,
       sheetName: sheetName,
       headerRowIndex: headerRowIndex,
       headersTrusted: headersTrusted,
       columnMapping: columnMapping,
       sessionCache: sessionCache,
-    );
-
-    final parsed = mapList.map((row) => Tds26QRow.fromMap(row)).toList();
-    return _dedupeTdsRows(parsed);
+    ).rows;
   }
 
   static List<NormalizedLedgerRow> parseGenericLedgerRows(
@@ -936,26 +1198,95 @@ class ExcelService {
     String sourceFileName = '',
     ImportSessionCache? sessionCache,
   }) {
-    final mapList = excelToMapList(
+    return parseGenericLedgerRowsWithAudit(
       bytes,
-      forcedType: ExcelImportType.genericLedger,
+      defaultSection: defaultSection,
+      sourceFileName: sourceFileName,
       sessionCache: sessionCache,
-    );
-    final prepared = _prepareGenericLedgerRowMaps(mapList);
+    ).rows;
+  }
 
-    final parsed = prepared.rows
-        .map(
-          (row) => NormalizedLedgerRow.fromMap(
-            row,
+  static ({
+    List<NormalizedLedgerRow> rows,
+    List<ImportAuditRecord> auditRecords,
+  })
+  parseGenericLedgerRowsWithAudit(
+    List<int> bytes, {
+    required String defaultSection,
+    String sourceFileName = '',
+    ImportSessionCache? sessionCache,
+    String? sheetName,
+    int? headerRowIndex,
+    bool? headersTrusted,
+    Map<String, String>? columnMapping,
+  }) {
+    final extracted = columnMapping == null
+        ? _extractImportedRowCandidates(
+            bytes,
+            forcedType: ExcelImportType.genericLedger,
             sourceFileName: sourceFileName,
-            defaultSection: defaultSection,
-          ),
-        )
-        .toList();
+            preferredSheetName: sheetName,
+            sessionCache: sessionCache,
+          )
+        : _extractImportedRowCandidatesWithProfile(
+            bytes,
+            forcedType: ExcelImportType.genericLedger,
+            sourceFileName: sourceFileName,
+            sheetName: sheetName ?? '',
+            headerRowIndex: headerRowIndex ?? 0,
+            headersTrusted: headersTrusted ?? true,
+            columnMapping: columnMapping,
+            sessionCache: sessionCache,
+          );
+    final prepared = _prepareGenericLedgerAuditRows(
+      extracted.rows,
+      sourceFileName: sourceFileName,
+      sheetName: extracted.sheetName,
+      sectionBucket: defaultSection,
+    );
 
-    _logGenericLedgerImportAudit(prepared);
+    final deduped = _dedupeImportedNormalizedLedgerRows(
+      prepared.rows
+          .map(
+            (candidate) => (
+              row: NormalizedLedgerRow.fromMap(
+                candidate.rowMap,
+                sourceFileName: sourceFileName,
+                defaultSection: defaultSection,
+              ),
+              rowNumber: candidate.rowNumber,
+            ),
+          )
+          .toList(),
+      sourceFileName: sourceFileName,
+      sheetName: extracted.sheetName,
+      sectionBucket: defaultSection,
+    );
 
-    return _dedupeNormalizedLedgerRows(parsed);
+    _logGenericLedgerImportAudit((
+      rows: prepared.rows.map((candidate) => candidate.rowMap).toList(),
+      sourceRowCount: extracted.rows.length,
+      parsedTransactionCount: prepared.rows.length,
+      continuationMergedCount: prepared.auditRecords
+          .where(
+            (record) => record.reason == ImportAuditReason.continuationMerged,
+          )
+          .length,
+      invalidRowsSkippedCount: prepared.auditRecords
+          .where(
+            (record) => record.reason == ImportAuditReason.invalidRowSkipped,
+          )
+          .length,
+    ));
+
+    return (
+      rows: deduped.rows,
+      auditRecords: <ImportAuditRecord>[
+        ...extracted.auditRecords,
+        ...prepared.auditRecords,
+        ...deduped.auditRecords,
+      ],
+    );
   }
 
   static List<NormalizedLedgerRow> parseGenericLedgerRowsWithProfile(
@@ -968,30 +1299,16 @@ class ExcelService {
     String sourceFileName = '',
     ImportSessionCache? sessionCache,
   }) {
-    final mapList = excelToMapListWithProfile(
+    return parseGenericLedgerRowsWithAudit(
       bytes,
-      forcedType: ExcelImportType.genericLedger,
       sheetName: sheetName,
       headerRowIndex: headerRowIndex,
       headersTrusted: headersTrusted,
       columnMapping: columnMapping,
+      defaultSection: defaultSection,
+      sourceFileName: sourceFileName,
       sessionCache: sessionCache,
-    );
-    final prepared = _prepareGenericLedgerRowMaps(mapList);
-
-    final parsed = prepared.rows
-        .map(
-          (row) => NormalizedLedgerRow.fromMap(
-            row,
-            sourceFileName: sourceFileName,
-            defaultSection: defaultSection,
-          ),
-        )
-        .toList();
-
-    _logGenericLedgerImportAudit(prepared);
-
-    return _dedupeNormalizedLedgerRows(parsed);
+    ).rows;
   }
 
   static ExcelValidationResult validatePurchaseFile(
@@ -3144,12 +3461,105 @@ class ExcelService {
     return map.values.toList();
   }
 
-  static List<NormalizedLedgerRow> _dedupeNormalizedLedgerRows(
-    List<NormalizedLedgerRow> rows,
-  ) {
-    final map = <String, NormalizedLedgerRow>{};
+  static ({List<PurchaseRow> rows, List<ImportAuditRecord> auditRecords})
+  _dedupeImportedPurchaseRows(
+    List<({PurchaseRow row, int rowNumber})> rows, {
+    required String sourceFileName,
+    required String sheetName,
+  }) {
+    final map = <String, PurchaseRow>{};
+    final auditRecords = <ImportAuditRecord>[];
 
-    for (final row in rows) {
+    for (final entry in rows) {
+      final row = entry.row;
+      final key = [
+        row.date.trim(),
+        row.month.trim().toUpperCase(),
+        row.billNo.trim().toUpperCase(),
+        row.partyName.trim().toUpperCase(),
+        row.panNumber.trim().toUpperCase(),
+        row.productName.trim().toUpperCase(),
+        row.basicAmount.toStringAsFixed(2),
+        row.billAmount.toStringAsFixed(2),
+      ].join('|');
+
+      if (map.containsKey(key)) {
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: entry.rowNumber,
+            rowType: ImportAuditRowType.ledgerSource,
+            sectionBucket: '194Q',
+            reason: ImportAuditReason.duplicateIgnored,
+            message: 'Duplicate purchase/source row ignored during import.',
+          ),
+        );
+        continue;
+      }
+
+      map[key] = row;
+    }
+
+    return (rows: map.values.toList(), auditRecords: auditRecords);
+  }
+
+  static ({List<Tds26QRow> rows, List<ImportAuditRecord> auditRecords})
+  _dedupeImportedTdsRows(
+    List<_ImportedRowCandidate> rows, {
+    required String sourceFileName,
+    required String sheetName,
+  }) {
+    final map = <String, Tds26QRow>{};
+    final auditRecords = <ImportAuditRecord>[];
+
+    for (final candidate in rows) {
+      final row = Tds26QRow.fromMap(candidate.rowMap);
+      final key = [
+        row.month.trim().toUpperCase(),
+        row.deducteeName.trim().toUpperCase(),
+        row.panNumber.trim().toUpperCase(),
+        row.deductedAmount.toStringAsFixed(2),
+        row.tds.toStringAsFixed(2),
+        row.section.trim().toUpperCase(),
+      ].join('|');
+
+      if (map.containsKey(key)) {
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: candidate.rowNumber,
+            rowType: ImportAuditRowType.tds26q,
+            sectionBucket: '',
+            reason: ImportAuditReason.duplicateIgnored,
+            message: 'Duplicate 26Q row ignored during import.',
+          ),
+        );
+        continue;
+      }
+
+      map[key] = row;
+    }
+
+    return (rows: map.values.toList(), auditRecords: auditRecords);
+  }
+
+  static ({
+    List<NormalizedLedgerRow> rows,
+    List<ImportAuditRecord> auditRecords,
+  })
+  _dedupeImportedNormalizedLedgerRows(
+    List<({NormalizedLedgerRow row, int rowNumber})> rows, {
+    required String sourceFileName,
+    required String sheetName,
+    required String sectionBucket,
+  }) {
+    final map = <String, NormalizedLedgerRow>{};
+    final auditRecords = <ImportAuditRecord>[];
+
+    for (final entry in rows) {
+      final row = entry.row;
       final key = [
         row.sectionCode.trim().toUpperCase(),
         row.month.trim().toUpperCase(),
@@ -3160,50 +3570,94 @@ class ExcelService {
         row.tdsAmount.toStringAsFixed(2),
       ].join('|');
 
+      if (map.containsKey(key)) {
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: entry.rowNumber,
+            rowType: ImportAuditRowType.ledgerSource,
+            sectionBucket: sectionBucket,
+            reason: ImportAuditReason.duplicateIgnored,
+            message: 'Duplicate ledger/source row ignored during import.',
+          ),
+        );
+        continue;
+      }
+
       map[key] = row;
     }
 
-    return map.values.toList();
+    return (rows: map.values.toList(), auditRecords: auditRecords);
   }
 
   static ({
-    List<Map<String, dynamic>> rows,
-    int sourceRowCount,
-    int parsedTransactionCount,
-    int continuationMergedCount,
-    int invalidRowsSkippedCount,
+    List<_ImportedRowCandidate> rows,
+    List<ImportAuditRecord> auditRecords,
   })
-  _prepareGenericLedgerRowMaps(List<Map<String, dynamic>> rawRows) {
-    final preparedRows = <Map<String, dynamic>>[];
-    var continuationMergedCount = 0;
-    var invalidRowsSkippedCount = 0;
+  _prepareGenericLedgerAuditRows(
+    List<_ImportedRowCandidate> rawRows, {
+    required String sourceFileName,
+    required String sheetName,
+    required String sectionBucket,
+  }) {
+    final preparedRows = <_ImportedRowCandidate>[];
+    final auditRecords = <ImportAuditRecord>[];
 
     for (int i = 0; i < rawRows.length; i++) {
-      final currentRow = Map<String, dynamic>.from(rawRows[i]);
+      final rawCandidate = rawRows[i];
+      final currentRow = Map<String, dynamic>.from(rawCandidate.rowMap);
       final classification = _classifyGenericLedgerRow(currentRow);
 
       if (classification == _GenericLedgerRowType.continuation) {
         if (preparedRows.isNotEmpty) {
           final previous = preparedRows.last;
-          previous['description'] = _appendGenericLedgerNarration(
-            previous['description']?.toString() ?? '',
+          previous.rowMap['description'] = _appendGenericLedgerNarration(
+            previous.rowMap['description']?.toString() ?? '',
             _extractContinuationNarration(currentRow),
           );
-          continuationMergedCount++;
+          auditRecords.add(
+            ImportAuditRecord(
+              sourceFileName: sourceFileName,
+              sheetName: sheetName,
+              rowNumber: rawCandidate.rowNumber,
+              rowType: ImportAuditRowType.ledgerSource,
+              sectionBucket: sectionBucket,
+              reason: ImportAuditReason.continuationMerged,
+              message:
+                  'Narration-only continuation row merged into the previous ledger transaction.',
+            ),
+          );
           continue;
         }
 
-        invalidRowsSkippedCount++;
-        debugPrint(
-          'GENERIC LEDGER ROW CLASS => row=${i + 1} type=continuation skippedReason=noPreviousTransaction',
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: rawCandidate.rowNumber,
+            rowType: ImportAuditRowType.ledgerSource,
+            sectionBucket: sectionBucket,
+            reason: ImportAuditReason.invalidRowSkipped,
+            message:
+                'Narration-only continuation row was skipped because there was no previous transaction to merge into.',
+          ),
         );
         continue;
       }
 
       if (classification == _GenericLedgerRowType.invalid) {
-        invalidRowsSkippedCount++;
-        debugPrint(
-          'GENERIC LEDGER ROW CLASS => row=${i + 1} type=invalid skippedReason=noAmountAndNoNarration',
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: rawCandidate.rowNumber,
+            rowType: ImportAuditRowType.ledgerSource,
+            sectionBucket: sectionBucket,
+            reason: ImportAuditReason.invalidRowSkipped,
+            message:
+                'Row skipped because it did not contain a usable amount or meaningful narration.',
+          ),
         );
         continue;
       }
@@ -3217,19 +3671,29 @@ class ExcelService {
           currentRow['description']?.toString() ?? '',
           'Placeholder date requires review: $rawDate',
         );
+        auditRecords.add(
+          ImportAuditRecord(
+            sourceFileName: sourceFileName,
+            sheetName: sheetName,
+            rowNumber: rawCandidate.rowNumber,
+            rowType: ImportAuditRowType.ledgerSource,
+            sectionBucket: sectionBucket,
+            reason: ImportAuditReason.suspiciousReviewNote,
+            message:
+                'Suspicious placeholder date was cleared and preserved as a review note in the narration.',
+          ),
+        );
       }
 
-      preparedRows.add(currentRow);
-      debugPrint('GENERIC LEDGER ROW CLASS => row=${i + 1} type=transaction');
+      preparedRows.add(
+        _ImportedRowCandidate(
+          rowMap: currentRow,
+          rowNumber: rawCandidate.rowNumber,
+        ),
+      );
     }
 
-    return (
-      rows: preparedRows,
-      sourceRowCount: rawRows.length,
-      parsedTransactionCount: preparedRows.length,
-      continuationMergedCount: continuationMergedCount,
-      invalidRowsSkippedCount: invalidRowsSkippedCount,
-    );
+    return (rows: preparedRows, auditRecords: auditRecords);
   }
 
   static _GenericLedgerRowType _classifyGenericLedgerRow(
