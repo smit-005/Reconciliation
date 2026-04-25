@@ -1106,7 +1106,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   bool get _has26QReady => tdsUploadFile != null && tdsRows.isNotEmpty;
 
-  bool get _canUploadSectionFiles => _has26QReady;
+  bool get _is26QMappingConfirmed =>
+      _has26QReady &&
+      tdsUploadFile!.mappingStatus == UploadMappingStatus.confirmed;
+
+  bool get _canUploadSectionFiles => _is26QMappingConfirmed;
 
   Iterable<LedgerUploadFile> get _allUploadedSectionFiles =>
       sectionFiles.values.expand((files) => files);
@@ -2333,7 +2337,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       ? 'Uploading...'
                       : _canUploadSectionFiles
                       ? 'Add File'
-                      : 'Complete 26Q First',
+                      : 'Confirm 26Q Mapping First',
                 ),
               ),
             ],
@@ -2376,7 +2380,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             files.isEmpty
                 ? _canUploadSectionFiles
                       ? 'No files added to this bucket yet.'
-                      : 'Upload 26Q before adding source files.'
+                      : 'Confirm 26Q mapping before adding source files.'
                 : 'Review uploaded files for this section and adjust mapping if required.',
             style: const TextStyle(
               color: Color(0xFF94A3B8),
@@ -2409,7 +2413,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   Expanded(
                     child: Text(
                       !_canUploadSectionFiles
-                          ? 'This bucket unlocks after the 26Q file is uploaded.'
+                          ? 'This bucket unlocks after the 26Q mapping is confirmed.'
                           : sectionCode == '194Q'
                           ? 'Use this bucket for purchase-parser source files. Add one or more files to stage buyer-side transactions.'
                           : 'Use this bucket for generic ledger source files mapped to ${sectionDisplayLabel(sectionCode)}. Add files to complete this workspace.',
