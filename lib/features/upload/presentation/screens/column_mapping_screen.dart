@@ -647,9 +647,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           ..._requiredColumnKeys.map(_buildColumnCard),
           const SizedBox(height: 12),
           Theme(
-            data: Theme.of(
-              context,
-            ).copyWith(dividerColor: Colors.transparent),
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               tilePadding: EdgeInsets.zero,
               collapsedIconColor: const Color(0xFF94A3B8),
@@ -760,6 +758,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: selectedValue != null && selectedValue.isNotEmpty
                 ? selectedValue
                 : '',
@@ -790,23 +789,12 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
               ...fieldOptions.map(
                 (option) => DropdownMenuItem<String>(
                   value: option.key,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        option.label,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        option.description,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    option.description.isNotEmpty
+                        ? '${option.label} — ${option.description}'
+                        : option.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
               ),
