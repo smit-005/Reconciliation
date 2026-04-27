@@ -3142,6 +3142,12 @@ class ExcelService {
     return amountRegExp.hasMatch(val);
   }
 
+  static bool _isDateLikeAmountCandidateHeader(String normalizedHeader) {
+    return normalizedHeader.contains('date') ||
+        normalizedHeader.contains('month') ||
+        normalizedHeader.contains('eom');
+  }
+
   static String? _detectCanonicalHeader(
     String raw, {
     required ExcelImportType type,
@@ -3233,14 +3239,20 @@ class ExcelService {
           canonical == 'date_month' ||
           canonical == 'eom';
 
+      if (isAmountField &&
+          (dateLikeCount > 0 && dateLikeCount >= sampleValues.length / 2)) {
+        continue;
+      }
+      if (isAmountField && _isDateLikeAmountCandidateHeader(normalized)) {
+        continue;
+      }
+
       for (final alias in aliases) {
         int score = _headerSimilarityScore(normalized, alias);
         if (score == 0) continue;
 
         if (isAmountField) {
-          if (dateLikeCount > 0 && dateLikeCount >= sampleValues.length / 2) {
-            score -= 50;
-          } else if (amountLikeCount > 0) {
+          if (amountLikeCount > 0) {
             score += 10;
           }
         } else if (isDateField) {
@@ -3980,6 +3992,16 @@ class ExcelService {
         );
       }
       return value.toString();
+    }
+
+    if (forceNumeric) {
+      final text = value.toString().trim();
+      if (_looksLikeDateValue(text)) {
+        debugPrint(
+          'EXCEL VALUE FORMAT => field=$field raw=$text forcedNumeric=true',
+        );
+        return '';
+      }
     }
 
     return value.toString().trim();

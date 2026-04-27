@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -141,9 +142,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       <String, List<SellerMappingRowVm>>{};
   final Set<String> _clearedRowKeys = <String>{};
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
   String _searchQuery = '';
   String _statusFilter = 'All';
   SellerMappingListView _activeListView = SellerMappingListView.needsAction;
+
+  int _currentPage = 1;
+  final int _pageSize = 50;
+  List<SellerMappingRowVm>? _cachedFilteredRows;
+  Map<SellerMappingListView, int>? _cachedListViewCounts;
+
+  void _invalidateViewCaches({bool resetPage = false}) {
+    _cachedFilteredRows = null;
+    _cachedListViewCounts = null;
+    if (resetPage) {
+      _currentPage = 1;
+    }
+  }
 
   String _rowKey(String alias, String sectionCode) {
     return '${normalizePan(widget.buyerPan)}|'
@@ -737,8 +752,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   bool _isDangerousPreflightStatus(String status) {
     return status == 'Conflicting PAN' ||
         status == 'Ambiguous Identity' ||
-        status == 'Unresolved Identity' ||
-        status == 'PAN Conflict';
+        status == 'Unresolved Identity';
+  }
+
+  bool _isBlockingDangerousRow({
+    required SellerMappingRowVm row,
+    required String status,
+  }) {
+    if (row.isPurchaseOnly) return false;
+    if (!_isDangerousPreflightStatus(status)) return false;
+    return row.requiresDangerousReview;
   }
 
   String _statusChipLabel(String status) {
@@ -782,10 +805,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   List<SellerMappingRowVm> _filteredRows() {
+    if (_cachedFilteredRows != null) return _cachedFilteredRows!;
+
+    final stopwatch = Stopwatch()..start();
     final query = _searchQuery.trim().toUpperCase();
     final activeRows = _rowsForActiveSection();
 
-    return activeRows.where((row) {
+    _cachedFilteredRows = activeRows.where((row) {
       final selectedValue = _getSelectedValue(row);
       final selectedPan = _getPanForSelection(row, selectedValue);
       final status = _getStatus(row: row, selectedValue: selectedValue);
@@ -827,6 +853,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
       return searchHaystack.contains(query);
     }).toList();
+    stopwatch.stop();
+    debugPrint('SELLER MAP PERF filterMs=${stopwatch.elapsedMilliseconds}');
+    return _cachedFilteredRows!;
   }
 
   void _applyAutoMap() {
@@ -850,6 +879,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
 
       autoMapDetails = nextDetails;
+      _invalidateViewCaches();
     });
   }
 
@@ -862,6 +892,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         selectedMappings.remove(row.rowKey);
         autoMapDetails.remove(row.rowKey);
       }
+      _invalidateViewCaches(resetPage: true);
     });
   }
 
@@ -871,6 +902,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       _clearedRowKeys.add(row.rowKey);
       selectedMappings.remove(row.rowKey);
       autoMapDetails.remove(row.rowKey);
+      _invalidateViewCaches();
     });
   }
 
@@ -942,6 +974,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -999,7 +1032,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final dangerousRemaining = rowsToPersist.where((row) {
       final selectedValue = _getSelectedValue(row);
       final status = _getStatus(row: row, selectedValue: selectedValue);
-      return _isDangerousPreflightStatus(status);
+      return _isBlockingDangerousRow(row: row, status: status);
     }).length;
 
     Navigator.pop(context, {
@@ -1520,13 +1553,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 runSpacing: 8,
                 children: SellerMappingListView.values.map((view) {
                   final isSelected = _activeListView == view;
-                  final count = _rowsForListView(view).length;
+                  final count = _listViewCounts()[view] ?? 0;
                   return ChoiceChip(
                     label: Text('${view.label} ($count)'),
                     selected: isSelected,
                     onSelected: (_) {
                       setState(() {
                         _activeListView = view;
+                        _invalidateViewCaches(resetPage: true);
                       });
                     },
                     selectedColor: SellerMappingTheme.primarySoft,
@@ -1608,8 +1642,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             child: TextField(
               controller: _searchController,
               onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
+                if (_searchDebounce?.isActive ?? false) {
+                  _searchDebounce!.cancel();
+                }
+                _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                  setState(() {
+                    _searchQuery = value;
+                    _invalidateViewCaches(resetPage: true);
+                  });
                 });
               },
               decoration: InputDecoration(
@@ -1623,6 +1663,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                           _searchController.clear();
                           setState(() {
                             _searchQuery = '';
+                            _invalidateViewCaches(resetPage: true);
                           });
                         },
                         icon: const Icon(Icons.close_rounded),
@@ -1671,6 +1712,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               onChanged: (value) {
                 setState(() {
                   _statusFilter = value;
+                  _invalidateViewCaches(resetPage: true);
                 });
               },
             ),
@@ -1822,6 +1864,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = normalizedValue;
       }
+      _invalidateViewCaches();
     });
   }
 
@@ -1853,6 +1896,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       autoMapDetails.remove(row.rowKey);
       _clearedRowKeys.remove(row.rowKey);
       selectedMappings[row.rowKey] = _separateSelectionValue(row);
+      _invalidateViewCaches();
     });
   }
 
@@ -2209,6 +2253,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 setState(() {
                   _searchQuery = '';
                   _statusFilter = 'All';
+                  _invalidateViewCaches(resetPage: true);
                 });
               },
               icon: const Icon(Icons.refresh_rounded),
@@ -2462,28 +2507,49 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
   }
 
-  List<SellerMappingRowVm> _rowsForListView(SellerMappingListView view) {
-    return _rowsForActiveSection().where((row) {
+  Map<SellerMappingListView, int> _listViewCounts() {
+    if (_cachedListViewCounts != null) return _cachedListViewCounts!;
+    final counts = <SellerMappingListView, int>{
+      for (final view in SellerMappingListView.values) view: 0,
+    };
+    for (final row in _rowsForActiveSection()) {
       final selectedValue = _getSelectedValue(row);
       final status = _getStatus(row: row, selectedValue: selectedValue);
       final autoMapDetail = autoMapDetails[row.rowKey];
-      return _matchesListView(
-        row: row,
-        status: status,
-        selectedValue: selectedValue,
-        autoMapDetail: autoMapDetail,
-        view: view,
-      );
-    }).toList();
+      for (final view in SellerMappingListView.values) {
+        if (_matchesListView(
+          row: row,
+          status: status,
+          selectedValue: selectedValue,
+          autoMapDetail: autoMapDetail,
+          view: view,
+        )) {
+          counts[view] = (counts[view] ?? 0) + 1;
+        }
+      }
+    }
+    _cachedListViewCounts = counts;
+    return counts;
   }
 
   @override
   Widget build(BuildContext context) {
-    final visibleRows = _filteredRows();
+    final allFiltered = _filteredRows();
+    final totalPages = (allFiltered.length / _pageSize).ceil();
+    if (_currentPage > totalPages && totalPages > 0) {
+      _currentPage = totalPages;
+    }
+    final startIdx = (_currentPage - 1) * _pageSize;
+    final endIdx = math.min(startIdx + _pageSize, allFiltered.length);
+    final pagedRows = allFiltered.isNotEmpty
+        ? allFiltered.sublist(startIdx, endIdx)
+        : <SellerMappingRowVm>[];
 
-    return Scaffold(
+    final stopwatch = Stopwatch()..start();
+
+    final body = Scaffold(
       backgroundColor: SellerMappingTheme.pageBackground,
-      bottomNavigationBar: _buildBottomBar(visibleRows),
+      bottomNavigationBar: _buildBottomBar(allFiltered),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -2493,10 +2559,45 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               const SizedBox(height: 14),
               _buildTopToolbar(),
               const SizedBox(height: 16),
-              Expanded(child: _buildTableSection(visibleRows)),
+              Expanded(child: _buildTableSection(pagedRows)),
+              if (totalPages > 1) _buildPagination(totalPages),
             ],
           ),
         ),
+      ),
+    );
+
+    stopwatch.stop();
+    debugPrint(
+      'SELLER MAP PERF pageMs=${stopwatch.elapsedMilliseconds} rowsRendered=${pagedRows.length}',
+    );
+
+    return body;
+  }
+
+  Widget _buildPagination(int totalPages) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: _currentPage > 1
+                ? () => setState(() => _currentPage--)
+                : null,
+          ),
+          Text(
+            'Page $_currentPage of $totalPages',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: _currentPage < totalPages
+                ? () => setState(() => _currentPage++)
+                : null,
+          ),
+        ],
       ),
     );
   }
