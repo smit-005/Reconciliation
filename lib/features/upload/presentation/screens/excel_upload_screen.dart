@@ -103,6 +103,17 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   List<NormalizedTransactionRow> normalizedTdsRows = [];
   String? detectedGstNo;
 
+  void _logUploadFreezePerf({
+    required String step,
+    required Stopwatch watch,
+    int rows = 0,
+  }) {
+    watch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=$step ms=${watch.elapsedMilliseconds} rows=$rows',
+    );
+  }
+
   Future<ColumnMappingResult?> showColumnMappingScreen({
     required ExcelPreviewData previewData,
   }) async {
@@ -123,6 +134,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     ImportSessionCache? sessionCache,
     String? preferredSheetName,
   }) async {
+    final previewWatch = Stopwatch()..start();
     final previewData = ExcelService.buildPreviewData(
       bytes,
       fileType: fileType,
@@ -133,6 +145,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       preferredSheetName: preferredSheetName,
       sessionCache: sessionCache,
     );
+    _logUploadFreezePerf(step: 'build_preview', watch: previewWatch);
 
     if (previewData == null) {
       _showUploadSnackBar('Could not build mapping preview for this file');
@@ -145,6 +158,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<ColumnMappingResult?> _openStoredFileColumnMapping({
     required LedgerUploadFile file,
   }) async {
+    final previewWatch = Stopwatch()..start();
     final fileType = file.sectionCode == '194Q'
         ? ExcelImportType.purchase
         : ExcelImportType.genericLedger;
@@ -158,6 +172,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       columnMapping: file.columnMapping,
       sessionCache: ImportSessionCache.fromBytes(file.bytes),
     );
+    _logUploadFreezePerf(step: 'build_stored_preview', watch: previewWatch);
 
     if (previewData == null) {
       _showUploadSnackBar('Could not build mapping preview for this file');
@@ -170,6 +185,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<ColumnMappingResult?> _openStoredTdsColumnMapping({
     required Tds26QUploadFile file,
   }) async {
+    final previewWatch = Stopwatch()..start();
     final previewData = ExcelService.buildPreviewDataWithProfile(
       file.bytes,
       fileType: ExcelImportType.tds26q,
@@ -180,6 +196,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       columnMapping: file.columnMapping,
       sessionCache: ImportSessionCache.fromBytes(file.bytes),
     );
+    _logUploadFreezePerf(step: 'build_stored_tds_preview', watch: previewWatch);
 
     if (previewData == null) {
       _showUploadSnackBar('Could not build mapping preview for this file');
@@ -460,7 +477,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
   }) async {
-    final parseWatch = Stopwatch()..start();
+    final prepareWatch = Stopwatch()..start();
     final response = await ImportUploadFlowService.preparePurchaseImport(
       buyerId: widget.selectedBuyerId,
       bytes: bytes,
@@ -469,29 +486,31 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       initialMappedColumns: initialMappedColumns,
       forceColumnMapping: forceColumnMapping,
     );
+    _logUploadFreezePerf(step: 'prepare_purchase_import', watch: prepareWatch);
 
     if (response.isFailure) {
-      parseWatch.stop();
       _showUploadSnackBar(response.errorMessage!);
       return null;
     }
 
     final result = response.data;
     if (result == null) {
-      parseWatch.stop();
       return null;
     }
 
     if (result.columnMappingResult != null) {
+      final saveProfileWatch = Stopwatch()..start();
       await _saveProfileFromColumnMappingResult(
         result: result.columnMappingResult!,
         sampleSignature: result.sampleSignature,
       );
+      _logUploadFreezePerf(step: 'save_profile', watch: saveProfileWatch);
     }
 
     final fileId =
         existingFileId ??
         '194Q_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}';
+    final normalizeRowsWatch = Stopwatch()..start();
     final normalizedRows = result.parsedRows
         .map(
           (row) => NormalizedLedgerRow.fromPurchaseRow(
@@ -500,13 +519,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           ),
         )
         .toList();
+    _logUploadFreezePerf(
+      step: 'normalize_purchase_rows',
+      watch: normalizeRowsWatch,
+      rows: result.parsedRows.length,
+    );
 
     purchaseRowsByFileId[fileId] = result.parsedRows;
-    parseWatch.stop();
-    debugPrint(
-      'UPLOAD PERF => purchase parse ${parseWatch.elapsedMilliseconds} ms | '
-      'file=${pickedFile.name} rows=${result.parsedRows.length} mappingStatus=${result.mappingStatus}',
-    );
 
     return LedgerUploadFile(
       id: fileId,
@@ -655,59 +674,75 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Future<void> _upload194QFile() async {
     _setSectionLoading('194Q', true);
+    await WidgetsBinding.instance.endOfFrame;
 
     try {
+      final pickWatch = Stopwatch()..start();
       final pickedFile = await _pickExcelFile();
+      _logUploadFreezePerf(step: 'pick_file', watch: pickWatch);
       if (pickedFile == null) {
-        _setSectionLoading('194Q', false);
         return;
       }
 
       final bytes = pickedFile.bytes;
       if (bytes == null) {
-        _setSectionLoading('194Q', false);
         _showUploadSnackBar('Could not read 194Q source file');
         return;
       }
+      final buildUploadFileWatch = Stopwatch()..start();
       final uploadFile = await _buildPurchaseUploadFile(
         pickedFile: pickedFile,
         bytes: bytes,
       );
+      _logUploadFreezePerf(
+        step: 'build_purchase_upload_file',
+        watch: buildUploadFileWatch,
+        rows: uploadFile?.rowCount ?? 0,
+      );
       if (uploadFile == null) {
-        _setSectionLoading('194Q', false);
         return;
       }
 
+      final applyStateWatch = Stopwatch()..start();
       setState(() {
         sectionFiles['194Q'] = [...sectionFiles['194Q']!, uploadFile];
         _invalidateSellerMappingConfirmation();
         _rebuildPurchaseState();
-        sectionLoading['194Q'] = false;
       });
-      _refreshSellerMappingPreflightIfReady();
+      _logUploadFreezePerf(
+        step: 'apply_purchase_upload_state',
+        watch: applyStateWatch,
+        rows: uploadFile.rowCount,
+      );
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=batch_review_count_refresh ms=0 rows=${_batchMappingReviewItems.length}',
+      );
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=seller_preflight_auto_refresh_skipped ms=0 rows=${uploadFile.rowCount}',
+      );
 
       _showUploadSnackBar(
         '194Q source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Open Review All Mappings to confirm it.',
       );
     } catch (e) {
-      _setSectionLoading('194Q', false);
       _showUploadSnackBar('194Q upload error: $e');
+    } finally {
+      _setSectionLoading('194Q', false);
     }
   }
 
   Future<void> _uploadGenericSectionFile(String sectionCode) async {
     _setSectionLoading(sectionCode, true);
+    await WidgetsBinding.instance.endOfFrame;
 
     try {
       final pickedFile = await _pickExcelFile();
       if (pickedFile == null) {
-        _setSectionLoading(sectionCode, false);
         return;
       }
 
       final bytes = pickedFile.bytes;
       if (bytes == null) {
-        _setSectionLoading(sectionCode, false);
         _showUploadSnackBar('Could not read $sectionCode source file');
         return;
       }
@@ -717,7 +752,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         bytes: bytes,
       );
       if (uploadFile == null) {
-        _setSectionLoading(sectionCode, false);
         return;
       }
 
@@ -727,16 +761,21 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         ledgerRowsBySection[sectionCode] = sectionFiles[sectionCode]!
             .expand((item) => item.rows)
             .toList();
-        sectionLoading[sectionCode] = false;
       });
-      _refreshSellerMappingPreflightIfReady();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=batch_review_count_refresh ms=0 rows=${_batchMappingReviewItems.length}',
+      );
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=seller_preflight_auto_refresh_skipped ms=0 rows=${uploadFile.rowCount}',
+      );
 
       _showUploadSnackBar(
         '$sectionCode source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Open Review All Mappings to confirm it.',
       );
     } catch (e) {
-      _setSectionLoading(sectionCode, false);
       _showUploadSnackBar('$sectionCode upload error: $e');
+    } finally {
+      _setSectionLoading(sectionCode, false);
     }
   }
 

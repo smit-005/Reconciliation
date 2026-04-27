@@ -191,8 +191,13 @@ class ImportUploadFlowService {
     }
 
     try {
+      final inspectWatch = Stopwatch()..start();
       final purchasePreparation = await _preparePurchaseUploadInBackground(
         bytes: bytes,
+      );
+      inspectWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=inspect_purchase_upload ms=${inspectWatch.elapsedMilliseconds} rows=0',
       );
 
       if (purchasePreparation == null) {
@@ -219,12 +224,17 @@ class ImportUploadFlowService {
       );
 
       if (matchedProfile != null) {
+        final parseWatch = Stopwatch()..start();
         final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
           bytes: bytes,
           sheetName: inspection.sheetName,
           headerRowIndex: matchedProfile.headerRowIndex,
           headersTrusted: matchedProfile.headersTrusted,
           columnMapping: matchedProfile.columnMapping,
+        );
+        parseWatch.stop();
+        debugPrint(
+          'UPLOAD FREEZE PERF => step=parse_purchase_with_profile ms=${parseWatch.elapsedMilliseconds} rows=${parsedRows.length}',
         );
 
         return ImportWorkflowResponse.success(
@@ -253,6 +263,7 @@ class ImportUploadFlowService {
           );
 
       if (shouldOpenColumnMapping) {
+        final mappingUiWatch = Stopwatch()..start();
         final columnMappingResult = await openColumnMapping(
           bytes: bytes,
           fileName: fileName,
@@ -276,13 +287,22 @@ class ImportUploadFlowService {
         if (columnMappingResult == null) {
           return const ImportWorkflowResponse.cancelled();
         }
+        mappingUiWatch.stop();
+        debugPrint(
+          'UPLOAD FREEZE PERF => step=column_mapping_review ms=${mappingUiWatch.elapsedMilliseconds} rows=0',
+        );
 
+        final parseMappedWatch = Stopwatch()..start();
         final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
           bytes: bytes,
           sheetName: columnMappingResult.sheetName,
           headerRowIndex: columnMappingResult.headerRowIndex,
           headersTrusted: columnMappingResult.headersTrusted,
           columnMapping: columnMappingResult.columnMapping,
+        );
+        parseMappedWatch.stop();
+        debugPrint(
+          'UPLOAD FREEZE PERF => step=parse_purchase_after_mapping ms=${parseMappedWatch.elapsedMilliseconds} rows=${parsedRows.length}',
         );
 
         return ImportWorkflowResponse.success(
