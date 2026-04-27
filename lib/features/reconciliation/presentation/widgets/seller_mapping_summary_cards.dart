@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/widgets/app_metric_card.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
-import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 
 class SellerMappingSummaryMetric {
   final String label;
@@ -51,8 +50,7 @@ class SellerMappingPill extends StatelessWidget {
     return AppStatusBadge(
       icon: icon,
       label: label,
-      color: compact ? AppColorScheme.textMuted : AppColorScheme.primary,
-      backgroundColor: compact ? AppColorScheme.surfaceVariant : AppColorScheme.infoSoft,
+      tone: compact ? AppStatusBadgeTone.neutral : AppStatusBadgeTone.info,
     );
   }
 }
@@ -60,21 +58,17 @@ class SellerMappingPill extends StatelessWidget {
 class SellerMappingStatusChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color color;
+  final AppStatusBadgeTone tone;
 
   const SellerMappingStatusChip({
     super.key,
     required this.icon,
     required this.label,
-    required this.color,
+    required this.tone,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AppStatusBadge(
-      icon: icon,
-      label: label,
-      color: color,
-    );
+    return AppStatusBadge(icon: icon, label: label, tone: tone);
   }
 }

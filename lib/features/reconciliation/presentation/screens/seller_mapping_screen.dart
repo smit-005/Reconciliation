@@ -7,6 +7,7 @@ import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
 import 'package:reconciliation_app/core/widgets/app_search_autocomplete_field.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_summary_cards.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
+import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
@@ -1082,27 +1083,27 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     ];
   }
 
-  Color _statusAccentColor(String status) {
+  AppStatusBadgeTone _statusTone(String status) {
     switch (status) {
       case 'Mapped':
-        return SellerMappingTheme.successColor;
+        return AppStatusBadgeTone.success;
       case 'Marked Separate':
-        return const Color(0xFF0F766E);
+        return AppStatusBadgeTone.info;
       case 'Purchase Only':
-        return const Color(0xFF64748B);
+        return AppStatusBadgeTone.neutral;
       case '26Q Unmatched':
-        return const Color(0xFF7C3AED);
+        return AppStatusBadgeTone.warning;
       case 'Conflicting PAN':
       case 'Ambiguous Identity':
       case 'Unresolved Identity':
       case 'Mapped (PAN missing)':
         return status == 'Mapped (PAN missing)'
-            ? SellerMappingTheme.warningColor
-            : SellerMappingTheme.dangerColor;
+            ? AppStatusBadgeTone.warning
+            : AppStatusBadgeTone.danger;
       case 'PAN Conflict':
-        return SellerMappingTheme.dangerColor;
+        return AppStatusBadgeTone.danger;
       default:
-        return SellerMappingTheme.mutedTextColor;
+        return AppStatusBadgeTone.neutral;
     }
   }
 
@@ -2075,7 +2076,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               child: SellerMappingStatusChip(
                 icon: _statusIconSafe(status),
                 label: _statusChipLabel(status),
-                color: _statusAccentColor(status),
+                tone: _statusTone(status),
               ),
             ),
           ),
