@@ -26,6 +26,7 @@ class SellerMappingScreenRowData {
   final String preflightReasonLabel;
   final String preflightReasonDetail;
   final bool requiresDangerousReview;
+  final bool isPurchaseOnly;
 
   const SellerMappingScreenRowData({
     required this.purchasePartyDisplayName,
@@ -45,6 +46,7 @@ class SellerMappingScreenRowData {
     this.preflightReasonLabel = '',
     this.preflightReasonDetail = '',
     this.requiresDangerousReview = false,
+    this.isPurchaseOnly = false,
   });
 }
 
@@ -116,6 +118,7 @@ class _SellerMappingRowVm {
   final String preflightReasonLabel;
   final String preflightReasonDetail;
   final bool requiresDangerousReview;
+  final bool isPurchaseOnly;
 
   const _SellerMappingRowVm({
     required this.purchasePartyDisplayName,
@@ -137,6 +140,7 @@ class _SellerMappingRowVm {
     this.preflightReasonLabel = '',
     this.preflightReasonDetail = '',
     this.requiresDangerousReview = false,
+    this.isPurchaseOnly = false,
   });
 
   String get rowKey => '$normalizedAlias|$sectionCode';
@@ -359,6 +363,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         requiresDangerousReview:
             row.requiresDangerousReview ||
             (existing?.requiresDangerousReview ?? false),
+        isPurchaseOnly:
+            row.isPurchaseOnly || (existing?.isPurchaseOnly ?? false),
       );
     }
 
@@ -814,6 +820,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
 
     if (selectedValue == null || selectedValue.trim().isEmpty) {
+      if (row.isPurchaseOnly) {
+        return 'Purchase Only';
+      }
       if (_isPreflightMode &&
           row.requiresDangerousReview &&
           row.preflightReasonLabel.trim().isNotEmpty) {
@@ -1193,6 +1202,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return _successColor;
       case 'Marked Separate':
         return const Color(0xFF0F766E);
+      case 'Purchase Only':
+        return const Color(0xFF64748B);
       case '26Q Unmatched':
         return const Color(0xFF7C3AED);
       case 'Conflicting PAN':
@@ -1213,6 +1224,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return Icons.check_circle_rounded;
       case 'Marked Separate':
         return Icons.account_tree_rounded;
+      case 'Purchase Only':
+        return Icons.store_outlined;
       case '26Q Unmatched':
         return Icons.link_off_rounded;
       case 'Conflicting PAN':
@@ -1241,6 +1254,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (status == '26Q Unmatched') {
       return Color.alphaBlend(
         const Color(0xFF7C3AED).withValues(alpha: 0.08),
+        base,
+      );
+    }
+    if (status == 'Purchase Only') {
+      return Color.alphaBlend(
+        const Color(0xFF64748B).withValues(alpha: 0.05),
         base,
       );
     }
@@ -1543,7 +1562,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 const SizedBox(height: 12),
                 Text(
                   _isPreflightMode
-                      ? 'Preflight is 26Q-centered. Only same-section source aliases relevant to 26Q sellers are shown here, and ledger-only sellers are handled later in reconciliation.'
+                      ? 'Preflight includes both purchase-register and 26Q sellers for this section to ensure complete visibility.'
                       : 'Rows remain section-aware. Existing ALL mappings are shown as guidance only, and saving continues to create or update exact section mappings.',
                   style: TextStyle(
                     fontSize: 13,

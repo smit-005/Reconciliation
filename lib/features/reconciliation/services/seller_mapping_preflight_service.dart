@@ -165,6 +165,7 @@ class SellerMappingPreflightService {
     }
 
     final rows = <SellerMappingScreenRowData>[];
+    final addedSourceAliases = <String>{};
     var pendingReviewCount = 0;
 
     for (final tdsGroup in tdsGroups.values) {
@@ -202,8 +203,11 @@ class SellerMappingPreflightService {
       }
 
       rows.addAll(
-        matches.rows.map(
-          (match) => SellerMappingScreenRowData(
+        matches.rows.map((match) {
+          addedSourceAliases.add(
+            '${match.sourceAlias.alias}|${match.sourceAlias.sectionCode}',
+          );
+          return SellerMappingScreenRowData(
             purchasePartyDisplayName: match.sourceAlias.displayName,
             normalizedAlias: match.sourceAlias.alias,
             sectionCode: match.sourceAlias.sectionCode,
@@ -225,9 +229,39 @@ class SellerMappingPreflightService {
             preflightReasonLabel: matches.reasonLabel,
             preflightReasonDetail: matches.reasonDetail,
             requiresDangerousReview: matches.requiresDangerousReview,
-          ),
-        ),
+          );
+        }),
       );
+    }
+
+    for (final sourceGroup in sourceGroups.values) {
+      final key = '${sourceGroup.alias}|${sourceGroup.sectionCode}';
+      if (!addedSourceAliases.contains(key)) {
+        rows.add(
+          SellerMappingScreenRowData(
+            purchasePartyDisplayName: sourceGroup.displayName,
+            normalizedAlias: sourceGroup.alias,
+            sectionCode: sourceGroup.sectionCode,
+            purchasePan: sourceGroup.sourcePan,
+            purchaseGstNo: sourceGroup.sourceGst,
+            resolvedSuggestion: sourceGroup.suggestedName.isNotEmpty
+                ? SellerMappingResolvedSuggestion(
+                    mappedName: sourceGroup.suggestedName,
+                    mappedPan: sourceGroup.resolvedPan,
+                    source: sourceGroup.suggestionSource,
+                    helperText:
+                        'Suggested 26Q seller based on fuzzy match or ledger data.',
+                  )
+                : null,
+            preflightReasonCode: 'ledger_only',
+            preflightReasonLabel: 'Purchase Only',
+            preflightReasonDetail:
+                'Source seller without a confirmed 26Q match.',
+            requiresDangerousReview: false,
+            isPurchaseOnly: true,
+          ),
+        );
+      }
     }
 
     rows.sort((a, b) {
