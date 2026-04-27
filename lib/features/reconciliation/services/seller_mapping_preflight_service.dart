@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
@@ -175,10 +176,6 @@ class SellerMappingPreflightService {
         existingMappings: existingMappings,
       );
 
-      if (matches.requiresDangerousReview) {
-        pendingReviewCount += 1;
-      }
-
       if (matches.rows.isEmpty) {
         rows.add(
           SellerMappingScreenRowData(
@@ -242,6 +239,21 @@ class SellerMappingPreflightService {
       return a.purchasePartyDisplayName.compareTo(b.purchasePartyDisplayName);
     });
 
+    // Calculate unique dangerous aliases to align count with the UI row deduplication
+    final uniqueDangerousAliases = <String>{};
+    for (final row in rows) {
+      final hasSavedMapping =
+          row.resolvedSuggestion?.source.startsWith('saved_') ?? false;
+      debugPrint(
+        'PRECHECK row=${row.purchasePartyDisplayName} status=${row.preflightReasonCode} hasSavedMapping=$hasSavedMapping blocked=${row.requiresDangerousReview}',
+      );
+
+      if (row.requiresDangerousReview) {
+        uniqueDangerousAliases.add('${row.normalizedAlias}|${row.sectionCode}');
+      }
+    }
+    pendingReviewCount = uniqueDangerousAliases.length;
+
     return SellerMappingPreflightResult(
       reviewRows: rows,
       tdsParties: tdsParties,
@@ -285,7 +297,14 @@ class SellerMappingPreflightService {
       final hasPanConflict =
           tdsGroup.effectivePan.isNotEmpty &&
           source.sourcePan.isNotEmpty &&
-          source.sourcePan != tdsGroup.effectivePan;
+          source.sourcePan != tdsGroup.effectivePan &&
+          (nameExact || suggestedNameMatch);
+
+      if (!savedExact &&
+          !savedFallback &&
+          source.hasAnySavedMapping(existingMappings)) {
+        continue;
+      }
 
       if (!(savedExact ||
           savedFallback ||
@@ -318,19 +337,23 @@ class SellerMappingPreflightService {
         helperText: helperText,
       );
 
-      if (hasPanConflict) {
-        panConflictMatches.add(matched);
-        continue;
-      }
       if (savedExact) {
         exactSavedMatches.add(matched);
+        continue;
+      }
+      if (savedFallback) {
+        safeNameMatches.add(matched);
+        continue;
+      }
+      if (hasPanConflict) {
+        panConflictMatches.add(matched);
         continue;
       }
       if (panExact) {
         safePanMatches.add(matched);
         continue;
       }
-      if (nameExact || savedFallback) {
+      if (nameExact) {
         safeNameMatches.add(matched);
         continue;
       }
@@ -351,7 +374,8 @@ class SellerMappingPreflightService {
       );
       return _PreflightMatchResult(
         rows: const <_MatchedSourceAlias>[],
-        requiresDangerousReview: dangerousFlag != null,
+        requiresDangerousReview:
+            dangerousFlag != null && dangerousFlag != 'unresolved_identity',
         reasonCode: dangerousFlag ?? '',
         reasonLabel: _reasonLabel(dangerousFlag),
         reasonDetail: tdsGroup.identityNotes.toSet().join(' | '),
@@ -361,23 +385,52 @@ class SellerMappingPreflightService {
     final dangerousFlag =
         primaryDangerousSellerIdentityFlag(tdsGroup.identityFlags) ??
         (tdsGroup.pans.length > 1 ? 'conflicting_pan' : null);
+
+    final safeDirectMatches = <_MatchedSourceAlias>[
+      ...exactSavedMatches,
+      ...safePanMatches,
+      ...safeNameMatches,
+    ];
+
+    final allSaved =
+        allRows.isNotEmpty &&
+        allRows.every((r) => r.suggestionSource.startsWith('saved_'));
+
+    if (allSaved) {
+      return _PreflightMatchResult(
+        rows: allRows,
+        requiresDangerousReview: false,
+        reasonCode: '',
+        reasonLabel: '',
+        reasonDetail:
+            'All same-section source aliases are safely resolved via saved mappings.',
+      );
+    }
+
+    // Identity is considered "resolved" for preflight if all matched rows are "safe"
+    // (saved, PAN, or exact name) and there are no conflicts or risky suggestions.
+    // Exception: statutory PAN conflicts (multiple PANs in the 26Q file) must always
+    // be reviewed even if matches exist.
+    final matchesAreSafeAndResolved =
+        safeDirectMatches.length == allRows.length &&
+        safeDirectMatches.isNotEmpty &&
+        panConflictMatches.isEmpty &&
+        riskyMatches.isEmpty;
+
+    final isStatutoryPanConflict = tdsGroup.pans.length > 1;
+
+    if (matchesAreSafeAndResolved && !isStatutoryPanConflict) {
+      return _PreflightMatchResult(
+        rows: allRows,
+        requiresDangerousReview: false,
+        reasonCode: '',
+        reasonLabel: '',
+        reasonDetail:
+            'All same-section source aliases are safely resolved for this 26Q seller.',
+      );
+    }
+
     if (dangerousFlag != null) {
-      final safeManyToOnePanMatch =
-          safePanMatches.length == allRows.length &&
-          safePanMatches.isNotEmpty &&
-          tdsGroup.effectivePan.isNotEmpty &&
-          panConflictMatches.isEmpty &&
-          riskyMatches.isEmpty;
-      if (safeManyToOnePanMatch) {
-        return _PreflightMatchResult(
-          rows: allRows,
-          requiresDangerousReview: false,
-          reasonCode: '',
-          reasonLabel: '',
-          reasonDetail:
-              'Multiple same-section source aliases safely share the same PAN as this 26Q seller.',
-        );
-      }
       return _PreflightMatchResult(
         rows: allRows,
         requiresDangerousReview: true,
@@ -386,12 +439,6 @@ class SellerMappingPreflightService {
         reasonDetail: tdsGroup.identityNotes.toSet().join(' | '),
       );
     }
-
-    final safeDirectMatches = <_MatchedSourceAlias>[
-      ...exactSavedMatches,
-      ...safePanMatches,
-      ...safeNameMatches,
-    ];
 
     if (panConflictMatches.isNotEmpty &&
         safeDirectMatches.isEmpty &&
@@ -403,19 +450,6 @@ class SellerMappingPreflightService {
         reasonLabel: 'Conflicting PAN',
         reasonDetail:
             'Same-section source aliases conflict with the 26Q PAN for this seller and need review.',
-      );
-    }
-
-    if (safeDirectMatches.isNotEmpty &&
-        riskyMatches.isEmpty &&
-        panConflictMatches.isEmpty) {
-      return _PreflightMatchResult(
-        rows: allRows,
-        requiresDangerousReview: false,
-        reasonCode: '',
-        reasonLabel: '',
-        reasonDetail:
-            'All same-section source aliases safely resolve to this 26Q seller.',
       );
     }
 
@@ -545,6 +579,14 @@ class _SourceAliasAccumulator {
         )
         .firstOrNull;
     return fallbackMapping != null;
+  }
+
+  bool hasAnySavedMapping(List<SellerMapping> existingMappings) {
+    return existingMappings.any((mapping) {
+      final mAlias = normalizeName(mapping.aliasName);
+      final mSection = normalizeSellerMappingSectionCode(mapping.sectionCode);
+      return mAlias == alias && (mSection == sectionCode || mSection == 'ALL');
+    });
   }
 
   String get resolvedPan =>

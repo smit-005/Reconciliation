@@ -1016,8 +1016,23 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       await _applySellerMappingChanges(result);
-      _invalidateSellerMappingConfirmation();
+      if (result['dangerousRemaining'] == 0) {
+        setState(() {
+          _isSellerMappingConfirmed = true;
+        });
+      }
+
+      final upsertsCount = (result['upserts'] as List?)?.length ?? 0;
+      final deletedCount = (result['deleted'] as List?)?.length ?? 0;
+      debugPrint(
+        'SAVE_REVIEW => upserts=$upsertsCount deleted=$deletedCount dangerousRemaining=${result['dangerousRemaining']}',
+      );
+
       await _refreshSellerMappingPreflight();
+
+      debugPrint(
+        'SAVE_REVIEW => pendingReviewCount=${_sellerMappingPreflight?.pendingReviewCount}',
+      );
 
       if (!mounted) return;
 
@@ -1191,13 +1206,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
   }
 
-  int get _safeBatchMappingCount => _batchMappingReviewItems
-      .where((item) => item.canConfirmSafely)
-      .length;
+  int get _safeBatchMappingCount =>
+      _batchMappingReviewItems.where((item) => item.canConfirmSafely).length;
 
-  int get _reviewRequiredBatchMappingCount => _batchMappingReviewItems
-      .where((item) => !item.isConfirmed)
-      .length;
+  int get _reviewRequiredBatchMappingCount =>
+      _batchMappingReviewItems.where((item) => !item.isConfirmed).length;
 
   Future<void> _openBatchMappingReviewScreen() async {
     if (_batchMappingReviewItems.isEmpty) {
@@ -2615,7 +2628,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             ),
             const SizedBox(width: 12),
             OutlinedButton.icon(
-              onPressed: _hasWorkspaceContent ? _openBatchMappingReviewScreen : null,
+              onPressed: _hasWorkspaceContent
+                  ? _openBatchMappingReviewScreen
+                  : null,
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 disabledForegroundColor: const Color(0xFF64748B),

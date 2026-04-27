@@ -1122,9 +1122,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         continue;
       }
       final currentMappedName = selectedMappings[row.rowKey]?.trim() ?? '';
+      final resolvedSuggestionName =
+          _normalizeToKnownTdsParty(
+            row.resolvedSuggestion?.mappedName,
+          )?.trim() ??
+          '';
+      final effectiveMappedName = currentMappedName.isNotEmpty
+          ? currentMappedName
+          : (_isPreflightMode ? resolvedSuggestionName : '');
       final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
 
-      if (currentMappedName.isEmpty) {
+      if (effectiveMappedName.isEmpty) {
         if (existingExactName.isNotEmpty &&
             _clearedRowKeys.contains(row.rowKey)) {
           deleted.add({
@@ -1135,21 +1143,34 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         continue;
       }
 
-      if (currentMappedName == existingExactName) {
+      // In preflight mode, always upsert mapped rows so that the upload
+      // screen's next preflight refresh sees the section-level saved alias
+      // and suppresses any stale dangerous flags.
+      if (effectiveMappedName == existingExactName && !_isPreflightMode) {
         continue;
       }
 
       upserts.add({
         'aliasName': row.normalizedAlias,
         'sectionCode': row.sectionCode,
-        'mappedName': currentMappedName,
-        'mappedPan': _isSeparateSelection(row, currentMappedName)
+        'mappedName': effectiveMappedName,
+        'mappedPan': _isSeparateSelection(row, effectiveMappedName)
             ? row.purchasePan
-            : _getPanForTdsParty(currentMappedName),
+            : _getPanForTdsParty(effectiveMappedName),
       });
     }
 
-    Navigator.pop(context, {'upserts': upserts, 'deleted': deleted});
+    final dangerousRemaining = rowsToPersist.where((row) {
+      final selectedValue = _getSelectedValue(row);
+      final status = _getStatus(row: row, selectedValue: selectedValue);
+      return _isDangerousPreflightStatus(status);
+    }).length;
+
+    Navigator.pop(context, {
+      'upserts': upserts,
+      'deleted': deleted,
+      'dangerousRemaining': dangerousRemaining,
+    });
   }
 
   String _buyerInitials() {
@@ -1405,6 +1426,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       messages.add(row.preflightReasonDetail.trim());
     } else if (status == 'PAN Conflict') {
       messages.add('Conflict: purchase PAN and 26Q PAN differ');
+      if (explicitSelectedValue == null) {
+        messages.add('Please Mark Separate or select a valid party');
+      }
     } else if (status == 'Mapped (PAN missing)') {
       messages.add('Mapping exists, but PAN still needs manual verification');
     } else if (status == 'Unmapped') {
@@ -1957,10 +1981,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   bool _canAcceptSuggestion(_SellerMappingRowVm row) {
+    if (_getExplicitSelectedValue(row) != null) return false;
+
     final suggested = _normalizeToKnownTdsParty(
       row.resolvedSuggestion?.mappedName,
     );
-    return suggested != null && suggested.trim().isNotEmpty;
+    if (suggested == null || suggested.trim().isEmpty) return false;
+
+    final statusIfAccepted = _getStatus(row: row, selectedValue: suggested);
+    if (_isDangerousPreflightStatus(statusIfAccepted)) return false;
+
+    return true;
   }
 
   void _acceptSuggestedMapping(_SellerMappingRowVm row) {
@@ -2216,7 +2247,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text('Accept'),
+                          child: const Text('Use Suggested Match'),
                         ),
                       if (!_isSeparateSelection(row, selectedValue))
                         TextButton(
