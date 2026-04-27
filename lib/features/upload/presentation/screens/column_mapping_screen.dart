@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
 
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
@@ -285,8 +288,6 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     );
   }
 
-
-
   double get _displayConfidence {
     return math.max(
       widget.previewData.confidenceScore.clamp(0.0, 1.0),
@@ -308,17 +309,17 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   BoxDecoration _panelDecoration({Color? borderColor}) {
     return BoxDecoration(
-      color: const Color(0xFF111827),
+      color: AppColorScheme.surface,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: borderColor ?? const Color(0xFF273247)),
+      border: Border.all(color: borderColor ?? AppColorScheme.border),
     );
   }
 
   Widget _buildFileInfoCard() {
     final confidencePercent = (_displayConfidence * 100).round();
     final confidenceColor = _displayConfidence < 0.75
-        ? const Color(0xFFF59E0B)
-        : const Color(0xFF38BDF8);
+        ? AppColorScheme.warning
+        : AppColorScheme.primary;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -348,8 +349,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           FilledButton.icon(
             onPressed: _autoMapBestGuess,
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1D4ED8),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColorScheme.primary,
+              foregroundColor: AppColorScheme.textPrimary,
             ),
             icon: const Icon(Icons.auto_fix_high),
             label: const Text('Auto Map Best Guess'),
@@ -363,9 +364,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
+        color: AppColorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF273247)),
+        border: Border.all(color: AppColorScheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,7 +384,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           Text(
             value,
             style: TextStyle(
-              color: accentColor ?? Colors.white,
+              color: accentColor ?? AppColorScheme.textPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -397,8 +398,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(
         borderColor: _isMappingValid
-            ? const Color(0xFF1F6F50)
-            : const Color(0xFF7F1D1D),
+            ? AppColorScheme.successSoft
+            : AppColorScheme.dangerSoft,
       ),
       child: ListView(
         controller: _columnsScrollController,
@@ -408,7 +409,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           const Text(
             'Field Mapping',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColorScheme.textPrimary,
               fontSize: 17,
               fontWeight: FontWeight.w700,
             ),
@@ -468,36 +469,36 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
     if (mappedColumnKey != null) {
       labelStatus = 'Mapped';
-      statusColor = const Color(0xFF22C55E);
+      statusColor = AppColorScheme.success;
     } else if (field.key == 'section' && _isGenericLedgerFile) {
       labelStatus = 'Conditional';
-      statusColor = const Color(0xFFF59E0B);
+      statusColor = AppColorScheme.warning;
     } else if (field.key == 'pan_number' || field.key == 'gst_no') {
       final hasIdentity =
           selections.containsValue('pan_number') ||
           selections.containsValue('gst_no');
       if (_isTdsFile && field.key == 'pan_number') {
         labelStatus = 'Missing';
-        statusColor = const Color(0xFFEF4444);
+        statusColor = AppColorScheme.danger;
       } else if (hasIdentity) {
         labelStatus = 'Optional';
-        statusColor = const Color(0xFF94A3B8);
+        statusColor = AppColorScheme.textSecondary;
       } else {
         labelStatus = 'Missing';
-        statusColor = const Color(0xFFEF4444);
+        statusColor = AppColorScheme.danger;
       }
     } else if (field.key == 'date' || field.key == 'eom') {
       final hasDate =
           selections.containsValue('date') || selections.containsValue('eom');
       if (hasDate) {
         labelStatus = 'Optional';
-        statusColor = const Color(0xFF94A3B8);
+        statusColor = AppColorScheme.textSecondary;
       } else if (field.requiredField) {
         labelStatus = 'Missing';
-        statusColor = const Color(0xFFEF4444);
+        statusColor = AppColorScheme.danger;
       } else {
         labelStatus = 'Optional';
-        statusColor = const Color(0xFF94A3B8);
+        statusColor = AppColorScheme.textSecondary;
       }
     } else if (field.key == 'basic_amount' || field.key == 'bill_amount') {
       final hasAmount =
@@ -505,34 +506,34 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           selections.containsValue('bill_amount');
       if (hasAmount) {
         labelStatus = 'Optional';
-        statusColor = const Color(0xFF94A3B8);
+        statusColor = AppColorScheme.textSecondary;
       } else if (field.requiredField || field.key == 'bill_amount') {
         labelStatus = 'Missing';
-        statusColor = const Color(0xFFEF4444);
+        statusColor = AppColorScheme.danger;
       } else {
         labelStatus = 'Optional';
-        statusColor = const Color(0xFF94A3B8);
+        statusColor = AppColorScheme.textSecondary;
       }
     } else if (field.requiredField) {
       labelStatus = 'Missing';
-      statusColor = const Color(0xFFEF4444);
+      statusColor = AppColorScheme.danger;
     } else {
       labelStatus = 'Optional';
-      statusColor = const Color(0xFF94A3B8);
+      statusColor = AppColorScheme.textSecondary;
     }
 
     final hasDuplicate = _hasDuplicateFor(field.key);
     final lowConfidence = _isLowConfidenceMapping(field.key);
 
-    Color borderColor = const Color(0xFF273247);
-    Color backgroundColor = const Color(0xFF0B1220);
+    Color borderColor = AppColorScheme.border;
+    Color backgroundColor = AppColorScheme.surface;
 
     if (hasDuplicate) {
-      borderColor = const Color(0xFFEF4444);
-      backgroundColor = const Color(0xFF2A0F14);
+      borderColor = AppColorScheme.danger;
+      backgroundColor = AppColorScheme.dangerSoft;
     } else if (lowConfidence) {
-      borderColor = const Color(0xFFF59E0B);
-      backgroundColor = const Color(0xFF2A1F0B);
+      borderColor = AppColorScheme.warning;
+      backgroundColor = AppColorScheme.warningSoft;
     }
 
     return Container(
@@ -552,7 +553,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 child: Text(
                   field.label,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColorScheme.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -565,10 +566,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                    color: AppColorScheme.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                      color: AppColorScheme.warning.withValues(alpha: 0.3),
                     ),
                   ),
                   child: const Text(
@@ -609,14 +610,14 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           Theme(
             data: Theme.of(
               context,
-            ).copyWith(canvasColor: const Color(0xFF1E293B)),
+            ).copyWith(canvasColor: AppColorScheme.border),
             child: DropdownButtonFormField<String>(
               initialValue: mappedColumnKey,
               icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
               isExpanded: true,
               decoration: InputDecoration(
                 filled: true,
-                fillColor: const Color(0xFF0F172A),
+                fillColor: AppColorScheme.surface,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 12,
@@ -630,7 +631,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                   borderSide: const BorderSide(color: Color(0xFF334155)),
                 ),
               ),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(
+                color: AppColorScheme.textPrimary,
+                fontSize: 13,
+              ),
               items: [
                 const DropdownMenuItem<String>(
                   value: null,
@@ -669,11 +673,11 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     return Theme(
       data: Theme.of(
         context,
-      ).copyWith(scaffoldBackgroundColor: const Color(0xFF020617)),
+      ).copyWith(scaffoldBackgroundColor: AppColorScheme.background),
       child: Scaffold(
-        backgroundColor: const Color(0xFF020617),
+        backgroundColor: AppColorScheme.background,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF020617),
+          backgroundColor: AppColorScheme.background,
           elevation: 0,
           title: Text(
             widget.previewData.fileType == ImportMappingService.purchaseFileType

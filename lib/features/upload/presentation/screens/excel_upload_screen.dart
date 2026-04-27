@@ -1,5 +1,8 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
@@ -1339,7 +1342,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       case UploadMappingStatus.notMapped:
         return const Color(0xFF9A3412);
       case UploadMappingStatus.autoMapped:
-        return const Color(0xFF1D4ED8);
+        return AppColorScheme.primary;
       case UploadMappingStatus.needsReview:
         return const Color(0xFFB45309);
       case UploadMappingStatus.confirmed:
@@ -1361,8 +1364,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   BoxDecoration _panelDecoration({
-    Color borderColor = const Color(0xFF1E293B),
-    Color backgroundColor = const Color(0xFF0F172A),
+    Color borderColor = AppColorScheme.border,
+    Color backgroundColor = AppColorScheme.surface,
     List<BoxShadow>? shadows,
   }) {
     return BoxDecoration(
@@ -1394,7 +1397,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: _panelDecoration(
-        borderColor: const Color(0xFF1E293B),
+        borderColor: AppColorScheme.border,
         backgroundColor: const Color(0xFF07111F),
         shadows: [
           BoxShadow(
@@ -1418,7 +1421,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 onPressed: () => Navigator.of(context).maybePop(),
                 style: IconButton.styleFrom(
                   backgroundColor: const Color(0xFF111C31),
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColorScheme.textPrimary,
                 ),
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
@@ -1432,7 +1435,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: AppColorScheme.textPrimary,
                         letterSpacing: -0.4,
                       ),
                     ),
@@ -1457,12 +1460,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 decoration: BoxDecoration(
                   color: canOpenReconciliation
                       ? const Color(0xFF052E2B)
-                      : const Color(0xFF1E293B),
+                      : AppColorScheme.border,
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
                     color: canOpenReconciliation
                         ? const Color(0xFF0F766E)
-                        : const Color(0xFF334155),
+                        : AppColorScheme.textMuted,
                   ),
                 ),
                 child: Row(
@@ -1497,9 +1500,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                     : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
-                  disabledBackgroundColor: const Color(0xFF1E293B),
+                  disabledBackgroundColor: AppColorScheme.border,
                   disabledForegroundColor: const Color(0xFF64748B),
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColorScheme.textPrimary,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
                     vertical: 18,
@@ -1522,7 +1525,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF0B1728),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFF1E293B)),
+              border: Border.all(color: AppColorScheme.border),
             ),
             child: Row(
               children: [
@@ -1530,7 +1533,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1D4ED8).withValues(alpha: 0.18),
+                    color: AppColorScheme.primary.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(
@@ -1565,11 +1568,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: _panelDecoration(
-        borderColor: const Color(0xFF1D4ED8).withValues(alpha: 0.35),
-        backgroundColor: const Color(0xFF0B1220),
+        borderColor: AppColorScheme.primary.withValues(alpha: 0.35),
+        backgroundColor: AppColorScheme.surface,
         shadows: [
           BoxShadow(
-            color: const Color(0xFF1D4ED8).withValues(alpha: 0.10),
+            color: AppColorScheme.primary.withValues(alpha: 0.10),
             blurRadius: 24,
             offset: const Offset(0, 14),
           ),
@@ -1628,7 +1631,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: AppColorScheme.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1649,8 +1652,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: uploaded
-                    ? const Color(0xFF1D4ED8).withValues(alpha: 0.45)
-                    : const Color(0xFF334155),
+                    ? AppColorScheme.primary.withValues(alpha: 0.45)
+                    : AppColorScheme.textMuted,
               ),
             ),
             child: Row(
@@ -1661,7 +1664,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   decoration: BoxDecoration(
                     color: uploaded
                         ? const Color(0xFFDBEAFE).withValues(alpha: 0.12)
-                        : const Color(0xFF1E293B),
+                        : AppColorScheme.border,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Icon(
@@ -1670,7 +1673,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                         : Icons.upload_file_rounded,
                     color: uploaded
                         ? const Color(0xFF93C5FD)
-                        : const Color(0xFF94A3B8),
+                        : AppColorScheme.textSecondary,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -1681,7 +1684,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       Text(
                         uploaded ? file.fileName : 'No 26Q file uploaded yet',
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColorScheme.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -1708,9 +1711,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       onPressed: isLoadingTds ? null : uploadTds26QFile,
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
-                        disabledBackgroundColor: const Color(0xFF1E293B),
+                        disabledBackgroundColor: AppColorScheme.border,
                         disabledForegroundColor: const Color(0xFF64748B),
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColorScheme.textPrimary,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 16,
@@ -1735,7 +1738,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       OutlinedButton.icon(
                         onPressed: isLoadingTds ? null : _reviewTds26QMapping,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColorScheme.textPrimary,
                           side: const BorderSide(color: Color(0xFF334155)),
                         ),
                         icon: const Icon(Icons.tune, size: 16),
@@ -1765,7 +1768,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: AppColorScheme.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1799,15 +1802,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                     color: active
                         ? accent.withValues(alpha: 0.18)
                         : selected
-                        ? const Color(0xFF111827)
-                        : const Color(0xFF0B1220),
+                        ? AppColorScheme.surface
+                        : AppColorScheme.surface,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: active
                           ? accent
                           : selected
                           ? accent.withValues(alpha: 0.55)
-                          : const Color(0xFF334155),
+                          : AppColorScheme.textMuted,
                       width: active ? 1.6 : 1,
                     ),
                     boxShadow: active
@@ -1831,7 +1834,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                             sectionDisplayLabel(section),
                             style: TextStyle(
                               color: selected
-                                  ? Colors.white
+                                  ? AppColorScheme.textPrimary
                                   : const Color(0xFFE2E8F0),
                               fontWeight: FontWeight.w800,
                             ),
@@ -1906,12 +1909,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         ? 'Safe files ready'
         : 'Review required';
     final statusBackground = !hasFiles
-        ? const Color(0xFF1E293B)
+        ? AppColorScheme.border
         : allConfirmed
         ? const Color(0xFFDCFCE7)
         : const Color(0xFFFEF3C7);
     final statusColor = !hasFiles
-        ? const Color(0xFF94A3B8)
+        ? AppColorScheme.textSecondary
         : allConfirmed
         ? const Color(0xFF166534)
         : const Color(0xFFB45309);
@@ -1942,7 +1945,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: AppColorScheme.textPrimary,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1987,15 +1990,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       'Need Review',
                       reviewPendingCount.toString(),
                       accentColor: allConfirmed
-                          ? const Color(0xFF22C55E)
-                          : const Color(0xFFF59E0B),
+                          ? AppColorScheme.success
+                          : AppColorScheme.warning,
                     ),
                     _buildInfoChip(
                       'Safe to Confirm',
                       safeCount.toString(),
                       accentColor: safeCount > 0
-                          ? const Color(0xFF38BDF8)
-                          : const Color(0xFF94A3B8),
+                          ? AppColorScheme.primary
+                          : AppColorScheme.textSecondary,
                     ),
                   ],
                 ),
@@ -2010,7 +2013,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               OutlinedButton.icon(
                 onPressed: hasFiles ? _openBatchMappingReviewScreen : null,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColorScheme.textPrimary,
                   side: const BorderSide(color: Color(0xFF334155)),
                 ),
                 icon: const Icon(Icons.rule_folder_outlined),
@@ -2030,9 +2033,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                     : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
-                  disabledBackgroundColor: const Color(0xFF1E293B),
+                  disabledBackgroundColor: AppColorScheme.border,
                   disabledForegroundColor: const Color(0xFF64748B),
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColorScheme.textPrimary,
                 ),
                 icon: const Icon(Icons.done_all_rounded),
                 label: const Text('Confirm All Safe Mappings'),
@@ -2059,12 +2062,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         ? 'Needs Review'
         : 'Pending';
     final statusColor = isLocked
-        ? const Color(0xFF94A3B8)
+        ? AppColorScheme.textSecondary
         : isSafe
         ? const Color(0xFF166534)
         : const Color(0xFFB45309);
     final statusBackground = isLocked
-        ? const Color(0xFF1E293B)
+        ? AppColorScheme.border
         : isSafe
         ? const Color(0xFFDCFCE7)
         : const Color(0xFFFEF3C7);
@@ -2097,7 +2100,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: AppColorScheme.textPrimary,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -2138,8 +2141,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       'Pending Review',
                       isLocked ? '-' : pendingCount.toString(),
                       accentColor: isSafe
-                          ? const Color(0xFF22C55E)
-                          : const Color(0xFFF59E0B),
+                          ? AppColorScheme.success
+                          : AppColorScheme.warning,
                     ),
                     _buildInfoChip(
                       'Dangerous Statuses',
@@ -2156,7 +2159,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 ? null
                 : openSellerMappingScreen,
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
+              foregroundColor: AppColorScheme.textPrimary,
               side: const BorderSide(color: Color(0xFF334155)),
             ),
             icon: const Icon(Icons.person_search_rounded),
@@ -2172,7 +2175,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       constraints: const BoxConstraints(minWidth: 180, minHeight: 112),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
+        color: AppColorScheme.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFF1F2937)),
       ),
@@ -2195,7 +2198,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: AppColorScheme.textPrimary,
               height: 1.1,
             ),
             maxLines: 2,
@@ -2210,9 +2213,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
+        color: AppColorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF273247)),
+        border: Border.all(color: AppColorScheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2230,7 +2233,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           Text(
             value,
             style: TextStyle(
-              color: accentColor ?? Colors.white,
+              color: accentColor ?? AppColorScheme.textPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -2277,7 +2280,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       padding: const EdgeInsets.all(24),
       decoration: _panelDecoration(
         borderColor: accent.withValues(alpha: 0.28),
-        backgroundColor: const Color(0xFF0B1220),
+        backgroundColor: AppColorScheme.surface,
         shadows: [
           BoxShadow(
             color: accent.withValues(alpha: 0.10),
@@ -2342,7 +2345,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                           : _uploadGenericSectionFile(sectionCode),
                 style: FilledButton.styleFrom(
                   backgroundColor: accent,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColorScheme.textPrimary,
                 ),
                 icon: const Icon(Icons.add),
                 label: Text(
@@ -2361,7 +2364,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               Text(
                 sectionDisplayLabel(sectionCode),
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColorScheme.textPrimary,
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2373,9 +2376,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF111827),
+                  color: AppColorScheme.surface,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: AppColorScheme.textMuted),
                 ),
                 child: Text(
                   '${files.length} file${files.length == 1 ? '' : 's'} | ${_sectionRowCount(sectionCode)} rows',
@@ -2475,7 +2478,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                                   file.fileName,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white,
+                                    color: AppColorScheme.textPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -2564,7 +2567,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                                     : () =>
                                           _remapSectionFile(sectionCode, file),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: AppColorScheme.textPrimary,
                                   side: const BorderSide(
                                     color: Color(0xFF334155),
                                   ),
@@ -2613,7 +2616,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             OutlinedButton.icon(
               onPressed: () => Navigator.of(context).maybePop(),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: AppColorScheme.textPrimary,
                 side: const BorderSide(color: Color(0xFF334155)),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 18,
@@ -2632,12 +2635,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   ? _openBatchMappingReviewScreen
                   : null,
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: AppColorScheme.textPrimary,
                 disabledForegroundColor: const Color(0xFF64748B),
                 side: BorderSide(
                   color: _hasWorkspaceContent
-                      ? const Color(0xFF334155)
-                      : const Color(0xFF1E293B),
+                      ? AppColorScheme.textMuted
+                      : AppColorScheme.border,
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 18,
@@ -2659,12 +2662,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _isSellerMappingConfirmed
                       ? Colors.green
-                      : Colors.white,
+                      : AppColorScheme.textPrimary,
                   disabledForegroundColor: const Color(0xFF64748B),
                   side: BorderSide(
                     color: _isSellerMappingConfirmed
                         ? Colors.green.shade600
-                        : const Color(0xFF334155),
+                        : AppColorScheme.textMuted,
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
@@ -2697,9 +2700,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   : null,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2563EB),
-                disabledBackgroundColor: const Color(0xFF1E293B),
+                disabledBackgroundColor: AppColorScheme.border,
                 disabledForegroundColor: const Color(0xFF64748B),
-                foregroundColor: Colors.white,
+                foregroundColor: AppColorScheme.textPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 22,
                   vertical: 18,
@@ -2723,7 +2726,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF020617),
+      backgroundColor: AppColorScheme.background,
       bottomNavigationBar: _buildBottomActionBar(),
       body: SafeArea(
         child: Center(

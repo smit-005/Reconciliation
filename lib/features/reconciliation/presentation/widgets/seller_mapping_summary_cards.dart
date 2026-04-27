@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'seller_mapping_theme.dart';
+import 'package:reconciliation_app/core/widgets/app_metric_card.dart';
+import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 
 class SellerMappingSummaryMetric {
   final String label;
@@ -22,38 +24,12 @@ class SellerMappingMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 120,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: metric.color.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(metric.icon, size: 18, color: metric.color),
-          const SizedBox(height: 14),
-          Text(
-            '${metric.value}',
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: SellerMappingTheme.titleTextColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            metric.label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: SellerMappingTheme.mutedTextColor,
-            ),
-          ),
-        ],
-      ),
+    return AppMetricCard(
+      label: metric.label,
+      value: '',
+      icon: metric.icon,
+      accentColor: metric.color,
+      width: 130,
     );
   }
 }
@@ -72,43 +48,11 @@ class SellerMappingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 10 : 12,
-        vertical: compact ? 7 : 8,
-      ),
-      decoration: BoxDecoration(
-        color: compact
-            ? const Color(0xFFF8FAFC)
-            : SellerMappingTheme.primarySoft,
-        borderRadius: BorderRadius.circular(compact ? 999 : 12),
-        border: Border.all(
-          color: compact ? const Color(0xFFDCE4F2) : const Color(0xFFD4DFFF),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: compact ? 14 : 15,
-            color: compact
-                ? SellerMappingTheme.mutedTextColor
-                : SellerMappingTheme.primaryColor,
-          ),
-          const SizedBox(width: 7),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: compact ? 11.5 : 12,
-              fontWeight: FontWeight.w700,
-              color: compact
-                  ? SellerMappingTheme.titleTextColor
-                  : SellerMappingTheme.primaryColor,
-            ),
-          ),
-        ],
-      ),
+    return AppStatusBadge(
+      icon: icon,
+      label: label,
+      color: compact ? AppColorScheme.textMuted : AppColorScheme.primary,
+      backgroundColor: compact ? AppColorScheme.surfaceVariant : AppColorScheme.infoSoft,
     );
   }
 }
@@ -127,32 +71,10 @@ class SellerMappingStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.11),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AppStatusBadge(
+      icon: icon,
+      label: label,
+      color: color,
     );
   }
 }
