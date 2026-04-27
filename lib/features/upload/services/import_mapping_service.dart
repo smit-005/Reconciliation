@@ -250,6 +250,38 @@ class ImportMappingService {
     ];
   }
 
+  static bool isAmountField(String canonicalField) {
+    switch (canonicalField.trim()) {
+      case 'basic_amount':
+      case 'bill_amount':
+      case 'amount':
+      case 'product_amount':
+      case 'taxable_amount':
+      case 'tax_amount':
+      case 'tds_amount':
+      case 'amount_paid':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  static bool isDateField(String canonicalField) {
+    switch (canonicalField.trim()) {
+      case 'date':
+      case 'bill_date':
+      case 'paid_date':
+      case 'credited_date':
+      case 'bill_date_month':
+      case 'date_month':
+      case 'eom':
+      case 'bill_date_or_eom':
+        return true;
+      default:
+        return false;
+    }
+  }
+
   static Map<String, String> buildCanonicalMapping(
     Map<String, String> rawToCanonical,
   ) {

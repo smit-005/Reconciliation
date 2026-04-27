@@ -10,6 +10,7 @@ import 'package:reconciliation_app/features/upload/models/import_audit_record.da
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
 import 'package:reconciliation_app/features/upload/models/import_format_profile.dart';
 
+import 'import_mapping_service.dart';
 import 'import_profile_service.dart';
 
 part 'excel_preview_builder.dart';
@@ -445,7 +446,10 @@ class ExcelService {
         if (header == null || header.isEmpty) continue;
 
         final value = j < row.length ? row[j] : null;
-        final normalizedValue = _normalizeCellValue(value);
+        final normalizedValue = _normalizeCellValue(
+          value,
+          canonicalField: header,
+        );
         final textValue = normalizedValue.toString().trim();
 
         if (textValue.isNotEmpty) {
@@ -536,7 +540,10 @@ class ExcelService {
         if (header == null || header.isEmpty) continue;
 
         final value = j < row.length ? row[j] : null;
-        final normalizedValue = _normalizeCellValue(value);
+        final normalizedValue = _normalizeCellValue(
+          value,
+          canonicalField: header,
+        );
         final textValue = normalizedValue.toString().trim();
 
         if (textValue.isNotEmpty) {
@@ -698,7 +705,10 @@ class ExcelService {
         if (header == null || header.isEmpty) continue;
 
         final value = j < row.length ? row[j] : null;
-        final normalizedValue = _normalizeCellValue(value);
+        final normalizedValue = _normalizeCellValue(
+          value,
+          canonicalField: header,
+        );
         final textValue = normalizedValue.toString().trim();
 
         if (textValue.isNotEmpty) {
@@ -2507,8 +2517,14 @@ class ExcelService {
     required ExcelImportType forcedType,
     required bool headersTrusted,
   }) {
+    final sampleRows = rows.skip(headerRowIndex + 1).take(8).toList();
+
     if (headersTrusted) {
-      return _buildMappedHeaders(rows[headerRowIndex], forcedType: forcedType);
+      return _buildMappedHeaders(
+        rows[headerRowIndex],
+        forcedType: forcedType,
+        sampleRows: sampleRows,
+      );
     }
 
     return _inferMappedHeadersFromDataRows(
@@ -3060,7 +3076,9 @@ class ExcelService {
   static List<String?> _buildMappedHeaders(
     List<dynamic> rawHeaderRow, {
     required ExcelImportType forcedType,
+    List<List<dynamic>> sampleRows = const [],
   }) {
+    final stopwatch = Stopwatch()..start();
     final usedCanonical = <String>{};
     final mapped = <String?>[];
     final preferDebitAmount =
@@ -3071,13 +3089,22 @@ class ExcelService {
           ),
         );
 
-    for (final cell in rawHeaderRow) {
+    for (int i = 0; i < rawHeaderRow.length; i++) {
+      final cell = rawHeaderRow[i];
       final raw = cell?.toString() ?? '';
+
+      final colSamples = sampleRows
+          .where((r) => r.length > i && r[i] != null)
+          .map((r) => r[i].toString().trim())
+          .where((v) => v.isNotEmpty)
+          .toList();
+
       final canonical = _detectCanonicalHeader(
         raw,
         type: forcedType,
         usedCanonical: usedCanonical,
         preferDebitAmount: preferDebitAmount,
+        sampleValues: colSamples,
       );
 
       if (canonical != null) {
@@ -3087,7 +3114,32 @@ class ExcelService {
       mapped.add(canonical);
     }
 
+    stopwatch.stop();
+    debugPrint(
+      'COLUMN SCORE PERF => columns=${rawHeaderRow.length} rowsSampled=${sampleRows.length} ms=${stopwatch.elapsedMilliseconds}',
+    );
+
     return mapped;
+  }
+
+  static bool _looksLikeDateValue(String value) {
+    final val = value.trim();
+    if (val.isEmpty) return false;
+    final dateRegExp = RegExp(r'^(\d{1,4})[/\-](\d{1,2})[/\-](\d{1,4})$');
+    if (dateRegExp.hasMatch(val)) return true;
+    final dateWithTime = RegExp(
+      r'^(\d{1,4})[/\-](\d{1,2})[/\-](\d{1,4})\s+\d{1,2}:\d{1,2}',
+    );
+    if (dateWithTime.hasMatch(val)) return true;
+    return false;
+  }
+
+  static bool _looksLikeAmountValue(String value) {
+    final val = value.trim().replaceAll(',', '');
+    if (val.isEmpty) return false;
+    if (_looksLikeDateValue(val)) return false;
+    final amountRegExp = RegExp(r'^-?\d+(\.\d+)?$');
+    return amountRegExp.hasMatch(val);
   }
 
   static String? _detectCanonicalHeader(
@@ -3095,9 +3147,17 @@ class ExcelService {
     required ExcelImportType type,
     required Set<String> usedCanonical,
     bool preferDebitAmount = false,
+    List<String> sampleValues = const [],
   }) {
     final normalized = _normalizeLooseText(raw);
     if (normalized.isEmpty) return null;
+
+    int dateLikeCount = 0;
+    int amountLikeCount = 0;
+    for (final val in sampleValues) {
+      if (_looksLikeDateValue(val)) dateLikeCount++;
+      if (_looksLikeAmountValue(val)) amountLikeCount++;
+    }
 
     if (type == ExcelImportType.purchase) {
       if (_shouldIgnorePurchaseHeader(normalized)) {
@@ -3162,13 +3222,44 @@ class ExcelService {
         continue;
       }
 
+      bool isAmountField =
+          canonical == 'amount' ||
+          canonical == 'bill_amount' ||
+          canonical == 'basic_amount' ||
+          canonical == 'amount_paid' ||
+          canonical == 'tds_amount';
+      bool isDateField =
+          canonical == 'date' ||
+          canonical == 'date_month' ||
+          canonical == 'eom';
+
       for (final alias in aliases) {
-        final score = _headerSimilarityScore(normalized, alias);
+        int score = _headerSimilarityScore(normalized, alias);
+        if (score == 0) continue;
+
+        if (isAmountField) {
+          if (dateLikeCount > 0 && dateLikeCount >= sampleValues.length / 2) {
+            score -= 50;
+          } else if (amountLikeCount > 0) {
+            score += 10;
+          }
+        } else if (isDateField) {
+          if (dateLikeCount > 0) {
+            score += 15;
+          }
+        }
+
         if (score > bestScore) {
           bestScore = score;
           bestKey = canonical;
         }
       }
+    }
+
+    if (bestKey != null) {
+      debugPrint(
+        'FIELD MAP SCORE field=$bestKey column=$raw score=$bestScore dateLike=$dateLikeCount amountLike=$amountLikeCount',
+      );
     }
 
     if (bestScore >= 75) {
@@ -3332,7 +3423,10 @@ class ExcelService {
         if (header == null || header.isEmpty) continue;
 
         final value = j < row.length ? row[j] : null;
-        final normalizedValue = _normalizeCellValue(value);
+        final normalizedValue = _normalizeCellValue(
+          value,
+          canonicalField: header,
+        );
         final textValue = normalizedValue.toString().trim();
 
         if (textValue.isNotEmpty) {
@@ -3846,22 +3940,45 @@ class ExcelService {
     );
   }
 
-  static dynamic _normalizeCellValue(dynamic value) {
+  static dynamic _normalizeCellValue(dynamic value, {String? canonicalField}) {
     if (value == null) return '';
 
+    final field = canonicalField?.trim() ?? '';
+    final forceNumeric =
+        field.isNotEmpty && ImportMappingService.isAmountField(field);
+    final forceDate =
+        field.isNotEmpty && ImportMappingService.isDateField(field);
+
     if (value is DateTime) {
+      if (forceNumeric) {
+        final numeric = value.millisecondsSinceEpoch.toString();
+        debugPrint(
+          'EXCEL VALUE FORMAT => field=$field raw=$value forcedNumeric=true',
+        );
+        return numeric;
+      }
       return _formatDate(value);
     }
 
     if (value is num) {
-      if (_looksLikeExcelDate(value)) {
+      if (!forceNumeric && (forceDate || _looksLikeExcelDate(value))) {
         return _convertExcelDate(value);
       }
 
       if (value == value.roundToDouble()) {
+        if (forceNumeric && _looksLikeExcelDate(value)) {
+          debugPrint(
+            'EXCEL VALUE FORMAT => field=$field raw=$value forcedNumeric=true',
+          );
+        }
         return value.toInt().toString();
       }
 
+      if (forceNumeric && _looksLikeExcelDate(value)) {
+        debugPrint(
+          'EXCEL VALUE FORMAT => field=$field raw=$value forcedNumeric=true',
+        );
+      }
       return value.toString();
     }
 

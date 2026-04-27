@@ -1,8 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
-import 'package:reconciliation_app/core/theme/app_radius.dart';
-import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
@@ -750,14 +748,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     try {
       final uploadWatch = Stopwatch()..start();
       final pickedFile = await _pickExcelFile();
-      if (pickedFile == null) {
-        setState(() => isLoadingTds = false);
-        return;
-      }
+      if (pickedFile == null) return;
 
       final bytes = pickedFile.bytes;
       if (bytes == null) {
-        setState(() => isLoadingTds = false);
         _showUploadSnackBar('Could not read 26Q file');
         return;
       }
@@ -768,7 +762,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       String? preferredSheetName;
 
       if (validation.requiresUserSelection) {
-        setState(() => isLoadingTds = false);
+        if (mounted) {
+          setState(() => isLoadingTds = false);
+        }
         preferredSheetName = await _show26QSheetSelectionDialog(
           validation.candidateSheets.isNotEmpty
               ? validation.candidateSheets
@@ -796,14 +792,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
 
       if (response.isFailure) {
-        setState(() => isLoadingTds = false);
         _showUploadSnackBar(response.errorMessage!);
         return;
       }
 
       final result = response.data;
       if (result == null) {
-        setState(() => isLoadingTds = false);
         return;
       }
 
@@ -830,7 +824,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         normalizedTdsRows = result.parsedRows
             .map(NormalizedTransactionRow.fromTds26QRow)
             .toList();
-        isLoadingTds = false;
       });
       _refreshSellerMappingPreflightIfReady();
       uploadWatch.stop();
@@ -845,8 +838,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         '26Q uploaded: ${result.parsedRows.length} rows. Continue uploading files, then open Review All Mappings.',
       );
     } catch (e) {
-      setState(() => isLoadingTds = false);
       _showUploadSnackBar('26Q upload error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => isLoadingTds = false);
+      }
     }
   }
 
@@ -860,26 +856,19 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     try {
       final columnMappingResult = await _openStoredTdsColumnMapping(file: file);
-      if (columnMappingResult == null) {
-        setState(() => isLoadingTds = false);
-        return;
-      }
+      if (columnMappingResult == null) return;
 
       final response = await ImportUploadFlowService.prepareTds26QRemap(
         bytes: file.bytes,
         columnMappingResult: columnMappingResult,
       );
       if (response.isFailure) {
-        setState(() => isLoadingTds = false);
         _showUploadSnackBar(response.errorMessage ?? '26Q remap failed');
         return;
       }
 
       final result = response.data;
-      if (result == null) {
-        setState(() => isLoadingTds = false);
-        return;
-      }
+      if (result == null) return;
 
       setState(() {
         _invalidateSellerMappingConfirmation();
@@ -900,14 +889,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         normalizedTdsRows = result.parsedRows
             .map(NormalizedTransactionRow.fromTds26QRow)
             .toList();
-        isLoadingTds = false;
       });
       _refreshSellerMappingPreflightIfReady();
 
       _showUploadSnackBar('26Q mapping confirmed');
     } catch (e) {
-      setState(() => isLoadingTds = false);
       _showUploadSnackBar('26Q remap failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => isLoadingTds = false);
+      }
     }
   }
 
@@ -978,8 +969,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
 
     setState(() => _isLoadingSellerMapping = true);
+    final postMapWatch = Stopwatch()..start();
+    void logPostMapStep(String step, Stopwatch watch) {
+      watch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => step=$step ms=${watch.elapsedMilliseconds}',
+      );
+    }
 
     try {
+      final prepareWatch = Stopwatch()..start();
       final preparationResult =
           _sellerMappingPreflight ??
           await SellerMappingPreflightService.analyze(
@@ -988,11 +987,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             tdsRows: tdsRows,
             sourceRowsBySection: _buildSourceRowsBySection(),
           );
+      logPostMapStep('preflight_prepare', prepareWatch);
 
       if (!mounted) return;
 
       final fyLabel = _sellerMappingFinancialYearLabel();
 
+      final reviewWatch = Stopwatch()..start();
       final result = await Navigator.push<Map<String, dynamic>>(
         context,
         MaterialPageRoute(
@@ -1011,14 +1012,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           ),
         ),
       );
+      logPostMapStep('review_screen', reviewWatch);
 
       if (result == null) {
-        setState(() => _isLoadingSellerMapping = false);
         _showUploadSnackBar('Seller mapping review cancelled');
         return;
       }
 
+      final applyWatch = Stopwatch()..start();
       await _applySellerMappingChanges(result);
+      logPostMapStep('apply_changes', applyWatch);
       if (result['dangerousRemaining'] == 0) {
         setState(() {
           _isSellerMappingConfirmed = true;
@@ -1031,7 +1034,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         'SAVE_REVIEW => upserts=$upsertsCount deleted=$deletedCount dangerousRemaining=${result['dangerousRemaining']}',
       );
 
+      final refreshWatch = Stopwatch()..start();
       await _refreshSellerMappingPreflight();
+      logPostMapStep('refresh_preflight', refreshWatch);
 
       debugPrint(
         'SAVE_REVIEW => pendingReviewCount=${_sellerMappingPreflight?.pendingReviewCount}',
@@ -1046,8 +1051,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoadingSellerMapping = false);
         _showUploadSnackBar('Failed to open seller mapping: $e');
+      }
+    } finally {
+      postMapWatch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => total ms=${postMapWatch.elapsedMilliseconds}',
+      );
+      if (mounted) {
+        setState(() => _isLoadingSellerMapping = false);
       }
     }
   }
@@ -1255,7 +1267,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return previousStatus != updatedFile?.mappingStatus;
   }
 
-  Future<bool> _confirmSingleSafeMapping(BatchMappingReviewItem item) async {
+  Future<bool> _confirmSingleSafeMapping(
+    BatchMappingReviewItem item, {
+    bool refreshPreflight = true,
+  }) async {
     if (!item.canConfirmSafely) return false;
 
     if (item.type == BatchMappingReviewItemType.tds26q) {
@@ -1266,7 +1281,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           mappingStatus: UploadMappingStatus.confirmed,
         );
       });
-      _refreshSellerMappingPreflightIfReady();
+      if (refreshPreflight) {
+        _refreshSellerMappingPreflightIfReady();
+      }
       return true;
     }
 
@@ -1283,7 +1300,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           )
           .toList();
     });
-    _refreshSellerMappingPreflightIfReady();
+    if (refreshPreflight) {
+      _refreshSellerMappingPreflightIfReady();
+    }
     return true;
   }
 
@@ -1295,11 +1314,15 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     var confirmedCount = 0;
     for (final item in safeItems) {
-      final changed = await _confirmSingleSafeMapping(item);
+      final changed = await _confirmSingleSafeMapping(
+        item,
+        refreshPreflight: false,
+      );
       if (changed) {
         confirmedCount += 1;
       }
     }
+    _refreshSellerMappingPreflightIfReady();
     return confirmedCount;
   }
 

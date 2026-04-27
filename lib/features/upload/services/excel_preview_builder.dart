@@ -36,16 +36,13 @@ ExcelPreviewData? _buildPreviewData(
   final presentHeaders = mappedHeaders.whereType<String>().toSet();
   final previewConfidence =
       confidenceScore ??
-      ExcelService._headerConfidenceScore(
-        presentHeaders,
-        type: fileType,
-      );
+      ExcelService._headerConfidenceScore(presentHeaders, type: fileType);
 
   final columnKeys = <String>[];
   final columnLabels = <String, String>{};
   final suggestedMappings = <String, String>{};
-  final normalizedInitialMapping = ExcelService
-      ._normalizeCanonicalColumnMappingByType(
+  final normalizedInitialMapping =
+      ExcelService._normalizeCanonicalColumnMappingByType(
         ExcelService._normalizeProfileColumnMapping(initialMappedColumns),
         type: fileType,
       );
@@ -92,18 +89,29 @@ ExcelPreviewData? _buildPreviewData(
       : sheetInfo.headerRowIndex;
   final sampleRows = <Map<String, String>>[];
 
-  for (int i = dataStartIndex; i < table.rows.length && sampleRows.length < 8; i++) {
+  for (
+    int i = dataStartIndex;
+    i < table.rows.length && sampleRows.length < 8;
+    i++
+  ) {
     final row = table.rows[i];
     final sampleRow = <String, String>{};
     var hasValue = false;
 
     for (int j = 0; j < columnKeys.length; j++) {
-      final value = j < row.length ? ExcelService._normalizeCellValue(row[j]) : '';
+      final columnKey = columnKeys[j];
+      final canonicalField = suggestedMappings[columnKey];
+      final value = j < row.length
+          ? ExcelService._normalizeCellValue(
+              row[j],
+              canonicalField: canonicalField,
+            )
+          : '';
       final text = value.toString().trim();
       if (text.isNotEmpty) {
         hasValue = true;
       }
-      sampleRow[columnKeys[j]] = text;
+      sampleRow[columnKey] = text;
     }
 
     if (hasValue) {
@@ -168,16 +176,13 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   final presentHeaders = mappedHeaders.whereType<String>().toSet();
   final previewConfidence =
       confidenceScore ??
-      ExcelService._headerConfidenceScore(
-        presentHeaders,
-        type: fileType,
-      );
+      ExcelService._headerConfidenceScore(presentHeaders, type: fileType);
 
   final columnKeys = <String>[];
   final columnLabels = <String, String>{};
   final suggestedMappings = <String, String>{};
-  final normalizedInitialMapping = ExcelService
-      ._normalizeCanonicalColumnMappingByType(
+  final normalizedInitialMapping =
+      ExcelService._normalizeCanonicalColumnMappingByType(
         ExcelService._normalizeProfileColumnMapping(columnMapping),
         type: fileType,
       );
@@ -222,18 +227,29 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   final dataStartIndex = headersTrusted ? headerRowIndex + 1 : headerRowIndex;
   final sampleRows = <Map<String, String>>[];
 
-  for (int i = dataStartIndex; i < table.rows.length && sampleRows.length < 8; i++) {
+  for (
+    int i = dataStartIndex;
+    i < table.rows.length && sampleRows.length < 8;
+    i++
+  ) {
     final row = table.rows[i];
     final sampleRow = <String, String>{};
     var hasValue = false;
 
     for (int j = 0; j < columnKeys.length; j++) {
-      final value = j < row.length ? ExcelService._normalizeCellValue(row[j]) : '';
+      final columnKey = columnKeys[j];
+      final canonicalField = suggestedMappings[columnKey];
+      final value = j < row.length
+          ? ExcelService._normalizeCellValue(
+              row[j],
+              canonicalField: canonicalField,
+            )
+          : '';
       final text = value.toString().trim();
       if (text.isNotEmpty) {
         hasValue = true;
       }
-      sampleRow[columnKeys[j]] = text;
+      sampleRow[columnKey] = text;
     }
 
     if (hasValue) {
