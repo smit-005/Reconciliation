@@ -838,66 +838,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return 'PAN Conflict';
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Mapped':
-        return Colors.green;
-      case '26Q Unmatched':
-        return const Color(0xFF7C3AED);
-      case 'Mapped (PAN missing)':
-        return Colors.amber.shade800;
-      case 'PAN Conflict':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _getStatusBackgroundColor(String status) {
-    switch (status) {
-      case 'Mapped':
-        return Colors.green.shade50;
-      case '26Q Unmatched':
-        return const Color(0xFFF5F3FF);
-      case 'Mapped (PAN missing)':
-        return Colors.amber.shade50;
-      case 'PAN Conflict':
-        return Colors.red.shade50;
-      default:
-        return Colors.grey.shade50;
-    }
-  }
-
-  String _getValidationMessage(String status) {
-    switch (status) {
-      case 'Mapped':
-        return 'PAN matched';
-      case '26Q Unmatched':
-        return '26Q seller exists without linked purchase alias';
-      case 'Mapped (PAN missing)':
-        return 'Mapping is selected, but PAN is missing or not uniquely available';
-      case 'PAN Conflict':
-        return 'PAN mismatch between purchase and 26Q party';
-      default:
-        return 'Select a 26Q party for this alias and section';
-    }
-  }
-
-  Color _getValidationColor(String status) {
-    switch (status) {
-      case 'Mapped':
-        return Colors.green.shade800;
-      case '26Q Unmatched':
-        return const Color(0xFF6D28D9);
-      case 'PAN Conflict':
-        return Colors.red.shade800;
-      case 'Mapped (PAN missing)':
-        return Colors.amber.shade900;
-      default:
-        return Colors.grey.shade700;
-    }
-  }
-
   bool _isDangerousPreflightStatus(String status) {
     return status == 'Conflicting PAN' ||
         status == 'Ambiguous Identity' ||
@@ -1267,19 +1207,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
   }
 
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'Mapped':
-        return Icons.check_circle_rounded;
-      case 'Mapped • Verify PAN':
-        return Icons.help_outline_rounded;
-      case 'PAN Conflict':
-        return Icons.error_outline_rounded;
-      default:
-        return Icons.radio_button_unchecked_rounded;
-    }
-  }
-
   IconData _statusIconSafe(String status) {
     switch (status) {
       case 'Mapped':
@@ -1301,17 +1228,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       default:
         return Icons.radio_button_unchecked_rounded;
     }
-  }
-
-  Color _rowBackgroundColor({required String status, required int index}) {
-    final base = index.isEven ? Colors.white : const Color(0xFFFBFCFE);
-    if (status == 'PAN Conflict') {
-      return Color.alphaBlend(_dangerColor.withValues(alpha: 0.08), base);
-    }
-    if (status == 'Mapped • Verify PAN') {
-      return Color.alphaBlend(_warningColor.withValues(alpha: 0.08), base);
-    }
-    return base;
   }
 
   Color _rowBackgroundColorSafe({required String status, required int index}) {
