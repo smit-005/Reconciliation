@@ -25,7 +25,8 @@ class BatchMappingReviewScreen extends StatefulWidget {
   });
 
   @override
-  State<BatchMappingReviewScreen> createState() => _BatchMappingReviewScreenState();
+  State<BatchMappingReviewScreen> createState() =>
+      _BatchMappingReviewScreenState();
 }
 
 class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
@@ -63,9 +64,9 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
     final changed = await widget.onConfirmItem(item);
     if (!mounted) return;
     if (changed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${item.fileName} confirmed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${item.fileName} confirmed')));
     }
     await _refreshItems();
   }
@@ -93,7 +94,8 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
 
   int get _confirmedCount => _items.where((item) => item.isConfirmed).length;
 
-  int get _safePendingCount => _items.where((item) => item.canConfirmSafely).length;
+  int get _safePendingCount =>
+      _items.where((item) => item.canConfirmSafely).length;
 
   int get _needsReviewCount => _items.where((item) => !item.isConfirmed).length;
 
@@ -384,9 +386,7 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
 
   Widget _buildTableRow(BatchMappingReviewItem item) {
     final needsReview = !item.isConfirmed;
-    final rowColor = needsReview
-        ? const Color(0xFFFFFBEB)
-        : Colors.white;
+    final rowColor = needsReview ? const Color(0xFFFFFBEB) : Colors.white;
 
     return Container(
       color: rowColor,
@@ -461,7 +461,9 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
           ),
           Expanded(
             child: Tooltip(
-              message: item.issues.isEmpty ? 'No blocking issues' : item.issues.join('\n'),
+              message: item.issues.isEmpty
+                  ? 'No blocking issues'
+                  : item.issues.join('\n'),
               child: Text(
                 item.issuesCount.toString(),
                 style: TextStyle(
