@@ -63,7 +63,7 @@ void main() {
           result.reviewRows.any(
             (row) => row.purchasePartyDisplayName == 'Mystery Supplies',
           ),
-          isFalse,
+          isTrue,
         );
       },
     );
@@ -87,7 +87,11 @@ void main() {
 
         expect(result.isSafeForReconciliation, isTrue);
         expect(result.pendingReviewCount, 0);
-        expect(result.reviewRows, isEmpty);
+        expect(result.reviewRows, isNotEmpty);
+        expect(
+          result.reviewRows.any((row) => row.requiresDangerousReview),
+          isFalse,
+        );
       },
     );
 

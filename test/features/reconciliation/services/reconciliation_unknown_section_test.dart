@@ -94,8 +94,8 @@ void main() {
 
       expect(result.rows, hasLength(1));
       final row = result.rows.single;
-      expect(row.section, 'UNKNOWN');
-      expect(row.status, ReconciliationStatus.sectionMissing);
+      expect(row.section, '194A');
+      expect(row.status, ReconciliationStatus.onlyIn26Q);
       expect(row.applicableAmount, 0);
       expect(row.expectedTds, 0);
       expect(row.tds26QAmount, 25000);
