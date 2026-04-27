@@ -23,8 +23,7 @@ class AutoMappingResult {
       matchedTdsParty: map['matchedTdsParty']?.toString(),
       score: (map['score'] as num?)?.toDouble() ?? 0.0,
       isMatched: map['isMatched'] == true,
-      normalizedPurchaseParty:
-          map['normalizedPurchaseParty']?.toString() ?? '',
+      normalizedPurchaseParty: map['normalizedPurchaseParty']?.toString() ?? '',
       normalizedMatchedTdsParty:
           map['normalizedMatchedTdsParty']?.toString() ?? '',
     );
@@ -105,19 +104,21 @@ class AutoMappingService {
     double threshold = 0.80,
   }) {
     final normalizationWatch = Stopwatch()..start();
-    final uniquePurchase = purchaseParties
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final uniquePurchase =
+        purchaseParties
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
-    final uniqueTds = tdsParties
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final uniqueTds =
+        tdsParties
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     final purchaseProfiles = uniquePurchase.map(_buildProfile).toList();
     final tdsProfiles = uniqueTds.map(_buildProfile).toList();
@@ -132,9 +133,9 @@ class AutoMappingService {
           .putIfAbsent(profile.normalized, () => <_PartyProfile>[])
           .add(profile);
       if (profile.firstWord.isNotEmpty) {
-        firstWordIndex.putIfAbsent(profile.firstWord, () => <_PartyProfile>[]).add(
-          profile,
-        );
+        firstWordIndex
+            .putIfAbsent(profile.firstWord, () => <_PartyProfile>[])
+            .add(profile);
       }
       if (profile.compactPrefix.isNotEmpty) {
         compactPrefixIndex
@@ -142,9 +143,9 @@ class AutoMappingService {
             .add(profile);
       }
       if (profile.soundex.isNotEmpty) {
-        soundexIndex.putIfAbsent(profile.soundex, () => <_PartyProfile>[]).add(
-          profile,
-        );
+        soundexIndex
+            .putIfAbsent(profile.soundex, () => <_PartyProfile>[])
+            .add(profile);
       }
       for (final token in profile.words) {
         tokenIndex.putIfAbsent(token, () => <_PartyProfile>[]).add(profile);
@@ -200,9 +201,10 @@ class AutoMappingService {
         }
       }
 
-      final isSafeMatch = bestMatch != null &&
-          bestScore >= threshold &&
-          _isSafeBusinessNameMatchProfiles(purchaseProfile, bestMatch);
+      final isSafeMatch =
+          bestMatch != null &&
+          bestScore == 1.0 &&
+          purchaseProfile.normalized == bestMatch.normalized;
 
       results.add(
         AutoMappingResult(
@@ -253,11 +255,16 @@ class AutoMappingService {
 
   static _PartyProfile _buildProfile(String input) {
     final normalized = normalizePartyName(input);
-    final orderedWords = normalized.split(' ').where((e) => e.isNotEmpty).toList();
+    final orderedWords = normalized
+        .split(' ')
+        .where((e) => e.isNotEmpty)
+        .toList();
     final words = orderedWords.toSet();
     final firstWord = orderedWords.isEmpty ? '' : orderedWords.first;
     final compact = normalized.replaceAll(' ', '');
-    final compactPrefix = compact.length <= 4 ? compact : compact.substring(0, 4);
+    final compactPrefix = compact.length <= 4
+        ? compact
+        : compact.substring(0, 4);
     final soundex = _soundex(firstWord);
 
     return _PartyProfile(
@@ -289,11 +296,14 @@ class AutoMappingService {
     }
 
     if (purchaseProfile.firstWord.isNotEmpty) {
-      addAll(firstWordIndex[purchaseProfile.firstWord] ?? const <_PartyProfile>[]);
+      addAll(
+        firstWordIndex[purchaseProfile.firstWord] ?? const <_PartyProfile>[],
+      );
     }
     if (purchaseProfile.compactPrefix.isNotEmpty) {
       addAll(
-        compactPrefixIndex[purchaseProfile.compactPrefix] ?? const <_PartyProfile>[],
+        compactPrefixIndex[purchaseProfile.compactPrefix] ??
+            const <_PartyProfile>[],
       );
     }
     if (purchaseProfile.soundex.isNotEmpty) {
@@ -305,7 +315,8 @@ class AutoMappingService {
       final tokenMatches = tokenIndex[token] ?? const <_PartyProfile>[];
       for (final profile in tokenMatches) {
         candidatesByKey[profile.raw] = profile;
-        tokenOverlapCounts[profile.raw] = (tokenOverlapCounts[profile.raw] ?? 0) + 1;
+        tokenOverlapCounts[profile.raw] =
+            (tokenOverlapCounts[profile.raw] ?? 0) + 1;
       }
     }
 
@@ -322,8 +333,7 @@ class AutoMappingService {
       }
       return purchaseProfile.soundex.isNotEmpty &&
           profile.soundex == purchaseProfile.soundex;
-    }).toList()
-      ..sort((a, b) => a.raw.compareTo(b.raw));
+    }).toList()..sort((a, b) => a.raw.compareTo(b.raw));
 
     if (filtered.isNotEmpty) {
       return filtered;
@@ -332,51 +342,14 @@ class AutoMappingService {
     return allProfiles;
   }
 
-  static bool _isSafeBusinessNameMatch(String a, String b) {
-    final na = _buildProfile(a);
-    final nb = _buildProfile(b);
-    return _isSafeBusinessNameMatchProfiles(na, nb);
-  }
-
-  static bool _isSafeBusinessNameMatchProfiles(
-    _PartyProfile a,
-    _PartyProfile b,
-  ) {
-    if (a.normalized.isEmpty || b.normalized.isEmpty) return false;
-    if (a.normalized == b.normalized) return true;
-
-    final aWords = a.words.toList();
-    final bWords = b.words.toList();
-
-    if (aWords.isEmpty || bWords.isEmpty) return false;
-
-    final commonWords = a.words.intersection(b.words).length;
-    if (commonWords == 0) return false;
-
-    final tailA = a.tail;
-    final tailB = b.tail;
-
-    if (tailA.isEmpty && tailB.isEmpty) return true;
-    if (tailA == tailB) return true;
-
-    if (_levenshteinDistance(tailA, tailB) <= 1) return true;
-
-    final minWords =
-    aWords.length < bWords.length ? aWords.length : bWords.length;
-
-    return minWords > 0 && commonWords >= (minWords - 1);
-  }
-
-  static double _similarityScore(String a, String b) {
-    return _similarityScoreFromProfiles(_buildProfile(a), _buildProfile(b));
-  }
-
   static double _similarityScoreFromProfiles(_PartyProfile a, _PartyProfile b) {
     if (a.normalized.isEmpty || b.normalized.isEmpty) return 0.0;
     if (a.normalized == b.normalized) return 1.0;
 
     final commonWords = a.words.intersection(b.words).length;
-    final maxWords = a.words.length > b.words.length ? a.words.length : b.words.length;
+    final maxWords = a.words.length > b.words.length
+        ? a.words.length
+        : b.words.length;
     final wordScore = maxWords == 0 ? 0.0 : commonWords / maxWords;
 
     final editScore = _levenshteinSimilarity(a.normalized, b.normalized);
@@ -408,9 +381,11 @@ class AutoMappingService {
         final deletion = previous[j] + 1;
         final insertion = current[j - 1] + 1;
         final substitution = previous[j - 1] + cost;
-        current[j] = [deletion, insertion, substitution].reduce(
-          (a, b) => a < b ? a : b,
-        );
+        current[j] = [
+          deletion,
+          insertion,
+          substitution,
+        ].reduce((a, b) => a < b ? a : b);
       }
       final nextPrevious = current;
       current = previous;
@@ -487,8 +462,9 @@ Map<String, Object> _autoMapPartiesIsolateEntry(Map<String, Object> payload) {
   final purchaseParties = (payload['purchaseParties'] as List<Object?>)
       .whereType<String>()
       .toList();
-  final tdsParties =
-      (payload['tdsParties'] as List<Object?>).whereType<String>().toList();
+  final tdsParties = (payload['tdsParties'] as List<Object?>)
+      .whereType<String>()
+      .toList();
   final threshold = (payload['threshold'] as num?)?.toDouble() ?? 0.80;
 
   final result = AutoMappingService.autoMapParties(

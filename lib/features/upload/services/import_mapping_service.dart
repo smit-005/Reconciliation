@@ -49,6 +49,11 @@ class ImportMappingService {
           label: 'Description',
           description: 'Narration or particulars',
         ),
+        MappingFieldOption(
+          key: 'section',
+          label: 'Section',
+          description: 'TDS Section Code (Conditional)',
+        ),
       ];
     }
 
@@ -301,6 +306,12 @@ class ImportMappingService {
       errors.add('Map either Bill Amount or Basic Amount');
     }
 
+    if (fileType == purchaseFileType &&
+        !canonicalMapping.containsKey('pan_number') &&
+        !canonicalMapping.containsKey('gst_no')) {
+      errors.add('PAN or GST No is required');
+    }
+
     if (fileType == tds26qFileType &&
         !canonicalMapping.containsKey('date_month')) {
       errors.add('Date / Month is required');
@@ -344,6 +355,12 @@ class ImportMappingService {
     if (fileType == genericLedgerFileType &&
         !canonicalMapping.containsKey('amount')) {
       errors.add('Amount is required');
+    }
+
+    if (fileType == genericLedgerFileType &&
+        !canonicalMapping.containsKey('pan_number') &&
+        !canonicalMapping.containsKey('gst_no')) {
+      errors.add('PAN or GST No is required');
     }
 
     return errors;

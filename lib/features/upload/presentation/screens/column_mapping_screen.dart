@@ -151,7 +151,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   bool isValidMapping(bool is26Q, List<String?> mapped) {
     if (_isGenericLedgerFile) {
-      return hasRequiredFields(mapped, genericLedgerRequiredFields);
+      return hasRequiredFields(mapped, genericLedgerRequiredFields) &&
+          (mapped.contains('pan_number') || mapped.contains('gst_no'));
     }
 
     if (is26Q) {
@@ -160,7 +161,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
     return hasRequiredFields(mapped, const ['party_name']) &&
         (mapped.contains('date') || mapped.contains('eom')) &&
-        (mapped.contains('basic_amount') || mapped.contains('bill_amount'));
+        (mapped.contains('basic_amount') || mapped.contains('bill_amount')) &&
+        (mapped.contains('pan_number') || mapped.contains('gst_no'));
   }
 
   List<String> get _requiredValidationMessages {
@@ -177,6 +179,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       }
       if (!mappedSet.contains('amount')) {
         messages.add('Amount is required');
+      }
+      if (!mappedSet.contains('pan_number') && !mappedSet.contains('gst_no')) {
+        messages.add('PAN or GST No is required');
       }
       final amountColumnKey = _selectedColumnFor('amount');
       final amountColumnLabel = amountColumnKey == null
@@ -211,6 +216,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           !mappedSet.contains('bill_amount')) {
         messages.add('Map either Basic Amount or Bill Amount');
       }
+      if (!mappedSet.contains('pan_number') && !mappedSet.contains('gst_no')) {
+        messages.add('PAN or GST No is required');
+      }
     }
 
     return messages;
@@ -227,166 +235,17 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   bool get _isMappingValid => isValidMapping(_isTdsFile, _mappedFieldKeys);
 
-  Map<String, bool> get _requiredCompletionStatus => {
-    'date': _canonicalMapping.containsKey('date'),
-    'date_month': _canonicalMapping.containsKey('date_month'),
-    'eom': _canonicalMapping.containsKey('eom'),
-    'party_name': _canonicalMapping.containsKey('party_name'),
-    'amount': _canonicalMapping.containsKey('amount'),
-    'amount_paid': _canonicalMapping.containsKey('amount_paid'),
-    'tds_amount': _canonicalMapping.containsKey('tds_amount'),
-    'pan_number': _canonicalMapping.containsKey('pan_number'),
-    'section': _canonicalMapping.containsKey('section'),
-    'amount_column':
-        _canonicalMapping.containsKey('bill_amount') ||
-        _canonicalMapping.containsKey('basic_amount'),
-  };
-
-  Map<String, String> get _requiredFieldLabels {
-    if (_isGenericLedgerFile) {
-      return const {
-        'party_name': 'Party Name',
-        'date': 'Date',
-        'amount': 'Amount',
-      };
-    }
-
-    if (_isTdsFile) {
-      return const {
-        'party_name': 'Party Name',
-        'pan_number': 'PAN Number',
-        'section': 'Section',
-        'amount_paid': 'Amount Paid',
-        'date_month': 'Date / Month',
-        'tds_amount': 'TDS Amount',
-      };
-    }
-
-    return const {
-      'party_name': 'Party Name',
-      'date': 'Date',
-      'amount_column': 'Basic Amount / Bill Amount',
-    };
+  bool _hasDuplicateFor(String? fieldKey) {
+    if (fieldKey == null || fieldKey.isEmpty) return false;
+    return selections.values.where((v) => v == fieldKey).length > 1;
   }
 
-  Map<String, String> get _recommendedFieldLabels {
-    if (_isGenericLedgerFile) {
-      return const {
-        'pan_number': 'PAN Number',
-        'gst_no': 'GST No',
-        'bill_no': 'Bill No',
-        'description': 'Description',
-      };
-    }
-
-    if (_isTdsFile) {
-      return const {};
-    }
-
-    return const {
-      'pan_number': 'PAN Number',
-      'gst_no': 'GST No',
-      'bill_no': 'Bill No',
-    };
-  }
-
-  Set<String> get _requiredOptionKeys {
-    if (_isGenericLedgerFile) {
-      return const {'date', 'party_name', 'amount'};
-    }
-
-    if (_isTdsFile) {
-      return const {
-        'date_month',
-        'party_name',
-        'pan_number',
-        'section',
-        'amount_paid',
-        'tds_amount',
-      };
-    }
-
-    return const {'date', 'eom', 'party_name', 'basic_amount', 'bill_amount'};
-  }
-
-  int get _completedRequiredCount => _requiredFieldLabels.keys
-      .where((key) => _requiredCompletionStatus[key] ?? false)
-      .length;
-
-  bool get _allRequiredMapped => _isMappingValid;
-
-  double get _displayConfidence {
-    final base = widget.previewData.confidenceScore.clamp(0.0, 1.0);
-    final completionRatio = _requiredFieldLabels.isEmpty
-        ? base
-        : _completedRequiredCount / _requiredFieldLabels.length;
-
-    if (_allRequiredMapped) {
-      return math.max(base, 0.7);
-    }
-
-    if (completionRatio >= 0.75) {
-      return math.max(base, 0.55);
-    }
-
-    if (completionRatio >= 0.5) {
-      return math.max(base, 0.35);
-    }
-
-    return base;
-  }
-
-  List<String> get _requiredColumnKeys {
-    final keys = widget.previewData.columnKeys.where((columnKey) {
-      final selected = selections[columnKey]?.trim() ?? '';
-      final suggested =
-          widget.previewData.suggestedMappings[columnKey]?.trim() ?? '';
-      return _requiredOptionKeys.contains(selected) ||
-          _requiredOptionKeys.contains(suggested);
-    }).toList();
-
-    return keys.isNotEmpty
-        ? keys
-        : widget.previewData.columnKeys.take(4).toList();
-  }
-
-  List<String> get _optionalColumnKeys => widget.previewData.columnKeys
-      .where((columnKey) => !_requiredColumnKeys.contains(columnKey))
-      .toList();
-
-  Map<String, int> get _selectionCounts {
-    final counts = <String, int>{};
-    for (final value in selections.values) {
-      final key = value.trim();
-      if (key.isEmpty) continue;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-    return counts;
-  }
-
-  bool _hasDuplicateFor(String? value) {
-    final key = value?.trim() ?? '';
-    if (key.isEmpty) return false;
-    return (_selectionCounts[key] ?? 0) > 1;
-  }
-
-  void _updateSelection(String columnKey, String? value) {
+  void _updateMapping(String fieldKey, String? selectedColumnKey) {
     setState(() {
-      final cleanedValue = value?.trim() ?? '';
-      if (cleanedValue.isEmpty) {
-        selections.remove(columnKey);
-      } else {
-        final duplicateKeys = selections.entries
-            .where(
-              (entry) =>
-                  entry.key != columnKey && entry.value.trim() == cleanedValue,
-            )
-            .map((entry) => entry.key)
-            .toList();
-        for (final key in duplicateKeys) {
-          selections.remove(key);
-        }
-        selections[columnKey] = cleanedValue;
+      selections.removeWhere((k, v) => v == fieldKey);
+      if (selectedColumnKey != null && selectedColumnKey.isNotEmpty) {
+        selections.remove(selectedColumnKey);
+        selections[selectedColumnKey] = fieldKey;
       }
       validationErrors = _requiredValidationMessages;
     });
@@ -403,15 +262,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   }
 
   void _saveAndContinue() {
-    final errors = [
-      ..._requiredValidationMessages,
-      ..._selectionCounts.entries
-          .where((entry) => entry.value > 1)
-          .map(
-            (entry) =>
-                '${_fieldLabels[entry.key] ?? entry.key} is mapped more than once',
-          ),
-    ];
+    final errors = [..._requiredValidationMessages];
 
     if (errors.isNotEmpty) {
       setState(() {
@@ -434,17 +285,25 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     );
   }
 
-  Color _fieldStatusColor(bool isComplete) {
-    return isComplete ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
+
+
+  double get _displayConfidence {
+    return math.max(
+      widget.previewData.confidenceScore.clamp(0.0, 1.0),
+      _isMappingValid ? 0.7 : 0.0,
+    );
   }
 
-  bool _isLowConfidenceMapping(String columnKey) {
-    final selected = selections[columnKey]?.trim() ?? '';
-    if (selected.isEmpty) return false;
+  bool _isLowConfidenceMapping(String fieldKey) {
+    final selectedColumn = selections.entries
+        .where((e) => e.value == fieldKey)
+        .map((e) => e.key)
+        .firstOrNull;
+    if (selectedColumn == null) return false;
 
     final suggested =
-        widget.previewData.suggestedMappings[columnKey]?.trim() ?? '';
-    return _displayConfidence < 0.75 && selected == suggested;
+        widget.previewData.suggestedMappings[selectedColumn]?.trim() ?? '';
+    return _displayConfidence < 0.75 && fieldKey == suggested;
   }
 
   BoxDecoration _panelDecoration({Color? borderColor}) {
@@ -533,23 +392,21 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     );
   }
 
-  Widget _buildRequiredFieldsPanel() {
-    final visibleErrors = validationErrors.isNotEmpty
-        ? validationErrors
-        : _requiredValidationMessages;
-
+  Widget _buildFieldsPanel() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(
-        borderColor: _allRequiredMapped
+        borderColor: _isMappingValid
             ? const Color(0xFF1F6F50)
             : const Color(0xFF7F1D1D),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
+        controller: _columnsScrollController,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         children: [
           const Text(
-            'Required Fields',
+            'Field Mapping',
             style: TextStyle(
               color: Colors.white,
               fontSize: 17,
@@ -559,131 +416,113 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           const SizedBox(height: 6),
           Text(
             _isPurchaseFile
-                ? 'Required: Party Name, Date, and Basic Amount or Bill Amount.'
+                ? 'Required: Party Name, Date, Amount, and PAN/GST.'
                 : _isGenericLedgerFile
-                ? 'Required: Date, Party Name, and Amount. Prefer Debit for expense ledgers. Closing Balance is not allowed as Amount.'
-                : 'Required: Party Name, PAN, Section, Amount Paid, TDS Amount, and Date / Month.',
+                ? 'Required: Date, Party Name, Amount, and PAN/GST. Closing Balance is not allowed.'
+                : 'Required: Party Name, PAN, Section, Amount Paid, TDS Amount, and Date.',
             style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
           ),
-          const SizedBox(height: 14),
-          ..._requiredFieldLabels.entries.map((entry) {
-            final isComplete = _requiredCompletionStatus[entry.key] ?? false;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isComplete
-                    ? const Color(0xFF052E16)
-                    : const Color(0xFF450A0A),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _fieldStatusColor(isComplete)),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isComplete ? Icons.check_circle : Icons.error_outline,
-                    color: _fieldStatusColor(isComplete),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      entry.value,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+          if (validationErrors.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...validationErrors.map(
+              (error) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Color(0xFFFCA5A5),
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        error,
+                        style: const TextStyle(
+                          color: Color(0xFFFCA5A5),
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          if (_recommendedFieldLabels.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Recommended: ${_recommendedFieldLabels.values.join(', ')}',
-              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-            ),
-          ],
-          if (visibleErrors.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            ...visibleErrors.map(
-              (error) => Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  error,
-                  style: const TextStyle(
-                    color: Color(0xFFFCA5A5),
-                    fontSize: 12,
-                  ),
+                  ],
                 ),
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          ...fieldOptions.map(_buildFieldCard),
         ],
       ),
     );
   }
 
-  Widget _buildColumnsPanel() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _panelDecoration(),
-      child: ListView(
-        controller: _columnsScrollController,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          const Text(
-            'Required Columns',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ..._requiredColumnKeys.map(_buildColumnCard),
-          const SizedBox(height: 12),
-          Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              collapsedIconColor: const Color(0xFF94A3B8),
-              iconColor: Colors.white,
-              title: Text(
-                'Optional Columns (${_optionalColumnKeys.length})',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: const Text(
-                'Expand to map GST, PAN, product, or extra fields.',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-              ),
-              children: [
-                for (final columnKey in _optionalColumnKeys)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: _buildColumnCard(columnKey),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildFieldCard(MappingFieldOption field) {
+    final mappedColumnKey = selections.entries
+        .where((e) => e.value == field.key)
+        .map((e) => e.key)
+        .firstOrNull;
 
-  Widget _buildColumnCard(String columnKey) {
-    final columnLabel = widget.previewData.columnLabels[columnKey] ?? columnKey;
-    final sampleValue =
-        widget.previewData.sampleRows.firstOrNull?[columnKey] ?? '';
-    final selectedValue = selections[columnKey];
-    final hasDuplicate = _hasDuplicateFor(selectedValue);
-    final lowConfidence = _isLowConfidenceMapping(columnKey);
+    String labelStatus;
+    Color statusColor;
+
+    if (mappedColumnKey != null) {
+      labelStatus = 'Mapped';
+      statusColor = const Color(0xFF22C55E);
+    } else if (field.key == 'section' && _isGenericLedgerFile) {
+      labelStatus = 'Conditional';
+      statusColor = const Color(0xFFF59E0B);
+    } else if (field.key == 'pan_number' || field.key == 'gst_no') {
+      final hasIdentity =
+          selections.containsValue('pan_number') ||
+          selections.containsValue('gst_no');
+      if (_isTdsFile && field.key == 'pan_number') {
+        labelStatus = 'Missing';
+        statusColor = const Color(0xFFEF4444);
+      } else if (hasIdentity) {
+        labelStatus = 'Optional';
+        statusColor = const Color(0xFF94A3B8);
+      } else {
+        labelStatus = 'Missing';
+        statusColor = const Color(0xFFEF4444);
+      }
+    } else if (field.key == 'date' || field.key == 'eom') {
+      final hasDate =
+          selections.containsValue('date') || selections.containsValue('eom');
+      if (hasDate) {
+        labelStatus = 'Optional';
+        statusColor = const Color(0xFF94A3B8);
+      } else if (field.requiredField) {
+        labelStatus = 'Missing';
+        statusColor = const Color(0xFFEF4444);
+      } else {
+        labelStatus = 'Optional';
+        statusColor = const Color(0xFF94A3B8);
+      }
+    } else if (field.key == 'basic_amount' || field.key == 'bill_amount') {
+      final hasAmount =
+          selections.containsValue('basic_amount') ||
+          selections.containsValue('bill_amount');
+      if (hasAmount) {
+        labelStatus = 'Optional';
+        statusColor = const Color(0xFF94A3B8);
+      } else if (field.requiredField || field.key == 'bill_amount') {
+        labelStatus = 'Missing';
+        statusColor = const Color(0xFFEF4444);
+      } else {
+        labelStatus = 'Optional';
+        statusColor = const Color(0xFF94A3B8);
+      }
+    } else if (field.requiredField) {
+      labelStatus = 'Missing';
+      statusColor = const Color(0xFFEF4444);
+    } else {
+      labelStatus = 'Optional';
+      statusColor = const Color(0xFF94A3B8);
+    }
+
+    final hasDuplicate = _hasDuplicateFor(field.key);
+    final lowConfidence = _isLowConfidenceMapping(field.key);
 
     Color borderColor = const Color(0xFF273247);
     Color backgroundColor = const Color(0xFF0B1220);
@@ -697,6 +536,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     }
 
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -707,101 +547,108 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      columnLabel,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      sampleValue.isEmpty
-                          ? 'Sample: (blank)'
-                          : 'Sample: $sampleValue',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  field.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               if (lowConfidence)
                 Container(
+                  margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                    horizontal: 6,
+                    vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF78350F),
-                    borderRadius: BorderRadius.circular(999),
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                    ),
                   ),
                   child: const Text(
-                    'Low confidence',
+                    'Low Confidence',
                     style: TextStyle(
-                      color: Color(0xFFFDE68A),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFBBF24),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            isExpanded: true,
-            initialValue: selectedValue != null && selectedValue.isNotEmpty
-                ? selectedValue
-                : '',
-            decoration: InputDecoration(
-              labelText: 'Map this column',
-              labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-              filled: true,
-              fillColor: const Color(0xFF111827),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF334155)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-            ),
-            dropdownColor: const Color(0xFF111827),
-            style: const TextStyle(color: Colors.white),
-            items: [
-              const DropdownMenuItem<String>(
-                value: '',
-                child: Text(
-                  'Ignore column',
-                  style: TextStyle(color: Color(0xFFCBD5E1)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
-              ),
-              ...fieldOptions.map(
-                (option) => DropdownMenuItem<String>(
-                  value: option.key,
-                  child: Text(
-                    option.description.isNotEmpty
-                        ? '${option.label} — ${option.description}'
-                        : option.label,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                child: Text(
+                  labelStatus,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
-            onChanged: (value) => _updateSelection(
-              columnKey,
-              (value ?? '').isEmpty ? null : value,
+          ),
+          if (field.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              field.description,
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Theme(
+            data: Theme.of(
+              context,
+            ).copyWith(canvasColor: const Color(0xFF1E293B)),
+            child: DropdownButtonFormField<String>(
+              initialValue: mappedColumnKey,
+              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
+              isExpanded: true,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFF0F172A),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                ),
+              ),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text(
+                    'Not Mapped',
+                    style: TextStyle(color: Color(0xFF94A3B8)),
+                  ),
+                ),
+                ...widget.previewData.columnKeys.map((colKey) {
+                  final colLabel =
+                      widget.previewData.columnLabels[colKey] ?? colKey;
+                  return DropdownMenuItem<String>(
+                    value: colKey,
+                    child: Text(colLabel, overflow: TextOverflow.ellipsis),
+                  );
+                }),
+              ],
+              onChanged: (val) => _updateMapping(field.key, val),
             ),
           ),
           if (hasDuplicate)
@@ -852,11 +699,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                         controller: ScrollController(),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildRequiredFieldsPanel(),
-                            const SizedBox(height: 16),
-                            _buildColumnsPanel(),
-                          ],
+                          children: [_buildFieldsPanel()],
                         ),
                       ),
                     ),
@@ -898,8 +741,4 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       ),
     );
   }
-}
-
-extension<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

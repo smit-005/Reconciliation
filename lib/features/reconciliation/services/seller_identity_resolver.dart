@@ -79,7 +79,9 @@ class SellerIdentityResolver {
 
     for (final mapping in savedMappings) {
       final alias = normalizeName(mapping.aliasName);
-      final sectionCode = normalizeSellerMappingSectionCode(mapping.sectionCode);
+      final sectionCode = normalizeSellerMappingSectionCode(
+        mapping.sectionCode,
+      );
       if (alias.isEmpty || sectionCode.isEmpty) continue;
       sectionMappings['$alias|$sectionCode'] = mapping.copyWith(
         aliasName: alias,
@@ -100,8 +102,12 @@ class SellerIdentityResolver {
       if (normalizedName.isNotEmpty &&
           normalizedPan.isNotEmpty &&
           looksLikePan(normalizedPan)) {
-        nameToPans.putIfAbsent(normalizedName, () => <String>{}).add(normalizedPan);
-        panToNames.putIfAbsent(normalizedPan, () => <String>{}).add(normalizedName);
+        nameToPans
+            .putIfAbsent(normalizedName, () => <String>{})
+            .add(normalizedPan);
+        panToNames
+            .putIfAbsent(normalizedPan, () => <String>{})
+            .add(normalizedName);
         final observationKey = '$normalizedName|$normalizedPan';
         namePanObservationCounts[observationKey] =
             (namePanObservationCounts[observationKey] ?? 0) + 1;
@@ -134,7 +140,9 @@ class SellerIdentityResolver {
       originalName.trim().isNotEmpty ? originalName : mappedName,
     );
     final normalizedPan = normalizePan(originalPan);
-    final normalizedSectionCode = normalizeSellerMappingSectionCode(sectionCode);
+    final normalizedSectionCode = normalizeSellerMappingSectionCode(
+      sectionCode,
+    );
     final flags = <String>{};
     final mappingAttempted =
         normalizedBuyerPan.isNotEmpty && normalizedAliasName.isNotEmpty;
@@ -156,7 +164,9 @@ class SellerIdentityResolver {
       final mappedPan = normalizePan(activeMapping.mappedPan);
       final mappedResolvedName = activeMapping.mappedName.trim().isNotEmpty
           ? activeMapping.mappedName.trim()
-          : (mappedName.trim().isNotEmpty ? mappedName.trim() : originalName.trim());
+          : (mappedName.trim().isNotEmpty
+                ? mappedName.trim()
+                : originalName.trim());
 
       if (looksLikePan(normalizedPan) &&
           looksLikePan(mappedPan) &&
@@ -172,8 +182,7 @@ class SellerIdentityResolver {
           mappingSectionUsed: mappingSectionUsed,
           mappingHit: mappingHit,
           extraFlags: flags,
-          extraNotes:
-              ReconciliationRemarkTemplates.mappedPanConflict,
+          extraNotes: ReconciliationRemarkTemplates.mappedPanConflict,
         );
       }
 
@@ -191,8 +200,7 @@ class SellerIdentityResolver {
         if (mappingHit == 'exact') 'mapping_exact',
         if (mappingHit == 'fallback') 'mapping_fallback',
         if (looksLikePan(resolvedPan)) 'pan_verified',
-      }.toList()
-        ..sort();
+      }.toList()..sort();
 
       return ResolvedSellerIdentity(
         resolvedSellerId: resolvedSellerId,
@@ -200,8 +208,9 @@ class SellerIdentityResolver {
             ? _displayNameForName(normalizedName, originalName)
             : mappedResolvedName,
         resolvedPan: resolvedPan,
-        identitySource:
-            mappingHit == 'exact' ? 'mapping_exact' : 'mapping_fallback',
+        identitySource: mappingHit == 'exact'
+            ? 'mapping_exact'
+            : 'mapping_fallback',
         identityConfidence: 1.0,
         identityNotes: mappingNotes,
         mappingAttempted: mappingAttempted,
@@ -247,10 +256,14 @@ class SellerIdentityResolver {
 
       return ResolvedSellerIdentity(
         resolvedSellerId: 'PAN:$normalizedPan',
-        resolvedSellerName: _displayNameForPan(normalizedPan, normalizedName, originalName),
+        resolvedSellerName: _displayNameForPan(
+          normalizedPan,
+          normalizedName,
+          originalName,
+        ),
         resolvedPan: normalizedPan,
         identitySource: 'pan',
-        identityConfidence: conflictingNames.length > 1 ? 0.78 : 1.0,
+        identityConfidence: conflictingNames.length > 1 ? 0.70 : 1.0,
         identityNotes: [
           conflictingNames.length > 1
               ? ReconciliationRemarkTemplates.panNameMismatch
@@ -272,7 +285,11 @@ class SellerIdentityResolver {
       flags.add('alias_matched');
       return ResolvedSellerIdentity(
         resolvedSellerId: 'PAN:$aliasPan',
-        resolvedSellerName: _displayNameForPan(aliasPan, normalizedName, originalName),
+        resolvedSellerName: _displayNameForPan(
+          aliasPan,
+          normalizedName,
+          originalName,
+        ),
         resolvedPan: aliasPan,
         identitySource: 'alias',
         identityConfidence: 0.92,
@@ -321,10 +338,14 @@ class SellerIdentityResolver {
 
       return ResolvedSellerIdentity(
         resolvedSellerId: 'PAN:$matchedPan',
-        resolvedSellerName: _displayNameForPan(matchedPan, normalizedName, originalName),
+        resolvedSellerName: _displayNameForPan(
+          matchedPan,
+          normalizedName,
+          originalName,
+        ),
         resolvedPan: matchedPan,
         identitySource: 'normalized_name',
-        identityConfidence: 0.8,
+        identityConfidence: 0.70,
         identityNotes: [
           ReconciliationRemarkTemplates.inferredSellerMatch,
           extraNotes,
@@ -388,7 +409,9 @@ class SellerIdentityResolver {
     flags.add('unresolved_identity');
     return ResolvedSellerIdentity(
       resolvedSellerId: 'FALLBACK:${originalName.trim().toUpperCase()}',
-      resolvedSellerName: originalName.trim().isEmpty ? 'Unknown Seller' : originalName.trim(),
+      resolvedSellerName: originalName.trim().isEmpty
+          ? 'Unknown Seller'
+          : originalName.trim(),
       resolvedPan: '',
       identitySource: 'fallback',
       identityConfidence: 0.1,
@@ -419,6 +442,8 @@ class SellerIdentityResolver {
   String _displayNameForName(String normalizedName, String originalName) {
     return _nameDisplay[normalizedName]?.trim().isNotEmpty == true
         ? _nameDisplay[normalizedName]!.trim()
-        : (originalName.trim().isEmpty ? 'Unknown Seller' : originalName.trim());
+        : (originalName.trim().isEmpty
+              ? 'Unknown Seller'
+              : originalName.trim());
   }
 }
