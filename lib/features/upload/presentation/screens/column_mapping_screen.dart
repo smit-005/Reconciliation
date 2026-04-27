@@ -630,54 +630,51 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(),
-      child: Scrollbar(
+      child: ListView(
         controller: _columnsScrollController,
-        thumbVisibility: true,
-        child: ListView(
-          controller: _columnsScrollController,
-          primary: false,
-          children: [
-            const Text(
-              'Required Columns',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          const Text(
+            'Required Columns',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 12),
-            ..._requiredColumnKeys.map(_buildColumnCard),
-            const SizedBox(height: 12),
-            Theme(
-              data: Theme.of(
-                context,
-              ).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                collapsedIconColor: const Color(0xFF94A3B8),
-                iconColor: Colors.white,
-                title: Text(
-                  'Optional Columns (${_optionalColumnKeys.length})',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+          ),
+          const SizedBox(height: 12),
+          ..._requiredColumnKeys.map(_buildColumnCard),
+          const SizedBox(height: 12),
+          Theme(
+            data: Theme.of(
+              context,
+            ).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              collapsedIconColor: const Color(0xFF94A3B8),
+              iconColor: Colors.white,
+              title: Text(
+                'Optional Columns (${_optionalColumnKeys.length})',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: const Text(
+                'Expand to map GST, PAN, product, or extra fields.',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+              ),
+              children: [
+                for (final columnKey in _optionalColumnKeys)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: _buildColumnCard(columnKey),
                   ),
-                ),
-                subtitle: const Text(
-                  'Expand to map GST, PAN, product, or extra fields.',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                ),
-                children: [
-                  for (final columnKey in _optionalColumnKeys)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: _buildColumnCard(columnKey),
-                    ),
-                ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -863,12 +860,16 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                   children: [
                     SizedBox(
                       width: 420,
-                      child: Column(
-                        children: [
-                          _buildRequiredFieldsPanel(),
-                          const SizedBox(height: 16),
-                          Expanded(child: _buildColumnsPanel()),
-                        ],
+                      child: SingleChildScrollView(
+                        controller: ScrollController(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildRequiredFieldsPanel(),
+                            const SizedBox(height: 16),
+                            _buildColumnsPanel(),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 18),
