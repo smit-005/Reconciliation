@@ -83,6 +83,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   // Seller mapping state
   bool _isSellerMappingConfirmed = false;
   bool _isLoadingSellerMapping = false;
+  bool _isRefreshingSellerMappingPreflight = false;
+  bool _sellerMappingPreflightRefreshQueued = false;
   SellerMappingPreflightResult? _sellerMappingPreflight;
 
   final Set<String> selectedSections = {'194Q'};
@@ -354,6 +356,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return;
     }
 
+    if (_isRefreshingSellerMappingPreflight) {
+      _sellerMappingPreflightRefreshQueued = true;
+      return;
+    }
+
+    _isRefreshingSellerMappingPreflight = true;
+
     if (mounted) {
       setState(() {
         _isLoadingSellerMapping = true;
@@ -361,11 +370,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
 
     try {
+      final analyzeWatch = Stopwatch()..start();
       final result = await SellerMappingPreflightService.analyze(
         buyerName: widget.selectedBuyerName,
         buyerPan: widget.selectedBuyerPan,
         tdsRows: tdsRows,
         sourceRowsBySection: _buildSourceRowsBySection(),
+      );
+      analyzeWatch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => step=preflight_refresh ms=${analyzeWatch.elapsedMilliseconds}',
       );
 
       if (!mounted) return;
@@ -383,6 +397,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         _isLoadingSellerMapping = false;
       });
       _showUploadSnackBar('Failed to prepare seller mapping review: $e');
+    } finally {
+      _isRefreshingSellerMappingPreflight = false;
+      final shouldRefreshAgain = _sellerMappingPreflightRefreshQueued;
+      _sellerMappingPreflightRefreshQueued = false;
+      if (shouldRefreshAgain) {
+        _refreshSellerMappingPreflight();
+      }
     }
   }
 
@@ -606,21 +627,31 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     LedgerUploadFile file,
   ) async {
     _setSectionLoading(sectionCode, true);
+    final postMapWatch = Stopwatch()..start();
+    var shouldRefreshSellerPreflight = false;
     try {
+      final openMappingWatch = Stopwatch()..start();
       final columnMappingResult = await _openStoredFileColumnMapping(
         file: file,
       );
+      openMappingWatch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => step=review_mapping ms=${openMappingWatch.elapsedMilliseconds}',
+      );
       if (columnMappingResult == null) {
-        _setSectionLoading(sectionCode, false);
         return;
       }
 
+      final remapWatch = Stopwatch()..start();
       final response = await ImportUploadFlowService.prepareSectionFileRemap(
         file: file,
         columnMappingResult: columnMappingResult,
       );
+      remapWatch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => step=parse_after_mapping ms=${remapWatch.elapsedMilliseconds}',
+      );
       if (response.isFailure) {
-        _setSectionLoading(sectionCode, false);
         _showUploadSnackBar(
           'Remap failed for ${file.fileName}: ${response.errorMessage!}',
         );
@@ -629,7 +660,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       final result = response.data;
       if (result == null) {
-        _setSectionLoading(sectionCode, false);
         return;
       }
 
@@ -647,6 +677,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       final resolvedUpdatedFile = result.updatedFile;
 
+      final applyStateWatch = Stopwatch()..start();
       setState(() {
         sectionFiles[sectionCode] = sectionFiles[sectionCode]!
             .map<LedgerUploadFile>(
@@ -661,14 +692,26 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               .expand((item) => item.rows)
               .toList();
         }
-        sectionLoading[sectionCode] = false;
       });
-      _refreshSellerMappingPreflightIfReady();
+      applyStateWatch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => step=apply_remap_state ms=${applyStateWatch.elapsedMilliseconds}',
+      );
+      shouldRefreshSellerPreflight = true;
 
       _showUploadSnackBar('${file.fileName} remapped successfully');
     } catch (e) {
-      _setSectionLoading(sectionCode, false);
       _showUploadSnackBar('Remap failed for ${file.fileName}: $e');
+    } finally {
+      postMapWatch.stop();
+      debugPrint(
+        'UPLOAD POSTMAP PERF => total ms=${postMapWatch.elapsedMilliseconds}',
+      );
+      _setSectionLoading(sectionCode, false);
+    }
+
+    if (shouldRefreshSellerPreflight) {
+      _refreshSellerMappingPreflightIfReady();
     }
   }
 

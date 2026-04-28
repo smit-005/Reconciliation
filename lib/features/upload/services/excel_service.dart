@@ -208,6 +208,10 @@ class ExcelService {
     return SpreadsheetDecoder.decodeBytes(bytes, update: false);
   }
 
+  static dynamic formatPreviewValue(dynamic value, {String? canonicalField}) {
+    return _normalizeCellValue(value, canonicalField: canonicalField);
+  }
+
   static List<Map<String, dynamic>> _serializePurchaseRowsForIsolate(
     List<PurchaseRow> rows,
   ) {
@@ -3952,6 +3956,12 @@ class ExcelService {
     );
   }
 
+  static void _logForcedNumericDateAvoidance(String field, dynamic rawValue) {
+    debugPrint(
+      'EXCEL VALUE FORMAT => field=$field raw=$rawValue forcedNumeric=true',
+    );
+  }
+
   static dynamic _normalizeCellValue(dynamic value, {String? canonicalField}) {
     if (value == null) return '';
 
@@ -3963,45 +3973,33 @@ class ExcelService {
 
     if (value is DateTime) {
       if (forceNumeric) {
-        final numeric = value.millisecondsSinceEpoch.toString();
-        debugPrint(
-          'EXCEL VALUE FORMAT => field=$field raw=$value forcedNumeric=true',
-        );
-        return numeric;
+        _logForcedNumericDateAvoidance(field, value);
+        return value.toString().trim();
       }
-      return _formatDate(value);
+      if (forceDate) {
+        return _formatDate(value);
+      }
+      return value.toString().trim();
     }
 
     if (value is num) {
-      if (!forceNumeric && (forceDate || _looksLikeExcelDate(value))) {
+      if (forceNumeric && _looksLikeExcelDate(value)) {
+        _logForcedNumericDateAvoidance(field, value);
+      }
+
+      if (forceDate && _looksLikeExcelDate(value)) {
         return _convertExcelDate(value);
       }
 
       if (value == value.roundToDouble()) {
-        if (forceNumeric && _looksLikeExcelDate(value)) {
-          debugPrint(
-            'EXCEL VALUE FORMAT => field=$field raw=$value forcedNumeric=true',
-          );
-        }
         return value.toInt().toString();
       }
 
-      if (forceNumeric && _looksLikeExcelDate(value)) {
-        debugPrint(
-          'EXCEL VALUE FORMAT => field=$field raw=$value forcedNumeric=true',
-        );
-      }
       return value.toString();
     }
 
     if (forceNumeric) {
-      final text = value.toString().trim();
-      if (_looksLikeDateValue(text)) {
-        debugPrint(
-          'EXCEL VALUE FORMAT => field=$field raw=$text forcedNumeric=true',
-        );
-        return '';
-      }
+      return value.toString().trim();
     }
 
     return value.toString().trim();

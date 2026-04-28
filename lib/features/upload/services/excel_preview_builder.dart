@@ -87,6 +87,7 @@ ExcelPreviewData? _buildPreviewData(
   final dataStartIndex = sheetInfo.headersTrusted
       ? sheetInfo.headerRowIndex + 1
       : sheetInfo.headerRowIndex;
+  final rawSampleRows = <Map<String, dynamic>>[];
   final sampleRows = <Map<String, String>>[];
 
   for (
@@ -95,18 +96,19 @@ ExcelPreviewData? _buildPreviewData(
     i++
   ) {
     final row = table.rows[i];
+    final rawSampleRow = <String, dynamic>{};
     final sampleRow = <String, String>{};
     var hasValue = false;
 
     for (int j = 0; j < columnKeys.length; j++) {
       final columnKey = columnKeys[j];
       final canonicalField = suggestedMappings[columnKey];
-      final value = j < row.length
-          ? ExcelService._normalizeCellValue(
-              row[j],
-              canonicalField: canonicalField,
-            )
-          : '';
+      final rawValue = j < row.length ? row[j] : null;
+      rawSampleRow[columnKey] = rawValue;
+      final value = ExcelService.formatPreviewValue(
+        rawValue,
+        canonicalField: canonicalField,
+      );
       final text = value.toString().trim();
       if (text.isNotEmpty) {
         hasValue = true;
@@ -115,6 +117,7 @@ ExcelPreviewData? _buildPreviewData(
     }
 
     if (hasValue) {
+      rawSampleRows.add(rawSampleRow);
       sampleRows.add(sampleRow);
     }
   }
@@ -138,6 +141,7 @@ ExcelPreviewData? _buildPreviewData(
     columnKeys: columnKeys,
     columnLabels: columnLabels,
     suggestedMappings: suggestedMappings,
+    rawSampleRows: rawSampleRows,
     sampleRows: sampleRows,
   );
 }
@@ -225,6 +229,7 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   }
 
   final dataStartIndex = headersTrusted ? headerRowIndex + 1 : headerRowIndex;
+  final rawSampleRows = <Map<String, dynamic>>[];
   final sampleRows = <Map<String, String>>[];
 
   for (
@@ -233,18 +238,19 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
     i++
   ) {
     final row = table.rows[i];
+    final rawSampleRow = <String, dynamic>{};
     final sampleRow = <String, String>{};
     var hasValue = false;
 
     for (int j = 0; j < columnKeys.length; j++) {
       final columnKey = columnKeys[j];
       final canonicalField = suggestedMappings[columnKey];
-      final value = j < row.length
-          ? ExcelService._normalizeCellValue(
-              row[j],
-              canonicalField: canonicalField,
-            )
-          : '';
+      final rawValue = j < row.length ? row[j] : null;
+      rawSampleRow[columnKey] = rawValue;
+      final value = ExcelService.formatPreviewValue(
+        rawValue,
+        canonicalField: canonicalField,
+      );
       final text = value.toString().trim();
       if (text.isNotEmpty) {
         hasValue = true;
@@ -253,6 +259,7 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
     }
 
     if (hasValue) {
+      rawSampleRows.add(rawSampleRow);
       sampleRows.add(sampleRow);
     }
   }
@@ -276,6 +283,7 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
     columnKeys: columnKeys,
     columnLabels: columnLabels,
     suggestedMappings: suggestedMappings,
+    rawSampleRows: rawSampleRows,
     sampleRows: sampleRows,
   );
 }

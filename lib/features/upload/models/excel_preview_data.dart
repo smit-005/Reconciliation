@@ -10,6 +10,7 @@ class ExcelPreviewData {
   final List<String> columnKeys;
   final Map<String, String> columnLabels;
   final Map<String, String> suggestedMappings;
+  final List<Map<String, dynamic>> rawSampleRows;
   final List<Map<String, String>> sampleRows;
 
   const ExcelPreviewData({
@@ -24,6 +25,7 @@ class ExcelPreviewData {
     required this.columnKeys,
     required this.columnLabels,
     required this.suggestedMappings,
+    required this.rawSampleRows,
     required this.sampleRows,
   });
 }

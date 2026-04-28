@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
+import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 
 class MappingPreviewTable extends StatefulWidget {
   final ExcelPreviewData previewData;
@@ -38,6 +39,9 @@ class _MappingPreviewTableState extends State<MappingPreviewTable> {
 
   @override
   Widget build(BuildContext context) {
+    final hasRawSampleRows =
+        widget.previewData.rawSampleRows.length ==
+        widget.previewData.sampleRows.length;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -74,7 +78,8 @@ class _MappingPreviewTableState extends State<MappingPreviewTable> {
                     ),
                     columns: widget.previewData.columnKeys.map((columnKey) {
                       final label =
-                          widget.previewData.columnLabels[columnKey] ?? columnKey;
+                          widget.previewData.columnLabels[columnKey] ??
+                          columnKey;
                       final mappedKey = widget.selections[columnKey];
                       final mappedLabel = mappedKey == null || mappedKey.isEmpty
                           ? ''
@@ -108,10 +113,23 @@ class _MappingPreviewTableState extends State<MappingPreviewTable> {
                         ),
                       );
                     }).toList(),
-                    rows: widget.previewData.sampleRows.map((row) {
+                    rows: widget.previewData.sampleRows.asMap().entries.map((
+                      entry,
+                    ) {
+                      final rowIndex = entry.key;
+                      final row = entry.value;
+                      final rawRow = hasRawSampleRows
+                          ? widget.previewData.rawSampleRows[rowIndex]
+                          : const <String, dynamic>{};
                       return DataRow(
                         cells: widget.previewData.columnKeys.map((columnKey) {
-                          final value = row[columnKey] ?? '';
+                          final mappedKey = widget.selections[columnKey];
+                          final value = hasRawSampleRows
+                              ? ExcelService.formatPreviewValue(
+                                  rawRow[columnKey],
+                                  canonicalField: mappedKey,
+                                ).toString()
+                              : (row[columnKey] ?? '');
                           return DataCell(
                             SizedBox(
                               width: 180,
@@ -119,7 +137,9 @@ class _MappingPreviewTableState extends State<MappingPreviewTable> {
                                 value,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Color(0xFFE2E8F0)),
+                                style: const TextStyle(
+                                  color: Color(0xFFE2E8F0),
+                                ),
                               ),
                             ),
                           );
