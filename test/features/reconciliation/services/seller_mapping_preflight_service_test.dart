@@ -240,6 +240,64 @@ void main() {
         expect(row.resolvedSuggestion?.mappedPan, 'ZZZZZ9999Z');
       },
     );
+
+    test(
+      'numeric and date-like source seller keys are dropped before preflight grouping',
+      () async {
+        const buyerPan = 'PREFT7777G';
+        await _clearMappings(buyerPan);
+
+        final result = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Seven',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(
+              name: 'Valid Vendor Pvt Ltd',
+              pan: 'AAAAA1111A',
+              section: '194C',
+            ),
+          ],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(
+                name: 'Valid Vendor Pvt Ltd',
+                pan: 'AAAAA1111A',
+                section: '194C',
+              ),
+              _sourceRow(name: '000018', pan: '', section: '194C'),
+              _sourceRow(name: '06.09.24', pan: '', section: '194C'),
+              _sourceRow(name: '1010241606325', pan: '', section: '194C'),
+            ],
+          },
+        );
+
+        expect(result.isSafeForReconciliation, isTrue);
+        expect(
+          result.reviewRows.any(
+            (row) => row.purchasePartyDisplayName == '000018',
+          ),
+          isFalse,
+        );
+        expect(
+          result.reviewRows.any(
+            (row) => row.purchasePartyDisplayName == '06.09.24',
+          ),
+          isFalse,
+        );
+        expect(
+          result.reviewRows.any(
+            (row) => row.purchasePartyDisplayName == '1010241606325',
+          ),
+          isFalse,
+        );
+        expect(
+          result.reviewRows.any(
+            (row) => row.purchasePartyDisplayName == 'Valid Vendor Pvt Ltd',
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }
 

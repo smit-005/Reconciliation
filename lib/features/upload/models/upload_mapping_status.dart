@@ -8,7 +8,7 @@ extension UploadMappingStatusX on UploadMappingStatus {
       case UploadMappingStatus.autoMapped:
         return 'Auto-mapped';
       case UploadMappingStatus.needsReview:
-        return 'Needs review';
+        return 'Review Required';
       case UploadMappingStatus.confirmed:
         return 'Confirmed';
     }

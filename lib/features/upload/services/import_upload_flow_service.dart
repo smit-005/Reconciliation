@@ -72,6 +72,7 @@ class GenericLedgerImportPreparation {
   final int? headerRowIndex;
   final bool? headersTrusted;
   final Map<String, String> columnMapping;
+  final String sampleSignature;
   final ColumnMappingResult? columnMappingResult;
 
   const GenericLedgerImportPreparation({
@@ -82,6 +83,7 @@ class GenericLedgerImportPreparation {
     required this.headerRowIndex,
     required this.headersTrusted,
     required this.columnMapping,
+    required this.sampleSignature,
     required this.columnMappingResult,
   });
 }
@@ -154,7 +156,8 @@ class ImportUploadFlowService {
     required ExcelValidationResult validation,
     required ExcelImportType fileType,
   }) {
-    if (validation.decision == ExcelImportDecision.manualReview) {
+    if (fileType == ExcelImportType.tds26q &&
+        validation.decision == ExcelImportDecision.manualReview) {
       return true;
     }
 
@@ -163,11 +166,6 @@ class ImportUploadFlowService {
     }
 
     if (fileType == ExcelImportType.tds26q &&
-        validation.confidenceScore < 0.75) {
-      return true;
-    }
-
-    if (fileType == ExcelImportType.genericLedger &&
         validation.confidenceScore < 0.75) {
       return true;
     }
@@ -245,8 +243,8 @@ class ImportUploadFlowService {
             sheetName: inspection.sheetName,
             headerRowIndex: matchedProfile.headerRowIndex,
             headersTrusted: matchedProfile.headersTrusted,
-            columnMapping: Map<String, String>.from(
-              matchedProfile.columnMapping,
+            columnMapping: ImportMappingService.dedupeSourceColumns(
+              Map<String, String>.from(matchedProfile.columnMapping),
             ),
             sampleSignature: signature,
             columnMappingResult: null,
@@ -337,7 +335,9 @@ class ImportUploadFlowService {
           sheetName: inspection.sheetName,
           headerRowIndex: validation.headerRowIndex,
           headersTrusted: null,
-          columnMapping: Map<String, String>.from(initialMappedColumns),
+          columnMapping: ImportMappingService.dedupeSourceColumns(
+            Map<String, String>.from(validation.mappedColumns),
+          ),
           sampleSignature: signature,
           columnMappingResult: null,
         ),
@@ -354,6 +354,7 @@ class ImportUploadFlowService {
 
   static Future<ImportWorkflowResponse<GenericLedgerImportPreparation>>
   prepareGenericLedgerImport({
+    required String buyerId,
     required String sectionCode,
     required List<int> bytes,
     required String fileName,
@@ -368,6 +369,60 @@ class ImportUploadFlowService {
     }
 
     try {
+      final inspection = await _inspectGenericLedgerFileInBackground(
+        bytes: bytes,
+      );
+      if (inspection == null) {
+        return ImportWorkflowResponse.failure(
+          _readFailureMessage(
+            fileName: fileName,
+            defaultMessage: 'Could not inspect ledger workbook',
+          ),
+        );
+      }
+
+      final signature = ExcelService.buildSampleSignature(
+        inspection.sheetName,
+        inspection.rawHeaderRow,
+      );
+      final matchedProfile = await ExcelService.findMatchingProfile(
+        buyerId: buyerId,
+        fileType: ImportMappingService.genericLedgerFileType,
+        sheetName: inspection.sheetName,
+        sampleSignature: signature,
+      );
+
+      if (matchedProfile != null) {
+        final parsedRows =
+            await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
+              sessionCache?.bytes ?? Uint8List.fromList(bytes),
+              sheetName: inspection.sheetName,
+              headerRowIndex: matchedProfile.headerRowIndex,
+              headersTrusted: matchedProfile.headersTrusted,
+              columnMapping: matchedProfile.columnMapping,
+              defaultSection: sectionCode,
+              sourceFileName: fileName,
+            );
+
+        if (parsedRows.isNotEmpty) {
+          return ImportWorkflowResponse.success(
+            GenericLedgerImportPreparation(
+              parsedRows: parsedRows,
+              mappingStatus: UploadMappingStatus.autoMapped,
+              wasManuallyMapped: false,
+              sheetName: inspection.sheetName,
+              headerRowIndex: matchedProfile.headerRowIndex,
+              headersTrusted: matchedProfile.headersTrusted,
+              columnMapping: ImportMappingService.dedupeSourceColumns(
+                Map<String, String>.from(matchedProfile.columnMapping),
+              ),
+              sampleSignature: signature,
+              columnMappingResult: null,
+            ),
+          );
+        }
+      }
+
       final validation =
           await ExcelService.validateGenericLedgerFileInBackground(
             sessionCache?.bytes ?? Uint8List.fromList(bytes),
@@ -425,6 +480,7 @@ class ImportUploadFlowService {
             columnMapping: Map<String, String>.from(
               columnMappingResult.columnMapping,
             ),
+            sampleSignature: signature,
             columnMappingResult: columnMappingResult,
           ),
         );
@@ -448,7 +504,10 @@ class ImportUploadFlowService {
           sheetName: validation.detectedSheet,
           headerRowIndex: validation.headerRowIndex,
           headersTrusted: null,
-          columnMapping: Map<String, String>.from(initialMappedColumns),
+          columnMapping: ImportMappingService.dedupeSourceColumns(
+            Map<String, String>.from(validation.mappedColumns),
+          ),
+          sampleSignature: signature,
           columnMappingResult: null,
         ),
       );
@@ -561,8 +620,8 @@ class ImportUploadFlowService {
           sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
           headerRowIndex: effectiveValidation.headerRowIndex,
           headersTrusted: null,
-          columnMapping: Map<String, String>.from(
-            effectiveValidation.mappedColumns,
+          columnMapping: ImportMappingService.dedupeSourceColumns(
+            Map<String, String>.from(effectiveValidation.mappedColumns),
           ),
           columnMappingResult: null,
         ),
@@ -797,6 +856,18 @@ Future<_PurchaseInspectionResult?> _inspectPurchaseFileInBackground({
   );
 }
 
+Future<_PurchaseInspectionResult?> _inspectGenericLedgerFileInBackground({
+  required List<int> bytes,
+}) async {
+  final payload = await compute(_computeGenericLedgerInspectionPayload, bytes);
+  if (payload == null) {
+    return null;
+  }
+  return _deserializePurchaseInspectionResult(
+    Map<String, dynamic>.from(payload as Map),
+  );
+}
+
 Future<_PurchaseUploadPreparation?> _preparePurchaseUploadInBackground({
   required List<int> bytes,
 }) async {
@@ -874,6 +945,23 @@ Map<String, dynamic>? _computePurchaseInspectionPayload(
     List<int>.from(payload['bytes'] as List),
     forcedType: ExcelImportType.purchase,
     preferredSheetName: payload['preferredSheetName'] as String?,
+  );
+  if (inspection == null) {
+    return null;
+  }
+
+  return _serializePurchaseInspectionResult((
+    sheetName: inspection.sheetName,
+    headerRowIndex: inspection.headerRowIndex,
+    rawHeaderRow: inspection.rawHeaderRow,
+    headersTrusted: inspection.headersTrusted,
+  ));
+}
+
+Map<String, dynamic>? _computeGenericLedgerInspectionPayload(List<int> bytes) {
+  final inspection = ExcelService.inspectExcelFile(
+    bytes,
+    forcedType: ExcelImportType.genericLedger,
   );
   if (inspection == null) {
     return null;

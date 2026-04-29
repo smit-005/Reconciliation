@@ -41,10 +41,89 @@ class _ImportedRowCandidate {
 
 class ExcelService {
   static const bool _enableVerboseImportLogs = false;
+  static final Map<String, int> _forcedNumericDateAvoidanceByField =
+      <String, int>{};
+  static final Map<
+    String,
+    ({
+      String sheetName,
+      int headerRowIndex,
+      ExcelImportType detectedType,
+      bool headersTrusted,
+    })
+  >
+  _headerDetectionCache =
+      <
+        String,
+        ({
+          String sheetName,
+          int headerRowIndex,
+          ExcelImportType detectedType,
+          bool headersTrusted,
+        })
+      >{};
+  static final Map<String, List<String?>> _columnScoreCache =
+      <String, List<String?>>{};
 
   static void _debugVerbose(String message) {
     if (!_enableVerboseImportLogs) return;
     debugPrint(message);
+  }
+
+  static void _recordForcedNumericDateAvoidance(String field) {
+    _forcedNumericDateAvoidanceByField[field] =
+        (_forcedNumericDateAvoidanceByField[field] ?? 0) + 1;
+  }
+
+  static void _flushForcedNumericDateAvoidanceSummary(String context) {
+    if (_forcedNumericDateAvoidanceByField.isEmpty) return;
+
+    final summary = _forcedNumericDateAvoidanceByField.entries
+        .map((entry) => '${entry.key}:${entry.value}')
+        .join(', ');
+    _forcedNumericDateAvoidanceByField.clear();
+    debugPrint(
+      'EXCEL VALUE FORMAT => summary context=$context avoidedForcedNumericDates={$summary}',
+    );
+  }
+
+  static String _workbookCacheKey(
+    SpreadsheetDecoder decoder, {
+    ExcelImportType? forcedType,
+    String? preferredSheetName,
+  }) {
+    final buffer = StringBuffer()
+      ..write(forcedType?.name ?? 'any')
+      ..write('|')
+      ..write(preferredSheetName ?? '')
+      ..write('|');
+    for (final entry in decoder.tables.entries) {
+      final rows = entry.value.rows;
+      buffer
+        ..write(entry.key)
+        ..write(':')
+        ..write(rows.length)
+        ..write(':')
+        ..write(rows.isEmpty ? 0 : rows.first.length)
+        ..write('|');
+    }
+    return buffer.toString();
+  }
+
+  static String _columnScoreCacheKey({
+    required List<dynamic> rawHeaderRow,
+    required ExcelImportType forcedType,
+    required List<List<dynamic>> sampleRows,
+  }) {
+    final headerKey = rawHeaderRow
+        .map((cell) => cell?.toString().trim() ?? '')
+        .join('|');
+    final sampleKey = sampleRows
+        .map(
+          (row) => row.map((cell) => cell?.toString().trim() ?? '').join('^'),
+        )
+        .join('||');
+    return '${forcedType.name}|$headerKey|$sampleKey';
   }
 
   static Future<List<ImportFormatProfile>> getBuyerImportProfiles({
@@ -739,6 +818,8 @@ class ExcelService {
       }
     }
 
+    _flushForcedNumericDateAvoidanceSummary('row_candidates');
+
     return (rows: result, auditRecords: auditRecords);
   }
 
@@ -855,6 +936,7 @@ class ExcelService {
     List<int> bytes, {
     ImportSessionCache? sessionCache,
   }) {
+    final uploadWatch = Stopwatch()..start();
     final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
 
     if (decoder.tables.isEmpty) {
@@ -959,19 +1041,62 @@ class ExcelService {
       warnings.add(
         'Amount columns could not be clearly distinguished. Bill Amount will be used as the primary purchase amount.',
       );
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: warnings,
+          confidenceScore: confidenceScore,
+          message: 'Purchase amount columns need manual review before import.',
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
     }
 
     if (confidenceScore < 0.65) {
       warnings.add(
         'Low header-detection confidence. Review column mapping if imported values look incorrect.',
       );
+      return (
+        sheetName: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        rawHeaderRow: rawHeaderRow,
+        headersTrusted: sheetInfo.headersTrusted,
+        validation: ExcelValidationResult.manualReview(
+          detectedSheet: sheetInfo.sheetName,
+          headerRowIndex: sheetInfo.headerRowIndex,
+          detectedType: sheetInfo.detectedType,
+          mappedColumns: mappedColumns,
+          warnings: warnings,
+          confidenceScore: confidenceScore,
+          message:
+              'Low-confidence purchase mapping needs review before import.',
+          unmappedRawHeaders: unmappedRawHeaders,
+        ),
+        parsedRows: null,
+      );
     }
 
+    debugPrint(
+      'UPLOAD PERF => step=purchase_metadata_ready ms=${uploadWatch.elapsedMilliseconds} '
+      'sheet=${sheetInfo.sheetName} confidence=${confidenceScore.toStringAsFixed(2)}',
+    );
+    final parseWatch = Stopwatch()..start();
     final parsed = _parsePurchaseRowsFromPreparedSheet(
       rows: table.rows,
       headerRowIndex: sheetInfo.headerRowIndex,
       mappedHeaders: mappedHeaders,
       headersTrusted: sheetInfo.headersTrusted,
+    );
+    debugPrint(
+      'PARSE PERF => step=parse_purchase_rows ms=${parseWatch.elapsedMilliseconds} rows=${parsed.length}',
     );
 
     if (parsed.isEmpty) {
@@ -1031,26 +1156,6 @@ class ExcelService {
     if (billAmountSum > 0 && (billAmountSum - basicAmountSum).abs() < 1) {
       warnings.add(
         'Single amount column detected (Bill Amount used as Basic Amount)',
-      );
-    }
-
-    if (hasSuspiciousAmountCollision) {
-      return (
-        sheetName: sheetInfo.sheetName,
-        headerRowIndex: sheetInfo.headerRowIndex,
-        rawHeaderRow: rawHeaderRow,
-        headersTrusted: sheetInfo.headersTrusted,
-        validation: ExcelValidationResult.manualReview(
-          detectedSheet: sheetInfo.sheetName,
-          headerRowIndex: sheetInfo.headerRowIndex,
-          detectedType: sheetInfo.detectedType,
-          mappedColumns: mappedColumns,
-          warnings: warnings,
-          confidenceScore: confidenceScore,
-          message: 'Purchase amount columns need manual review before import.',
-          unmappedRawHeaders: unmappedRawHeaders,
-        ),
-        parsedRows: null,
       );
     }
 
@@ -1706,6 +1811,13 @@ class ExcelService {
 
     final hasDate = presentHeaders.contains('date');
     final hasAmount = presentHeaders.contains('amount');
+    final amountDiagnostics = _analyzeGenericLedgerAmountMapping(
+      rawHeaderRow: rawHeaderRow,
+      mappedHeaders: mappedHeaders,
+      rows: table.rows,
+      headerRowIndex: sheetInfo.headerRowIndex,
+      headersTrusted: sheetInfo.headersTrusted,
+    );
 
     final missing = <String>[
       if (!hasDate) 'Date',
@@ -1718,21 +1830,49 @@ class ExcelService {
       warnings.add(
         'Header detection is weak. Column mapping is required instead of auto-parsing.',
       );
-      return ExcelValidationResult.valid(
+      return ExcelValidationResult.manualReview(
         detectedSheet: sheetInfo.sheetName,
         headerRowIndex: sheetInfo.headerRowIndex,
         detectedType: sheetInfo.detectedType,
         mappedColumns: _headerPreviewMap(rawHeaderRow, mappedHeaders),
         warnings: warnings,
         confidenceScore: confidenceScore,
-        requiresManualMapping: true,
+        message: 'Generic ledger column mapping needs review before import.',
         unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
     if (missing.isNotEmpty) {
-      return ExcelValidationResult.invalid(
-        'Missing required ledger columns: ${missing.join(', ')}',
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: _headerPreviewMap(rawHeaderRow, mappedHeaders),
+        warnings: [
+          ...warnings,
+          'Required ledger columns need confirmation: ${missing.join(', ')}.',
+        ],
+        confidenceScore: confidenceScore,
+        message:
+            'Required ledger columns need review before import: ${missing.join(', ')}',
+        unmappedRawHeaders: unmappedRawHeaders,
+      );
+    }
+
+    if (amountDiagnostics.selectedColumn.isEmpty ||
+        amountDiagnostics.numericRatio < 0.60) {
+      warnings.add(
+        'Amount column detection is not reliable enough for auto-import.',
+      );
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: _headerPreviewMap(rawHeaderRow, mappedHeaders),
+        warnings: warnings,
+        confidenceScore: confidenceScore,
+        message: 'Amount mapping needs review before import.',
+        unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
@@ -1842,6 +1982,19 @@ class ExcelService {
     ExcelImportType? forcedType,
     String? preferredSheetName,
   }) {
+    final cacheKey = _workbookCacheKey(
+      decoder,
+      forcedType: forcedType,
+      preferredSheetName: preferredSheetName,
+    );
+    final cached = _headerDetectionCache[cacheKey];
+    if (cached != null) {
+      debugPrint(
+        'HEADER CACHE HIT => sheet=${cached.sheetName} row=${cached.headerRowIndex} type=${cached.detectedType.name}',
+      );
+      return cached;
+    }
+
     final preferred26QSheet =
         preferredSheetName ??
         (forcedType == ExcelImportType.tds26q
@@ -2028,12 +2181,14 @@ class ExcelService {
     debugPrint('DETECTION HEADER ROW => ${best.headerRowIndex}');
     debugPrint('DETECTION CONFIDENCE => $confidenceScore');
 
-    return (
+    final resolved = (
       sheetName: best.sheetName,
       headerRowIndex: best.headerRowIndex,
       detectedType: best.detectedType,
       headersTrusted: best.headersTrusted,
     );
+    _headerDetectionCache[cacheKey] = resolved;
+    return resolved;
   }
 
   static double _score26QSheet(String sheetName, List<List<dynamic>> rows) {
@@ -2522,19 +2677,25 @@ class ExcelService {
     required bool headersTrusted,
   }) {
     final sampleRows = rows.skip(headerRowIndex + 1).take(8).toList();
+    final resolved = headersTrusted
+        ? _buildMappedHeaders(
+            rows[headerRowIndex],
+            forcedType: forcedType,
+            sampleRows: sampleRows,
+          )
+        : _inferMappedHeadersFromDataRows(
+            rows.skip(headerRowIndex).take(8).toList(),
+            type: forcedType,
+          );
 
-    if (headersTrusted) {
-      return _buildMappedHeaders(
-        rows[headerRowIndex],
-        forcedType: forcedType,
-        sampleRows: sampleRows,
+    if (forcedType == ExcelImportType.genericLedger) {
+      return _sanitizeGenericLedgerMappedHeaders(
+        rawHeaderRow: rows[headerRowIndex],
+        mappedHeaders: resolved,
       );
     }
 
-    return _inferMappedHeadersFromDataRows(
-      rows.skip(headerRowIndex).take(8).toList(),
-      type: forcedType,
-    );
+    return resolved;
   }
 
   static List<String?> _buildMappedHeadersFromProfile({
@@ -2600,7 +2761,7 @@ class ExcelService {
       }
     }
 
-    return result;
+    return ImportMappingService.dedupeSourceColumns(result);
   }
 
   static Map<String, String> _normalizeCanonicalColumnMappingByType(
@@ -3082,6 +3243,19 @@ class ExcelService {
     required ExcelImportType forcedType,
     List<List<dynamic>> sampleRows = const [],
   }) {
+    final cacheKey = _columnScoreCacheKey(
+      rawHeaderRow: rawHeaderRow,
+      forcedType: forcedType,
+      sampleRows: sampleRows,
+    );
+    final cached = _columnScoreCache[cacheKey];
+    if (cached != null) {
+      debugPrint(
+        'COLUMN SCORE CACHE HIT => type=${forcedType.name} columns=${rawHeaderRow.length}',
+      );
+      return List<String?>.from(cached);
+    }
+
     final stopwatch = Stopwatch()..start();
     final usedCanonical = <String>{};
     final mapped = <String?>[];
@@ -3123,6 +3297,8 @@ class ExcelService {
       'COLUMN SCORE PERF => columns=${rawHeaderRow.length} rowsSampled=${sampleRows.length} ms=${stopwatch.elapsedMilliseconds}',
     );
 
+    _columnScoreCache[cacheKey] = List<String?>.from(mapped);
+
     return mapped;
   }
 
@@ -3146,10 +3322,214 @@ class ExcelService {
     return amountRegExp.hasMatch(val);
   }
 
+  static bool _isTextHeavyGenericLedgerAmountHeader(String normalizedHeader) {
+    return normalizedHeader.contains('party') ||
+        normalizedHeader.contains('particular') ||
+        normalizedHeader.contains('narration') ||
+        normalizedHeader.contains('description') ||
+        normalizedHeader.contains('ledger name') ||
+        normalizedHeader.contains('account name') ||
+        normalizedHeader == 'name';
+  }
+
+  static bool _isPreferredGenericLedgerAmountHeader(String normalizedHeader) {
+    const preferredHeaders = {
+      'amount',
+      'debit',
+      'credit',
+      'gross amount',
+      'taxable amount',
+      'bill amount',
+      'basic amount',
+      'total amount',
+      'debit amount',
+      'credit amount',
+      'dr amount',
+      'cr amount',
+    };
+    if (preferredHeaders.contains(normalizedHeader)) {
+      return true;
+    }
+
+    return normalizedHeader.contains('amount') ||
+        normalizedHeader == 'debit' ||
+        normalizedHeader == 'credit';
+  }
+
+  static void _logGenericLedgerAmountRejected({
+    required String rawHeader,
+    required String reason,
+  }) {
+    debugPrint(
+      'AUTO MAP DEBUG => rejectedColumn=$rawHeader for amount reason=$reason',
+    );
+  }
+
+  static void _logGenericLedgerAmountSelected({
+    required String selectedColumn,
+    required String reason,
+    required double numericRatio,
+  }) {
+    debugPrint(
+      'AUTO MAP DEBUG => field=amount selectedColumn=$selectedColumn reason=$reason numericRatio=${numericRatio.toStringAsFixed(2)}',
+    );
+  }
+
+  static void _logGenericLedgerDomainReject({
+    required String field,
+    required String column,
+    required String reason,
+  }) {
+    debugPrint(
+      'AUTO MAP DOMAIN REJECT => field=$field column=$column reason=$reason',
+    );
+  }
+
   static bool _isDateLikeAmountCandidateHeader(String normalizedHeader) {
     return normalizedHeader.contains('date') ||
         normalizedHeader.contains('month') ||
         normalizedHeader.contains('eom');
+  }
+
+  static String? _genericLedgerPartyNameRejectReason(String normalizedHeader) {
+    const blockedTokens = [
+      'bill no',
+      'bill number',
+      'voucher no',
+      'voucher number',
+      'invoice no',
+      'invoice number',
+      'document no',
+      'document number',
+      'doc no',
+      'doc number',
+      'ref no',
+      'reference no',
+    ];
+    for (final token in blockedTokens) {
+      if (normalizedHeader.contains(token)) {
+        return 'bill-number-column';
+      }
+    }
+    return null;
+  }
+
+  static String? _genericLedgerAmountRejectReason(String normalizedHeader) {
+    if (normalizedHeader.contains('tds amount') ||
+        normalizedHeader == 'tds' ||
+        normalizedHeader.contains('tds amt') ||
+        normalizedHeader.contains('withholding') ||
+        normalizedHeader.contains('deduction') ||
+        normalizedHeader.contains('tax deducted')) {
+      return 'tds-not-base-amount';
+    }
+    if (normalizedHeader.contains('tax amount') &&
+        !normalizedHeader.contains('taxable')) {
+      return 'tax-not-base-amount';
+    }
+    return null;
+  }
+
+  static int _genericLedgerDomainPenalty(
+    String canonical,
+    String normalizedHeader,
+  ) {
+    if (canonical == 'party_name') {
+      if (normalizedHeader.contains('bill') ||
+          normalizedHeader.contains('voucher') ||
+          normalizedHeader.contains('invoice') ||
+          normalizedHeader.contains('document') ||
+          normalizedHeader.contains('doc ') ||
+          normalizedHeader.contains('reference') ||
+          normalizedHeader.contains('ref ')) {
+        return -40;
+      }
+    }
+
+    if (canonical == 'amount') {
+      if (normalizedHeader.contains('tds') ||
+          normalizedHeader.contains('withholding') ||
+          normalizedHeader.contains('deduction')) {
+        return -60;
+      }
+      if (normalizedHeader.contains('tax amount') &&
+          !normalizedHeader.contains('taxable')) {
+        return -45;
+      }
+      if (normalizedHeader.contains('gross amount') ||
+          normalizedHeader.contains('basic amount') ||
+          normalizedHeader.contains('transaction amount') ||
+          normalizedHeader.contains('product amount') ||
+          normalizedHeader.contains('bill amount')) {
+        return 10;
+      }
+    }
+
+    return 0;
+  }
+
+  static bool _isSellerLikeAlphabeticHeader(String normalizedHeader) {
+    if (normalizedHeader.isEmpty) return false;
+    if (_isPreferredGenericLedgerAmountHeader(normalizedHeader)) return false;
+    if (_isTextHeavyGenericLedgerAmountHeader(normalizedHeader)) return false;
+    if (_isDateLikeAmountCandidateHeader(normalizedHeader)) return false;
+    if (_genericLedgerAmountRejectReason(normalizedHeader) != null) return false;
+    if (normalizedHeader.contains('bill') ||
+        normalizedHeader.contains('invoice') ||
+        normalizedHeader.contains('voucher') ||
+        normalizedHeader.contains('reference') ||
+        normalizedHeader.contains('ref ') ||
+        normalizedHeader.contains('gst') ||
+        normalizedHeader.contains('pan')) {
+      return false;
+    }
+
+    final compact = normalizedHeader.replaceAll(' ', '');
+    if (compact.length < 8) return false;
+
+    final sellerLikePattern = RegExp(r'^[a-z][a-z .,&()/\-]{7,}$');
+    if (!sellerLikePattern.hasMatch(normalizedHeader)) return false;
+
+    final tokens = normalizedHeader
+        .split(' ')
+        .where((token) => token.isNotEmpty)
+        .toList();
+    final alphaTokens = tokens
+        .where((token) => RegExp(r'^[a-z][a-z.&()/-]*$').hasMatch(token))
+        .length;
+    return alphaTokens >= 2;
+  }
+
+  static void _logAmountHeuristicReject({
+    required String column,
+    required String reason,
+  }) {
+    debugPrint('AMOUNT HEURISTIC REJECT => column=$column reason=$reason');
+  }
+
+  static List<String?> _sanitizeGenericLedgerMappedHeaders({
+    required List<dynamic> rawHeaderRow,
+    required List<String?> mappedHeaders,
+  }) {
+    final sanitized = List<String?>.from(mappedHeaders);
+
+    for (int i = 0; i < sanitized.length && i < rawHeaderRow.length; i++) {
+      if (sanitized[i] != 'amount') continue;
+
+      final rawHeader = rawHeaderRow[i]?.toString().trim() ?? '';
+      final normalizedHeader = _normalizeLooseText(rawHeader);
+      final rejectReason =
+          _genericLedgerAmountRejectReason(normalizedHeader) ??
+          (_isSellerLikeAlphabeticHeader(normalizedHeader)
+              ? 'seller-like'
+              : null);
+      if (rejectReason == null) continue;
+
+      _logAmountHeuristicReject(column: rawHeader, reason: rejectReason);
+      sanitized[i] = null;
+    }
+
+    return sanitized;
   }
 
   static String? _detectCanonicalHeader(
@@ -3183,6 +3563,11 @@ class ExcelService {
     if (type == ExcelImportType.genericLedger &&
         _shouldIgnoreGenericLedgerHeader(normalized)) {
       return null;
+    }
+
+    if (type == ExcelImportType.genericLedger &&
+        _isTextHeavyGenericLedgerAmountHeader(normalized)) {
+      _logGenericLedgerAmountRejected(rawHeader: raw, reason: 'text-heavy');
     }
 
     if (type == ExcelImportType.genericLedger &&
@@ -3243,6 +3628,36 @@ class ExcelService {
           canonical == 'date_month' ||
           canonical == 'eom';
 
+      if (type == ExcelImportType.genericLedger && canonical == 'party_name') {
+        final rejectReason = _genericLedgerPartyNameRejectReason(normalized);
+        if (rejectReason != null) {
+          _logGenericLedgerDomainReject(
+            field: 'party_name',
+            column: raw,
+            reason: rejectReason,
+          );
+          continue;
+        }
+      }
+
+      if (type == ExcelImportType.genericLedger &&
+          canonical == 'amount' &&
+          _isTextHeavyGenericLedgerAmountHeader(normalized)) {
+        continue;
+      }
+
+      if (type == ExcelImportType.genericLedger && canonical == 'amount') {
+        final rejectReason = _genericLedgerAmountRejectReason(normalized);
+        if (rejectReason != null) {
+          _logGenericLedgerDomainReject(
+            field: 'amount',
+            column: raw,
+            reason: rejectReason,
+          );
+          continue;
+        }
+      }
+
       if (isAmountField &&
           (dateLikeCount > 0 && dateLikeCount >= sampleValues.length / 2)) {
         continue;
@@ -3259,10 +3674,18 @@ class ExcelService {
           if (amountLikeCount > 0) {
             score += 10;
           }
+          if (type == ExcelImportType.genericLedger &&
+              !_isPreferredGenericLedgerAmountHeader(normalized)) {
+            score -= 6;
+          }
         } else if (isDateField) {
           if (dateLikeCount > 0) {
             score += 15;
           }
+        }
+
+        if (type == ExcelImportType.genericLedger) {
+          score += _genericLedgerDomainPenalty(canonical, normalized);
         }
 
         if (score > bestScore) {
@@ -3276,6 +3699,19 @@ class ExcelService {
       debugPrint(
         'FIELD MAP SCORE field=$bestKey column=$raw score=$bestScore dateLike=$dateLikeCount amountLike=$amountLikeCount',
       );
+      if (type == ExcelImportType.genericLedger && bestKey == 'amount') {
+        final numericRatio = sampleValues.isEmpty
+            ? 0.0
+            : amountLikeCount / sampleValues.length;
+        final reason = _isPreferredGenericLedgerAmountHeader(normalized)
+            ? 'preferred-numeric-header'
+            : 'numeric-samples';
+        _logGenericLedgerAmountSelected(
+          selectedColumn: raw,
+          reason: reason,
+          numericRatio: numericRatio,
+        );
+      }
     }
 
     if (bestScore >= 75) {
@@ -3316,6 +3752,85 @@ class ExcelService {
     }
 
     return false;
+  }
+
+  static ({String selectedColumn, double numericRatio, String reason})
+  _analyzeGenericLedgerAmountMapping({
+    required List<dynamic> rawHeaderRow,
+    required List<String?> mappedHeaders,
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required bool headersTrusted,
+  }) {
+    final amountIndex = mappedHeaders.indexOf('amount');
+    if (amountIndex < 0 || amountIndex >= rawHeaderRow.length) {
+      _logGenericLedgerAmountSelected(
+        selectedColumn: '',
+        reason: 'not-found',
+        numericRatio: 0.0,
+      );
+      return (selectedColumn: '', numericRatio: 0.0, reason: 'not-found');
+    }
+
+    final rawHeader = rawHeaderRow[amountIndex]?.toString().trim() ?? '';
+    final normalizedHeader = _normalizeLooseText(rawHeader);
+    final rejectReason =
+        _genericLedgerAmountRejectReason(normalizedHeader) ??
+        (_isSellerLikeAlphabeticHeader(normalizedHeader)
+            ? 'seller-like'
+            : null);
+    if (rejectReason != null) {
+      _logAmountHeuristicReject(column: rawHeader, reason: rejectReason);
+      _logGenericLedgerAmountSelected(
+        selectedColumn: '',
+        reason: rejectReason,
+        numericRatio: 0.0,
+      );
+      return (
+        selectedColumn: '',
+        numericRatio: 0.0,
+        reason: rejectReason,
+      );
+    }
+
+    final dataStartIndex = headersTrusted ? headerRowIndex + 1 : headerRowIndex;
+    var nonEmptyCount = 0;
+    var numericCount = 0;
+
+    for (
+      var rowIndex = dataStartIndex;
+      rowIndex < rows.length && nonEmptyCount < 12;
+      rowIndex++
+    ) {
+      final row = rows[rowIndex];
+      if (amountIndex >= row.length) continue;
+      final rawValue = row[amountIndex];
+      final text = rawValue?.toString().trim() ?? '';
+      if (text.isEmpty) continue;
+      nonEmptyCount += 1;
+      if (_looksLikeAmountValue(text)) {
+        numericCount += 1;
+      }
+    }
+
+    final numericRatio = nonEmptyCount == 0
+        ? 0.0
+        : numericCount / nonEmptyCount;
+    final reason = _isPreferredGenericLedgerAmountHeader(normalizedHeader)
+        ? 'preferred-header'
+        : _isTextHeavyGenericLedgerAmountHeader(normalizedHeader)
+        ? 'text-heavy'
+        : 'sample-ratio';
+    _logGenericLedgerAmountSelected(
+      selectedColumn: rawHeader,
+      reason: reason,
+      numericRatio: numericRatio,
+    );
+    return (
+      selectedColumn: rawHeader,
+      numericRatio: numericRatio,
+      reason: reason,
+    );
   }
 
   static int _headerSimilarityScore(String a, String b) {
@@ -3456,6 +3971,8 @@ class ExcelService {
         result.add(rowMap);
       }
     }
+
+    _flushForcedNumericDateAvoidanceSummary('row_maps');
 
     return result;
   }
@@ -3956,12 +4473,6 @@ class ExcelService {
     );
   }
 
-  static void _logForcedNumericDateAvoidance(String field, dynamic rawValue) {
-    debugPrint(
-      'EXCEL VALUE FORMAT => field=$field raw=$rawValue forcedNumeric=true',
-    );
-  }
-
   static dynamic _normalizeCellValue(dynamic value, {String? canonicalField}) {
     if (value == null) return '';
 
@@ -3973,7 +4484,7 @@ class ExcelService {
 
     if (value is DateTime) {
       if (forceNumeric) {
-        _logForcedNumericDateAvoidance(field, value);
+        _recordForcedNumericDateAvoidance(field);
         return value.toString().trim();
       }
       if (forceDate) {
@@ -3984,7 +4495,7 @@ class ExcelService {
 
     if (value is num) {
       if (forceNumeric && _looksLikeExcelDate(value)) {
-        _logForcedNumericDateAvoidance(field, value);
+        _recordForcedNumericDateAvoidance(field);
       }
 
       if (forceDate && _looksLikeExcelDate(value)) {
@@ -4216,7 +4727,8 @@ class ExcelService {
     ],
     'amount': [
       'amount',
-      'amount paid',
+      'bill amount',
+      'total amount',
       'taxable amount',
       'basic amount',
       'gross amount',
@@ -4246,6 +4758,7 @@ class ExcelService {
     List<List<dynamic>> rows, {
     required String sheetName,
   }) {
+    const strongHeaderScoreThreshold = 120;
     ({int headerRowIndex, int score, bool headersTrusted})? best;
 
     for (int i = 0; i < rows.length && i < 30; i++) {
@@ -4285,6 +4798,11 @@ class ExcelService {
 
       if (best == null || score > best.score) {
         best = (headerRowIndex: i, score: score, headersTrusted: true);
+      }
+
+      if (score > strongHeaderScoreThreshold) {
+        debugPrint('HEADER EARLY EXIT => row=$i score=$score');
+        break;
       }
     }
 

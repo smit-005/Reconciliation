@@ -297,6 +297,25 @@ class ImportMappingService {
     return canonical;
   }
 
+  static Map<String, String> dedupeSourceColumns(
+    Map<String, String> canonicalToRaw,
+  ) {
+    final deduped = <String, String>{};
+    final usedSourceColumns = <String>{};
+
+    for (final entry in canonicalToRaw.entries) {
+      final canonicalKey = _normalizeCanonicalKey(entry.key.trim());
+      final rawColumn = entry.value.trim();
+      if (canonicalKey.isEmpty || rawColumn.isEmpty) continue;
+      if (usedSourceColumns.contains(rawColumn)) continue;
+
+      deduped[canonicalKey] = rawColumn;
+      usedSourceColumns.add(rawColumn);
+    }
+
+    return deduped;
+  }
+
   static String _normalizeCanonicalKey(String key) {
     switch (key) {
       case 'pan_no':
@@ -387,12 +406,6 @@ class ImportMappingService {
     if (fileType == genericLedgerFileType &&
         !canonicalMapping.containsKey('amount')) {
       errors.add('Amount is required');
-    }
-
-    if (fileType == genericLedgerFileType &&
-        !canonicalMapping.containsKey('pan_number') &&
-        !canonicalMapping.containsKey('gst_no')) {
-      errors.add('PAN or GST No is required');
     }
 
     return errors;

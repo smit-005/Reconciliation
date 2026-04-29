@@ -34,5 +34,35 @@ void main() {
 
       expect(errors, isEmpty);
     });
+
+    test(
+      'generic ledger does not require PAN or GST when date party and amount exist',
+      () {
+        final errors = ImportMappingService.validateSelections(
+          fileType: ImportMappingService.genericLedgerFileType,
+          rawToCanonical: const {
+            'Date': 'date',
+            'Party Name': 'party_name',
+            'Amount': 'amount',
+          },
+        );
+
+        expect(errors, isEmpty);
+      },
+    );
+  });
+
+  group('ImportMappingService.dedupeSourceColumns', () {
+    test('same source column cannot satisfy party name and amount', () {
+      final deduped = ImportMappingService.dedupeSourceColumns(const {
+        'date': 'Date',
+        'party_name': 'Party Name',
+        'amount': 'Party Name',
+      });
+
+      expect(deduped['date'], 'Date');
+      expect(deduped['party_name'], 'Party Name');
+      expect(deduped.containsKey('amount'), isFalse);
+    });
   });
 }

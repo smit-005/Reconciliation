@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
@@ -66,6 +68,18 @@ class SellerMappingResolvedSuggestion {
     required this.mappedPan,
     required this.source,
     this.helperText = '',
+  });
+}
+
+class SellerMappingScreenResult {
+  final List<Map<String, String>> upserts;
+  final List<Map<String, String>> deleted;
+  final int dangerousRemaining;
+
+  const SellerMappingScreenResult({
+    this.upserts = const <Map<String, String>>[],
+    this.deleted = const <Map<String, String>>[],
+    this.dangerousRemaining = 0,
   });
 }
 
@@ -138,6 +152,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     '194J_B',
   ];
   static const String _allSectionsAuditCode = 'ALL';
+  static const int _initialVisibleRowLimit = 100;
+  static const int _visibleRowIncrement = 100;
 
   static const Set<String> _legalSuffixTokens = {
     'M',
@@ -155,13 +171,15 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   static const Set<String> _ignoredNameTokens = {'AND', 'THE'};
 
-  late Map<String, String> selectedMappings;
-  late Map<String, AutoMapDecision> autoMapDetails;
-  late List<String> uniqueTdsParties;
-  late Map<String, List<SellerMappingScreenRowData>> _rowDataBySection;
-  late Map<String, SellerMapping> _exactMappingsByKey;
-  late Map<String, SellerMapping> _fallbackMappingsByAlias;
-  late String _activeSectionCode;
+  Map<String, String> selectedMappings = <String, String>{};
+  Map<String, AutoMapDecision> autoMapDetails = <String, AutoMapDecision>{};
+  List<String> uniqueTdsParties = <String>[];
+  Map<String, List<SellerMappingScreenRowData>> _rowDataBySection =
+      <String, List<SellerMappingScreenRowData>>{};
+  Map<String, SellerMapping> _exactMappingsByKey = <String, SellerMapping>{};
+  Map<String, SellerMapping> _fallbackMappingsByAlias =
+      <String, SellerMapping>{};
+  String _activeSectionCode = '194Q';
   final Map<String, List<SellerMappingRowVm>> _mappingRowsBySectionCache =
       <String, List<SellerMappingRowVm>>{};
   final Set<String> _clearedRowKeys = <String>{};
@@ -170,18 +188,19 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   String _searchQuery = '';
   String _statusFilter = 'All';
   SellerMappingListView _activeListView = SellerMappingListView.needsAction;
-
-  int _currentPage = 1;
-  final int _pageSize = 50;
+  int _visibleRowLimit = _initialVisibleRowLimit;
   List<SellerMappingRowVm>? _cachedFilteredRows;
   Map<SellerMappingListView, int>? _cachedListViewCounts;
   final Set<String> _expandedRowKeys = <String>{};
+  final Stopwatch _screenOpenStopwatch = Stopwatch()..start();
+  bool _isInitializing = true;
+  bool _firstFrameLogged = false;
 
   void _invalidateViewCaches({bool resetPage = false}) {
     _cachedFilteredRows = null;
     _cachedListViewCounts = null;
     if (resetPage) {
-      _currentPage = 1;
+      _visibleRowLimit = _initialVisibleRowLimit;
     }
   }
 
@@ -790,15 +809,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         status == 'Unresolved Identity';
   }
 
-  bool _isBlockingDangerousRow({
-    required SellerMappingRowVm row,
-    required String status,
-  }) {
-    if (row.isPurchaseOnly) return false;
-    if (!_isDangerousPreflightStatus(status)) return false;
-    return row.requiresDangerousReview;
-  }
-
   String _statusChipLabel(String status) {
     if (status == 'Conflicting PAN' ||
         status == 'Ambiguous Identity' ||
@@ -832,6 +842,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       return null;
     }
 
+    if (_isPreflightMode && row.requiresDangerousReview) {
+      return null;
+    }
+
     return _normalizeToKnownTdsParty(row.resolvedSuggestion?.mappedName);
   }
 
@@ -839,12 +853,55 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return _getExplicitSelectedValue(row) ?? _getResolvedSuggestionValue(row);
   }
 
+  bool get _usesGlobalPreflightNeedsActionScope =>
+      _isPreflightMode && _activeListView == SellerMappingListView.needsAction;
+
+  List<SellerMappingRowVm> _rowsForCurrentViewScope() {
+    if (_usesGlobalPreflightNeedsActionScope) {
+      return _rowsForSection(_allSectionsAuditCode);
+    }
+    return _rowsForActiveSection();
+  }
+
+  bool _isDangerousRowExplicitlyResolved(SellerMappingRowVm row) {
+    if (!_isPreflightMode ||
+        row.isPurchaseOnly ||
+        !row.requiresDangerousReview) {
+      return false;
+    }
+
+    final explicitSelectedValue = _getExplicitSelectedValue(row);
+    if (explicitSelectedValue == null || explicitSelectedValue.trim().isEmpty) {
+      return false;
+    }
+    if (_isSeparateSelection(row, explicitSelectedValue)) {
+      return true;
+    }
+
+    final selectedPan = _getPanForSelection(row, explicitSelectedValue);
+    if (selectedPan == 'Multiple PANs') {
+      return false;
+    }
+
+    final status = _getStatus(row: row, selectedValue: explicitSelectedValue);
+    return status != 'PAN Conflict' && !_isDangerousPreflightStatus(status);
+  }
+
+  bool _isUnresolvedDangerousPreflightRow(SellerMappingRowVm row) {
+    if (!_isPreflightMode ||
+        row.isPurchaseOnly ||
+        !row.requiresDangerousReview) {
+      return false;
+    }
+    return !_isDangerousRowExplicitlyResolved(row);
+  }
+
   List<SellerMappingRowVm> _filteredRows() {
     if (_cachedFilteredRows != null) return _cachedFilteredRows!;
 
     final stopwatch = Stopwatch()..start();
     final query = _searchQuery.trim().toUpperCase();
-    final activeRows = _rowsForActiveSection();
+    final activeRows = _rowsForCurrentViewScope();
 
     _cachedFilteredRows = activeRows.where((row) {
       final selectedValue = _getSelectedValue(row);
@@ -891,24 +948,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     stopwatch.stop();
     debugPrint('SELLER MAP PERF filterMs=${stopwatch.elapsedMilliseconds}');
     return _cachedFilteredRows!;
-  }
-
-  bool _hasNeedsActionRowsForSection(String sectionCode) {
-    for (final row in _rowsForSection(sectionCode)) {
-      final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      final autoMapDetail = autoMapDetails[row.rowKey];
-      if (_matchesListView(
-        row: row,
-        status: status,
-        selectedValue: selectedValue,
-        autoMapDetail: autoMapDetail,
-        view: SellerMappingListView.needsAction,
-      )) {
-        return true;
-      }
-    }
-    return false;
   }
 
   List<_SellerMappingDisplayRow> _buildDisplayRows(
@@ -1007,8 +1046,66 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_firstFrameLogged) return;
+      _firstFrameLogged = true;
+      debugPrint(
+        'SELLER SCREEN PERF => firstFrame ms=${_screenOpenStopwatch.elapsedMilliseconds}',
+      );
+      _hydrateScreenAfterFirstFrame();
+    });
+  }
 
-    uniqueTdsParties =
+  Future<void> _hydrateScreenAfterFirstFrame() async {
+    await Future<void>.delayed(Duration.zero);
+    final prepareWatch = Stopwatch()..start();
+    final preparedState = _prepareInitialState();
+    prepareWatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => prepareInput ms=${prepareWatch.elapsedMilliseconds}',
+    );
+
+    final buildWatch = Stopwatch()..start();
+    final isolatePayload = preparedState.toIsolatePayload();
+    final payload = _shouldUseComputeForViewModels
+        ? await compute(_buildSellerScreenViewModelsInIsolate, isolatePayload)
+        : _buildSellerScreenViewModelsInIsolate(isolatePayload);
+    buildWatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => buildViewModels ms=${buildWatch.elapsedMilliseconds}',
+    );
+
+    if (!mounted) return;
+
+    final readyState = _SellerMappingScreenReadyState.fromIsolatePayload(
+      Map<String, dynamic>.from(payload),
+    );
+
+    setState(() {
+      uniqueTdsParties = preparedState.uniqueTdsParties;
+      _rowDataBySection = preparedState.rowDataBySection;
+      _exactMappingsByKey = preparedState.exactMappingsByKey;
+      _fallbackMappingsByAlias = preparedState.fallbackMappingsByAlias;
+      _mappingRowsBySectionCache
+        ..clear()
+        ..addAll(readyState.mappingRowsBySection);
+      selectedMappings = readyState.selectedMappings;
+      autoMapDetails = <String, AutoMapDecision>{};
+      _activeSectionCode = readyState.activeSectionCode;
+      _isInitializing = false;
+      _invalidateViewCaches(resetPage: true);
+    });
+
+    final filterWatch = Stopwatch()..start();
+    _filteredRows();
+    filterWatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => applyFilters ms=${filterWatch.elapsedMilliseconds}',
+    );
+  }
+
+  _SellerMappingScreenPreparedState _prepareInitialState() {
+    final uniqueTdsParties =
         widget.tdsParties
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
@@ -1016,8 +1113,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             .toList()
           ..sort();
 
-    _exactMappingsByKey = <String, SellerMapping>{};
-    _fallbackMappingsByAlias = <String, SellerMapping>{};
+    final exactMappingsByKey = <String, SellerMapping>{};
+    final fallbackMappingsByAlias = <String, SellerMapping>{};
 
     for (final mapping in widget.existingMappings) {
       final aliasKey = normalizeName(mapping.aliasName.trim());
@@ -1026,60 +1123,41 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       );
       if (aliasKey.isEmpty || mapping.mappedName.trim().isEmpty) continue;
 
-      if (sectionCode == 'ALL') {
-        _fallbackMappingsByAlias[aliasKey] = mapping;
+      if (sectionCode == _allSectionsAuditCode) {
+        fallbackMappingsByAlias[aliasKey] = mapping;
         continue;
       }
 
-      _exactMappingsByKey[_rowKey(aliasKey, sectionCode)] = mapping;
+      exactMappingsByKey[_rowKey(aliasKey, sectionCode)] = mapping;
     }
 
-    _rowDataBySection = <String, List<SellerMappingScreenRowData>>{
+    final rowDataBySection = <String, List<SellerMappingScreenRowData>>{
       for (final section in _sectionTabOrder)
         section: <SellerMappingScreenRowData>[],
     };
 
     for (final row in widget.purchaseRows) {
       final sectionCode = normalizeSellerMappingSectionCode(row.sectionCode);
-      if (!_rowDataBySection.containsKey(sectionCode)) {
-        _rowDataBySection[sectionCode] = <SellerMappingScreenRowData>[];
-      }
-      _rowDataBySection[sectionCode]!.add(row);
+      rowDataBySection.putIfAbsent(
+        sectionCode,
+        () => <SellerMappingScreenRowData>[],
+      );
+      rowDataBySection[sectionCode]!.add(row);
     }
 
-    final preferredSection = normalizeSellerMappingSectionCode(
-      widget.selectedSectionLabel.trim(),
+    return _SellerMappingScreenPreparedState(
+      buyerPan: widget.buyerPan,
+      selectedSectionLabel: widget.selectedSectionLabel,
+      isPreflightMode: _isPreflightMode,
+      uniqueTdsParties: uniqueTdsParties,
+      rowDataBySection: rowDataBySection,
+      exactMappingsByKey: exactMappingsByKey,
+      fallbackMappingsByAlias: fallbackMappingsByAlias,
     );
-    selectedMappings = <String, String>{};
-    for (final sectionCode in _availableSectionCodes) {
-      if (sectionCode == _allSectionsAuditCode) continue;
-      for (final row in _rowsForSection(sectionCode)) {
-        final hydratedValue =
-            _normalizeToKnownTdsParty(row.exactMapping?.mappedName) ??
-            _normalizeToKnownTdsParty(row.fallbackMapping?.mappedName);
-        if (hydratedValue == null || hydratedValue.trim().isEmpty) continue;
-        selectedMappings[row.rowKey] = hydratedValue.trim();
-      }
-    }
-
-    autoMapDetails = {};
-
-    final availableSections = _availableSectionCodes;
-    final fallbackSection = availableSections.firstWhere(
-      (sectionCode) => sectionCode != _allSectionsAuditCode,
-      orElse: () =>
-          availableSections.isNotEmpty ? availableSections.first : '194Q',
-    );
-    final canUsePreferredSection =
-        availableSections.contains(preferredSection) &&
-        (!_isPreflightMode ||
-            preferredSection != _allSectionsAuditCode ||
-            _hasNeedsActionRowsForSection(_allSectionsAuditCode));
-
-    _activeSectionCode = canUsePreferredSection
-        ? preferredSection
-        : fallbackSection;
   }
+
+  bool get _shouldUseComputeForViewModels =>
+      !Platform.environment.containsKey('FLUTTER_TEST');
 
   @override
   void dispose() {
@@ -1094,8 +1172,15 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final rowsToPersist = _mappingRowsBySectionCache.values
         .expand((rows) => rows)
         .toList();
+    final dangerousRows = <String, SellerMappingRowVm>{};
 
     for (final row in rowsToPersist) {
+      if (_isPreflightMode &&
+          row.requiresDangerousReview &&
+          !row.isPurchaseOnly) {
+        dangerousRows[row.rowKey] = row;
+      }
+
       if (row.isReadOnly) {
         continue;
       }
@@ -1105,9 +1190,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             row.resolvedSuggestion?.mappedName,
           )?.trim() ??
           '';
+      final shouldPersistSuggestionFallback =
+          _isPreflightMode && !row.requiresDangerousReview;
       final effectiveMappedName = currentMappedName.isNotEmpty
           ? currentMappedName
-          : (_isPreflightMode ? resolvedSuggestionName : '');
+          : (shouldPersistSuggestionFallback ? resolvedSuggestionName : '');
       final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
 
       if (effectiveMappedName.isEmpty) {
@@ -1138,17 +1225,36 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       });
     }
 
-    final dangerousRemaining = rowsToPersist.where((row) {
-      final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      return _isBlockingDangerousRow(row: row, status: status);
+    final dangerousRowCount = dangerousRows.length;
+    final dangerousSuggestionOnlyCount = dangerousRows.values.where((row) {
+      if (_isDangerousRowExplicitlyResolved(row)) return false;
+      final suggested = _normalizeToKnownTdsParty(
+        row.resolvedSuggestion?.mappedName,
+      );
+      return suggested != null && suggested.trim().isNotEmpty;
     }).length;
+    final dangerousExplicitlyResolvedCount = dangerousRows.values
+        .where(_isDangerousRowExplicitlyResolved)
+        .length;
+    final dangerousRemaining = dangerousRows.values
+        .where((row) => !_isDangerousRowExplicitlyResolved(row))
+        .length;
 
-    Navigator.pop(context, {
-      'upserts': upserts,
-      'deleted': deleted,
-      'dangerousRemaining': dangerousRemaining,
-    });
+    debugPrint(
+      'SELLER MAP PREFLIGHT STATE dangerousRows=$dangerousRowCount '
+      'dangerousSuggestionOnly=$dangerousSuggestionOnlyCount '
+      'dangerousExplicitlyResolved=$dangerousExplicitlyResolvedCount '
+      'dangerousRemaining=$dangerousRemaining',
+    );
+
+    Navigator.pop(
+      context,
+      SellerMappingScreenResult(
+        upserts: upserts,
+        deleted: deleted,
+        dangerousRemaining: dangerousRemaining,
+      ),
+    );
   }
 
   String _buyerInitials() {
@@ -1457,12 +1563,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       return 0;
     }
 
-    return _rowsForActiveSection().length -
+    return _rowsForCurrentViewScope().length -
         _filteredRowsForViewModeOnly().length;
   }
 
   List<SellerMappingRowVm> _filteredRowsForViewModeOnly() {
-    return _rowsForActiveSection().where((row) {
+    return _rowsForCurrentViewScope().where((row) {
       final selectedValue = _getSelectedValue(row);
       final status = _getStatus(row: row, selectedValue: selectedValue);
       final autoMapDetail = autoMapDetails[row.rowKey];
@@ -1491,7 +1597,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   Widget _buildHeader() {
-    final selectedSection = _activeSectionCode == _allSectionsAuditCode
+    final selectedSection = _usesGlobalPreflightNeedsActionScope
+        ? 'All Sellers (Needs Action)'
+        : _activeSectionCode == _allSectionsAuditCode
         ? 'All Sellers (Audit)'
         : sectionDisplayLabel(_activeSectionCode);
     final fyLabel = widget.financialYearLabel.trim().isEmpty
@@ -2488,7 +2596,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   Widget _buildBottomBar(List<SellerMappingRowVm> visibleRows) {
     final visibleCount = visibleRows.length;
-    final totalCount = _rowsForActiveSection().length;
+    final totalCount = _rowsForCurrentViewScope().length;
     final conflictCount = visibleRows.where((row) {
       final selectedValue = _getSelectedValue(row);
       return _getStatus(row: row, selectedValue: selectedValue) ==
@@ -2510,9 +2618,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         ? '$missingPanCount row ${missingPanCount == 1 ? 'has' : 'have'} mapped selections that still need PAN verification.'
         : 'All visible mappings are ready for reconciliation review.';
     final preflightReviewCount = visibleRows.where((row) {
-      final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      return _isDangerousPreflightStatus(status);
+      return _isUnresolvedDangerousPreflightRow(row);
     }).length;
 
     final reviewColor = conflictCount > 0
@@ -2615,10 +2721,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required SellerMappingListView view,
   }) {
     if (_isPreflightMode) {
-      final needsAction =
-          _isDangerousPreflightStatus(status) ||
-          (selectedValue == null || selectedValue.trim().isEmpty) &&
-              row.requiresDangerousReview;
+      final needsAction = _isUnresolvedDangerousPreflightRow(row);
 
       switch (view) {
         case SellerMappingListView.needsAction:
@@ -2626,7 +2729,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         case SellerMappingListView.aboveThreshold:
           return false;
         case SellerMappingListView.unmatched26Q:
-          return false;
+          return row.is26QUnmatched;
         case SellerMappingListView.allSellers:
           return true;
       }
@@ -2667,11 +2770,15 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final counts = <SellerMappingListView, int>{
       for (final view in SellerMappingListView.values) view: 0,
     };
-    for (final row in _rowsForActiveSection()) {
-      final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      final autoMapDetail = autoMapDetails[row.rowKey];
-      for (final view in SellerMappingListView.values) {
+    for (final view in SellerMappingListView.values) {
+      final rowsForView =
+          _isPreflightMode && view == SellerMappingListView.needsAction
+          ? _rowsForSection(_allSectionsAuditCode)
+          : _rowsForActiveSection();
+      for (final row in rowsForView) {
+        final selectedValue = _getSelectedValue(row);
+        final status = _getStatus(row: row, selectedValue: selectedValue);
+        final autoMapDetail = autoMapDetails[row.rowKey];
         if (_matchesListView(
           row: row,
           status: status,
@@ -2689,17 +2796,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allFiltered = _filteredRows();
-    final totalPages = (allFiltered.length / _pageSize).ceil();
-    if (_currentPage > totalPages && totalPages > 0) {
-      _currentPage = totalPages;
+    if (_isInitializing) {
+      return _buildLoadingScaffold();
     }
-    final startIdx = (_currentPage - 1) * _pageSize;
-    final endIdx = math.min(startIdx + _pageSize, allFiltered.length);
-    final pagedRows = allFiltered.isNotEmpty
-        ? allFiltered.sublist(startIdx, endIdx)
+
+    final allFiltered = _filteredRows();
+    final visibleCount = math.min(_visibleRowLimit, allFiltered.length);
+    final visibleRows = allFiltered.isNotEmpty
+        ? allFiltered.sublist(0, visibleCount)
         : <SellerMappingRowVm>[];
-    final pagedRowViews = _buildDisplayRows(pagedRows);
+    final pagedRowViews = _buildDisplayRows(visibleRows);
 
     final stopwatch = Stopwatch()..start();
 
@@ -2716,7 +2822,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               _buildTopToolbar(),
               const SizedBox(height: 16),
               Expanded(child: _buildTableSection(pagedRowViews)),
-              if (totalPages > 1) _buildPagination(totalPages),
+              if (visibleCount < allFiltered.length)
+                _buildLoadMore(allFiltered),
             ],
           ),
         ),
@@ -2725,36 +2832,573 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     stopwatch.stop();
     debugPrint(
-      'SELLER MAP PERF pageMs=${stopwatch.elapsedMilliseconds} rowsRendered=${pagedRows.length}',
+      'SELLER MAP PERF pageMs=${stopwatch.elapsedMilliseconds} rowsRendered=${visibleRows.length}',
     );
 
     return body;
   }
 
-  Widget _buildPagination(int totalPages) {
+  Widget _buildLoadMore(List<SellerMappingRowVm> allFiltered) {
+    final remaining = math.max(allFiltered.length - _visibleRowLimit, 0);
+    final nextLoadCount = math.min(_visibleRowIncrement, remaining);
+
     return Padding(
       padding: const EdgeInsets.only(top: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Column(
         children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: _currentPage > 1
-                ? () => setState(() => _currentPage--)
-                : null,
-          ),
           Text(
-            'Page $_currentPage of $totalPages',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            'Showing ${math.min(_visibleRowLimit, allFiltered.length)} of ${allFiltered.length} seller rows.',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: SellerMappingTheme.mutedTextColor,
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: _currentPage < totalPages
-                ? () => setState(() => _currentPage++)
-                : null,
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: () {
+              setState(() {
+                _visibleRowLimit += _visibleRowIncrement;
+              });
+            },
+            icon: const Icon(Icons.expand_more_rounded),
+            label: Text(
+              nextLoadCount > 0 ? 'Load More ($nextLoadCount)' : 'Load More',
+            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildLoadingScaffold() {
+    return Scaffold(
+      backgroundColor: SellerMappingTheme.pageBackground,
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: SellerMappingTheme.surfaceColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: SellerMappingTheme.borderColor),
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.6),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Preparing seller mapping review...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: SellerMappingTheme.titleTextColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SellerMappingScreenPreparedState {
+  final String buyerPan;
+  final String selectedSectionLabel;
+  final bool isPreflightMode;
+  final List<String> uniqueTdsParties;
+  final Map<String, List<SellerMappingScreenRowData>> rowDataBySection;
+  final Map<String, SellerMapping> exactMappingsByKey;
+  final Map<String, SellerMapping> fallbackMappingsByAlias;
+
+  const _SellerMappingScreenPreparedState({
+    required this.buyerPan,
+    required this.selectedSectionLabel,
+    required this.isPreflightMode,
+    required this.uniqueTdsParties,
+    required this.rowDataBySection,
+    required this.exactMappingsByKey,
+    required this.fallbackMappingsByAlias,
+  });
+
+  Map<String, dynamic> toIsolatePayload() {
+    return {
+      'buyerPan': buyerPan,
+      'selectedSectionLabel': selectedSectionLabel,
+      'isPreflightMode': isPreflightMode,
+      'uniqueTdsParties': uniqueTdsParties,
+      'rowDataBySection': {
+        for (final entry in rowDataBySection.entries)
+          entry.key: entry.value.map(_serializeScreenRowForIsolate).toList(),
+      },
+      'exactMappingsByKey': {
+        for (final entry in exactMappingsByKey.entries)
+          entry.key: _serializeSellerMappingForIsolate(entry.value),
+      },
+      'fallbackMappingsByAlias': {
+        for (final entry in fallbackMappingsByAlias.entries)
+          entry.key: _serializeSellerMappingForIsolate(entry.value),
+      },
+    };
+  }
+}
+
+class _SellerMappingScreenReadyState {
+  final Map<String, List<SellerMappingRowVm>> mappingRowsBySection;
+  final Map<String, String> selectedMappings;
+  final String activeSectionCode;
+
+  const _SellerMappingScreenReadyState({
+    required this.mappingRowsBySection,
+    required this.selectedMappings,
+    required this.activeSectionCode,
+  });
+
+  factory _SellerMappingScreenReadyState.fromIsolatePayload(
+    Map<String, dynamic> payload,
+  ) {
+    final mappingRowsBySection = <String, List<SellerMappingRowVm>>{};
+    final rawMappingRows = Map<String, dynamic>.from(
+      payload['mappingRowsBySection'] as Map? ?? const {},
+    );
+    for (final entry in rawMappingRows.entries) {
+      mappingRowsBySection[entry.key] = List<Map<String, dynamic>>.from(
+        entry.value as List? ?? const [],
+      ).map(_deserializeRowVmForIsolate).toList();
+    }
+
+    return _SellerMappingScreenReadyState(
+      mappingRowsBySection: mappingRowsBySection,
+      selectedMappings: Map<String, String>.from(
+        payload['selectedMappings'] as Map? ?? const {},
+      ),
+      activeSectionCode: payload['activeSectionCode'] as String? ?? '194Q',
+    );
+  }
+}
+
+Map<String, dynamic> _buildSellerScreenViewModelsInIsolate(
+  Map<String, dynamic> payload,
+) {
+  final buyerPan = payload['buyerPan'] as String? ?? '';
+  final selectedSectionLabel = payload['selectedSectionLabel'] as String? ?? '';
+  final isPreflightMode = payload['isPreflightMode'] as bool? ?? false;
+  final uniqueTdsParties = List<String>.from(
+    payload['uniqueTdsParties'] as List? ?? const <String>[],
+  );
+
+  final rowDataBySection = <String, List<SellerMappingScreenRowData>>{};
+  final rawRowDataBySection = Map<String, dynamic>.from(
+    payload['rowDataBySection'] as Map? ?? const {},
+  );
+  for (final entry in rawRowDataBySection.entries) {
+    rowDataBySection[entry.key] = List<Map<String, dynamic>>.from(
+      entry.value as List? ?? const [],
+    ).map(_deserializeScreenRowForIsolate).toList();
+  }
+
+  final exactMappingsByKey = <String, SellerMapping>{};
+  final rawExactMappings = Map<String, dynamic>.from(
+    payload['exactMappingsByKey'] as Map? ?? const {},
+  );
+  for (final entry in rawExactMappings.entries) {
+    exactMappingsByKey[entry.key] = _deserializeSellerMappingForIsolate(
+      Map<String, dynamic>.from(entry.value as Map),
+    );
+  }
+
+  final fallbackMappingsByAlias = <String, SellerMapping>{};
+  final rawFallbackMappings = Map<String, dynamic>.from(
+    payload['fallbackMappingsByAlias'] as Map? ?? const {},
+  );
+  for (final entry in rawFallbackMappings.entries) {
+    fallbackMappingsByAlias[entry.key] = _deserializeSellerMappingForIsolate(
+      Map<String, dynamic>.from(entry.value as Map),
+    );
+  }
+
+  final availableSectionCodes = _availableSectionCodesForIsolate(
+    rowDataBySection: rowDataBySection,
+  );
+  final selectedMappings = <String, String>{};
+  final mappingRowsBySection = <String, List<SellerMappingRowVm>>{};
+
+  for (final sectionCode in availableSectionCodes) {
+    mappingRowsBySection[sectionCode] = _buildRowsForSectionInIsolate(
+      buyerPan: buyerPan,
+      sectionCode: sectionCode,
+      rowDataBySection: rowDataBySection,
+      exactMappingsByKey: exactMappingsByKey,
+      fallbackMappingsByAlias: fallbackMappingsByAlias,
+    );
+  }
+
+  for (final sectionCode in availableSectionCodes) {
+    if (sectionCode == _SellerMappingScreenState._allSectionsAuditCode) {
+      continue;
+    }
+    for (final row in mappingRowsBySection[sectionCode] ?? const []) {
+      final hydratedValue =
+          _normalizeToKnownTdsPartyForIsolate(
+            uniqueTdsParties,
+            row.exactMapping?.mappedName,
+          ) ??
+          _normalizeToKnownTdsPartyForIsolate(
+            uniqueTdsParties,
+            row.fallbackMapping?.mappedName,
+          );
+      if (hydratedValue == null || hydratedValue.trim().isEmpty) continue;
+      selectedMappings[row.rowKey] = hydratedValue.trim();
+    }
+  }
+
+  final preferredSection = normalizeSellerMappingSectionCode(
+    selectedSectionLabel.trim(),
+  );
+  final fallbackSection = availableSectionCodes.firstWhere(
+    (sectionCode) =>
+        sectionCode != _SellerMappingScreenState._allSectionsAuditCode,
+    orElse: () =>
+        availableSectionCodes.isNotEmpty ? availableSectionCodes.first : '194Q',
+  );
+  final canUsePreferredSection =
+      availableSectionCodes.contains(preferredSection) &&
+      (!isPreflightMode ||
+          preferredSection != _SellerMappingScreenState._allSectionsAuditCode ||
+          _hasNeedsActionRowsForSectionInIsolate(
+            rows:
+                mappingRowsBySection[_SellerMappingScreenState
+                    ._allSectionsAuditCode] ??
+                const [],
+            selectedMappings: selectedMappings,
+          ));
+
+  return {
+    'mappingRowsBySection': {
+      for (final entry in mappingRowsBySection.entries)
+        entry.key: entry.value.map(_serializeRowVmForIsolate).toList(),
+    },
+    'selectedMappings': selectedMappings,
+    'activeSectionCode': canUsePreferredSection
+        ? preferredSection
+        : fallbackSection,
+  };
+}
+
+List<String> _availableSectionCodesForIsolate({
+  required Map<String, List<SellerMappingScreenRowData>> rowDataBySection,
+}) {
+  final presentSections = _SellerMappingScreenState._sectionTabOrder
+      .where((section) => (rowDataBySection[section] ?? const []).isNotEmpty)
+      .toList();
+  if (presentSections.length > 1) {
+    return <String>[
+      ...presentSections,
+      _SellerMappingScreenState._allSectionsAuditCode,
+    ];
+  }
+  return presentSections;
+}
+
+List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
+  required String buyerPan,
+  required String sectionCode,
+  required Map<String, List<SellerMappingScreenRowData>> rowDataBySection,
+  required Map<String, SellerMapping> exactMappingsByKey,
+  required Map<String, SellerMapping> fallbackMappingsByAlias,
+}) {
+  final sourceRows =
+      sectionCode == _SellerMappingScreenState._allSectionsAuditCode
+      ? _SellerMappingScreenState._sectionTabOrder
+            .expand((section) => rowDataBySection[section] ?? const [])
+            .toList()
+      : List<SellerMappingScreenRowData>.from(
+          rowDataBySection[sectionCode] ?? const [],
+        );
+
+  final rowMap = <String, SellerMappingRowVm>{};
+  for (final row in sourceRows) {
+    final aliasKey = normalizeName(row.normalizedAlias.trim());
+    final normalizedSection = normalizeSellerMappingSectionCode(
+      row.sectionCode,
+    );
+    if (aliasKey.isEmpty) continue;
+
+    final exactMappingKey =
+        '${normalizePan(buyerPan)}|$aliasKey|$normalizedSection';
+    final existing = rowMap['$aliasKey|$normalizedSection'];
+    final displayName = row.purchasePartyDisplayName.trim();
+    final purchasePan = normalizePan(row.purchasePan);
+
+    rowMap['$aliasKey|$normalizedSection'] = SellerMappingRowVm(
+      purchasePartyDisplayName: displayName.isNotEmpty
+          ? displayName
+          : (existing?.purchasePartyDisplayName ?? ''),
+      normalizedAlias: aliasKey,
+      sectionCode: normalizedSection,
+      purchasePan: purchasePan.isNotEmpty
+          ? purchasePan
+          : (existing?.purchasePan ?? ''),
+      purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
+          ? row.purchaseGstNo.trim()
+          : (existing?.purchaseGstNo ?? ''),
+      exactMapping:
+          exactMappingsByKey[exactMappingKey] ?? existing?.exactMapping,
+      fallbackMapping:
+          fallbackMappingsByAlias[aliasKey] ?? existing?.fallbackMapping,
+      resolvedSuggestion:
+          row.resolvedSuggestion ?? existing?.resolvedSuggestion,
+      isReadOnly: row.isReadOnly || (existing?.isReadOnly ?? false),
+      isAboveThreshold:
+          row.isAboveThreshold || (existing?.isAboveThreshold ?? false),
+      hasReconciliationMismatch:
+          row.hasReconciliationMismatch ||
+          (existing?.hasReconciliationMismatch ?? false),
+      hasNameOrPanConflict:
+          row.hasNameOrPanConflict || (existing?.hasNameOrPanConflict ?? false),
+      hasApplicableTdsImpact:
+          row.hasApplicableTdsImpact ||
+          (existing?.hasApplicableTdsImpact ?? false),
+      is26QUnmatched: row.is26QUnmatched || (existing?.is26QUnmatched ?? false),
+      hasMissingOrUncertainPan:
+          row.hasMissingOrUncertainPan ||
+          (existing?.hasMissingOrUncertainPan ?? false),
+      preflightReasonCode: row.preflightReasonCode.trim().isNotEmpty
+          ? row.preflightReasonCode.trim()
+          : (existing?.preflightReasonCode ?? ''),
+      preflightReasonLabel: row.preflightReasonLabel.trim().isNotEmpty
+          ? row.preflightReasonLabel.trim()
+          : (existing?.preflightReasonLabel ?? ''),
+      preflightReasonDetail: row.preflightReasonDetail.trim().isNotEmpty
+          ? row.preflightReasonDetail.trim()
+          : (existing?.preflightReasonDetail ?? ''),
+      requiresDangerousReview:
+          row.requiresDangerousReview ||
+          (existing?.requiresDangerousReview ?? false),
+      isPurchaseOnly: row.isPurchaseOnly || (existing?.isPurchaseOnly ?? false),
+    );
+  }
+
+  final builtRows = rowMap.values.toList()
+    ..sort((a, b) {
+      final nameCompare = a.purchasePartyDisplayName.compareTo(
+        b.purchasePartyDisplayName,
+      );
+      if (nameCompare != 0) return nameCompare;
+      return a.sectionCode.compareTo(b.sectionCode);
+    });
+
+  return builtRows;
+}
+
+String? _normalizeToKnownTdsPartyForIsolate(
+  List<String> uniqueTdsParties,
+  String? mappedName,
+) {
+  if (mappedName == null || mappedName.trim().isEmpty) return null;
+
+  final trimmed = mappedName.trim();
+  if (uniqueTdsParties.contains(trimmed)) {
+    return trimmed;
+  }
+
+  final normalized = normalizeName(trimmed);
+  for (final party in uniqueTdsParties) {
+    if (normalizeName(party) == normalized) {
+      return party;
+    }
+  }
+
+  return null;
+}
+
+bool _hasNeedsActionRowsForSectionInIsolate({
+  required List<SellerMappingRowVm> rows,
+  required Map<String, String> selectedMappings,
+}) {
+  for (final row in rows) {
+    final selectedValue = selectedMappings[row.rowKey];
+    final hasPanIssue =
+        row.hasMissingOrUncertainPan || row.hasNameOrPanConflict;
+    final needsAction =
+        row.is26QUnmatched ||
+        row.requiresDangerousReview ||
+        row.hasReconciliationMismatch ||
+        hasPanIssue ||
+        ((row.isAboveThreshold || row.hasApplicableTdsImpact) &&
+            (selectedValue == null || selectedValue.trim().isEmpty));
+    if (needsAction) {
+      return true;
+    }
+  }
+  return false;
+}
+
+Map<String, dynamic> _serializeSellerMappingForIsolate(SellerMapping mapping) {
+  return {
+    'id': mapping.id,
+    'buyer_name': mapping.buyerName,
+    'buyer_pan': mapping.buyerPan,
+    'alias_name': mapping.aliasName,
+    'section_code': mapping.sectionCode,
+    'mapped_pan': mapping.mappedPan,
+    'mapped_name': mapping.mappedName,
+  };
+}
+
+SellerMapping _deserializeSellerMappingForIsolate(Map<String, dynamic> row) {
+  return SellerMapping.fromMap(row);
+}
+
+Map<String, dynamic> _serializeScreenRowForIsolate(
+  SellerMappingScreenRowData row,
+) {
+  return {
+    'purchasePartyDisplayName': row.purchasePartyDisplayName,
+    'normalizedAlias': row.normalizedAlias,
+    'sectionCode': row.sectionCode,
+    'purchasePan': row.purchasePan,
+    'purchaseGstNo': row.purchaseGstNo,
+    'resolvedSuggestion': row.resolvedSuggestion == null
+        ? null
+        : {
+            'mappedName': row.resolvedSuggestion!.mappedName,
+            'mappedPan': row.resolvedSuggestion!.mappedPan,
+            'source': row.resolvedSuggestion!.source,
+            'helperText': row.resolvedSuggestion!.helperText,
+          },
+    'isReadOnly': row.isReadOnly,
+    'isAboveThreshold': row.isAboveThreshold,
+    'hasReconciliationMismatch': row.hasReconciliationMismatch,
+    'hasNameOrPanConflict': row.hasNameOrPanConflict,
+    'hasApplicableTdsImpact': row.hasApplicableTdsImpact,
+    'is26QUnmatched': row.is26QUnmatched,
+    'hasMissingOrUncertainPan': row.hasMissingOrUncertainPan,
+    'preflightReasonCode': row.preflightReasonCode,
+    'preflightReasonLabel': row.preflightReasonLabel,
+    'preflightReasonDetail': row.preflightReasonDetail,
+    'requiresDangerousReview': row.requiresDangerousReview,
+    'isPurchaseOnly': row.isPurchaseOnly,
+  };
+}
+
+SellerMappingScreenRowData _deserializeScreenRowForIsolate(
+  Map<String, dynamic> row,
+) {
+  final suggestion = row['resolvedSuggestion'] as Map?;
+  return SellerMappingScreenRowData(
+    purchasePartyDisplayName: row['purchasePartyDisplayName'] as String? ?? '',
+    normalizedAlias: row['normalizedAlias'] as String? ?? '',
+    sectionCode: row['sectionCode'] as String? ?? '',
+    purchasePan: row['purchasePan'] as String? ?? '',
+    purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
+    resolvedSuggestion: suggestion == null
+        ? null
+        : SellerMappingResolvedSuggestion(
+            mappedName: suggestion['mappedName'] as String? ?? '',
+            mappedPan: suggestion['mappedPan'] as String? ?? '',
+            source: suggestion['source'] as String? ?? '',
+            helperText: suggestion['helperText'] as String? ?? '',
+          ),
+    isReadOnly: row['isReadOnly'] as bool? ?? false,
+    isAboveThreshold: row['isAboveThreshold'] as bool? ?? false,
+    hasReconciliationMismatch:
+        row['hasReconciliationMismatch'] as bool? ?? false,
+    hasNameOrPanConflict: row['hasNameOrPanConflict'] as bool? ?? false,
+    hasApplicableTdsImpact: row['hasApplicableTdsImpact'] as bool? ?? false,
+    is26QUnmatched: row['is26QUnmatched'] as bool? ?? false,
+    hasMissingOrUncertainPan: row['hasMissingOrUncertainPan'] as bool? ?? false,
+    preflightReasonCode: row['preflightReasonCode'] as String? ?? '',
+    preflightReasonLabel: row['preflightReasonLabel'] as String? ?? '',
+    preflightReasonDetail: row['preflightReasonDetail'] as String? ?? '',
+    requiresDangerousReview: row['requiresDangerousReview'] as bool? ?? false,
+    isPurchaseOnly: row['isPurchaseOnly'] as bool? ?? false,
+  );
+}
+
+Map<String, dynamic> _serializeRowVmForIsolate(SellerMappingRowVm row) {
+  return {
+    'purchasePartyDisplayName': row.purchasePartyDisplayName,
+    'normalizedAlias': row.normalizedAlias,
+    'sectionCode': row.sectionCode,
+    'purchasePan': row.purchasePan,
+    'purchaseGstNo': row.purchaseGstNo,
+    'exactMapping': row.exactMapping == null
+        ? null
+        : _serializeSellerMappingForIsolate(row.exactMapping!),
+    'fallbackMapping': row.fallbackMapping == null
+        ? null
+        : _serializeSellerMappingForIsolate(row.fallbackMapping!),
+    'resolvedSuggestion': row.resolvedSuggestion == null
+        ? null
+        : {
+            'mappedName': row.resolvedSuggestion!.mappedName,
+            'mappedPan': row.resolvedSuggestion!.mappedPan,
+            'source': row.resolvedSuggestion!.source,
+            'helperText': row.resolvedSuggestion!.helperText,
+          },
+    'isReadOnly': row.isReadOnly,
+    'isAboveThreshold': row.isAboveThreshold,
+    'hasReconciliationMismatch': row.hasReconciliationMismatch,
+    'hasNameOrPanConflict': row.hasNameOrPanConflict,
+    'hasApplicableTdsImpact': row.hasApplicableTdsImpact,
+    'is26QUnmatched': row.is26QUnmatched,
+    'hasMissingOrUncertainPan': row.hasMissingOrUncertainPan,
+    'preflightReasonCode': row.preflightReasonCode,
+    'preflightReasonLabel': row.preflightReasonLabel,
+    'preflightReasonDetail': row.preflightReasonDetail,
+    'requiresDangerousReview': row.requiresDangerousReview,
+    'isPurchaseOnly': row.isPurchaseOnly,
+  };
+}
+
+SellerMappingRowVm _deserializeRowVmForIsolate(Map<String, dynamic> row) {
+  final exactMapping = row['exactMapping'] as Map?;
+  final fallbackMapping = row['fallbackMapping'] as Map?;
+  final resolvedSuggestion = row['resolvedSuggestion'] as Map?;
+
+  return SellerMappingRowVm(
+    purchasePartyDisplayName: row['purchasePartyDisplayName'] as String? ?? '',
+    normalizedAlias: row['normalizedAlias'] as String? ?? '',
+    sectionCode: row['sectionCode'] as String? ?? '',
+    purchasePan: row['purchasePan'] as String? ?? '',
+    purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
+    exactMapping: exactMapping == null
+        ? null
+        : _deserializeSellerMappingForIsolate(
+            Map<String, dynamic>.from(exactMapping),
+          ),
+    fallbackMapping: fallbackMapping == null
+        ? null
+        : _deserializeSellerMappingForIsolate(
+            Map<String, dynamic>.from(fallbackMapping),
+          ),
+    resolvedSuggestion: resolvedSuggestion == null
+        ? null
+        : SellerMappingResolvedSuggestion(
+            mappedName: resolvedSuggestion['mappedName'] as String? ?? '',
+            mappedPan: resolvedSuggestion['mappedPan'] as String? ?? '',
+            source: resolvedSuggestion['source'] as String? ?? '',
+            helperText: resolvedSuggestion['helperText'] as String? ?? '',
+          ),
+    isReadOnly: row['isReadOnly'] as bool? ?? false,
+    isAboveThreshold: row['isAboveThreshold'] as bool? ?? false,
+    hasReconciliationMismatch:
+        row['hasReconciliationMismatch'] as bool? ?? false,
+    hasNameOrPanConflict: row['hasNameOrPanConflict'] as bool? ?? false,
+    hasApplicableTdsImpact: row['hasApplicableTdsImpact'] as bool? ?? false,
+    is26QUnmatched: row['is26QUnmatched'] as bool? ?? false,
+    hasMissingOrUncertainPan: row['hasMissingOrUncertainPan'] as bool? ?? false,
+    preflightReasonCode: row['preflightReasonCode'] as String? ?? '',
+    preflightReasonLabel: row['preflightReasonLabel'] as String? ?? '',
+    preflightReasonDetail: row['preflightReasonDetail'] as String? ?? '',
+    requiresDangerousReview: row['requiresDangerousReview'] as bool? ?? false,
+    isPurchaseOnly: row['isPurchaseOnly'] as bool? ?? false,
+  );
 }

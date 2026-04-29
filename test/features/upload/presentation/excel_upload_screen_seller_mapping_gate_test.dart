@@ -215,6 +215,109 @@ void main() {
   );
 
   testWidgets(
+    'seller mapping review return clears pending review and enables reconciliation immediately',
+    (tester) async {
+      await _clearMappings('ABCDE1234F');
+
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: ExcelUploadScreen(
+            selectedBuyerId: 'buyer-1',
+            selectedBuyerName: 'Buyer One',
+            selectedBuyerPan: 'ABCDE1234F',
+          ),
+        ),
+      );
+
+      final dynamic state = tester.state(find.byType(ExcelUploadScreen));
+      final ledgerRow = _ledgerRow(partyName: 'Alias Vendor');
+      final ledgerFile = LedgerUploadFile(
+        id: 'file-1',
+        sectionCode: '194C',
+        fileName: 'ledger.xlsx',
+        bytes: const <int>[1, 2, 3],
+        rowCount: 1,
+        uploadedAt: DateTime(2026, 4, 24, 10, 0),
+        parserType: 'genericLedger',
+        rows: [ledgerRow],
+        mappingStatus: UploadMappingStatus.confirmed,
+        wasManuallyMapped: true,
+        columnMapping: const {
+          'date': 'Date',
+          'party_name': 'Particulars',
+          'amount': 'Debit',
+        },
+      );
+
+      state.setState(() {
+        state.tdsRows = [_tdsRow(name: 'Mapped Vendor')];
+        state.tdsUploadFile = Tds26QUploadFile(
+          fileName: '26q.xlsx',
+          bytes: const <int>[1, 2, 3],
+          rowCount: 1,
+          uploadedAt: DateTime(2026, 4, 24, 9, 0),
+          rows: state.tdsRows,
+          mappingStatus: UploadMappingStatus.confirmed,
+          wasManuallyMapped: true,
+          columnMapping: const {
+            'party_name': 'Deductee Name',
+            'pan_number': 'PAN',
+            'section': 'Section',
+            'amount_paid': 'Amount Paid',
+            'tds_amount': 'TDS',
+            'date_month': 'Month',
+          },
+        );
+        state.selectedSections.add('194C');
+        state.sectionFiles['194C'] = [ledgerFile];
+        state.ledgerRowsBySection['194C'] = [ledgerRow];
+      });
+
+      await tester.pumpAndSettle();
+
+      await state.refreshSellerMappingPreflightForTest();
+      await tester.pumpAndSettle();
+
+      expect(state.pendingSellerMappingReviewCountForTest, 1);
+      expect(state.canOpenReconciliation, isFalse);
+      expect(find.text('Needs Review'), findsWidgets);
+      expect(find.text('Checking'), findsNothing);
+
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, 'Review Seller Mappings').first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Review').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use Suggested Match'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save Review'));
+      await tester.pumpAndSettle();
+
+      expect(state.pendingSellerMappingReviewCountForTest, 0);
+      expect(state.isSellerMappingConfirmedForTest, isTrue);
+      expect(state.canOpenReconciliation, isTrue);
+      expect(find.text('Safe'), findsWidgets);
+      expect(find.text('Checking'), findsNothing);
+      expect(find.text('Pending Review'), findsWidgets);
+      expect(find.text('0'), findsWidgets);
+
+      final openReconciliationButton = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Open Reconciliation').last,
+      );
+      expect(openReconciliationButton.onPressed, isNotNull);
+    },
+  );
+
+  testWidgets(
     'Review All Mappings lists uploaded files and confirms safe mappings in one place',
     (tester) async {
       tester.view.physicalSize = const Size(1600, 1200);
@@ -280,20 +383,27 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Review All Mappings').first);
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, 'Review All Mappings').first,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Review All Mappings'), findsWidgets);
       expect(find.text('26q.xlsx'), findsOneWidget);
       expect(find.text('ledger.xlsx'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Confirm All Safe Mappings'));
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Confirm All Safe Mappings'),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(OutlinedButton, 'Back to Upload'));
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(OutlinedButton, 'Review Seller Mappings'), findsWidgets);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Review Seller Mappings'),
+        findsWidgets,
+      );
     },
   );
 
@@ -330,10 +440,7 @@ void main() {
         rows: [ledgerRow],
         mappingStatus: UploadMappingStatus.needsReview,
         wasManuallyMapped: false,
-        columnMapping: const {
-          'date': 'Date',
-          'party_name': 'Particulars',
-        },
+        columnMapping: const {'date': 'Date', 'party_name': 'Particulars'},
       );
 
       state.setState(() {
@@ -362,9 +469,14 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(OutlinedButton, 'Review Seller Mappings'), findsNothing);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Review Seller Mappings'),
+        findsNothing,
+      );
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Review All Mappings').first);
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, 'Review All Mappings').first,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('ledger.xlsx'), findsOneWidget);

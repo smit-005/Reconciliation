@@ -128,6 +128,7 @@ ExcelPreviewData? _buildPreviewData(
             .where((key) => !suggestedMappings.containsKey(key))
             .map((key) => columnLabels[key] ?? key)
             .toList();
+  ExcelService._flushForcedNumericDateAvoidanceSummary('build_preview');
 
   return ExcelPreviewData(
     fileType: fileType.name,
@@ -270,6 +271,9 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
             .where((key) => !suggestedMappings.containsKey(key))
             .map((key) => columnLabels[key] ?? key)
             .toList();
+  ExcelService._flushForcedNumericDateAvoidanceSummary(
+    'build_preview_with_profile',
+  );
 
   return ExcelPreviewData(
     fileType: fileType.name,

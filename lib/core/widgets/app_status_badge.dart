@@ -4,13 +4,7 @@ import '../theme/app_color_scheme.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_spacing.dart';
 
-enum AppStatusBadgeTone {
-  neutral,
-  info,
-  success,
-  warning,
-  danger,
-}
+enum AppStatusBadgeTone { neutral, info, success, warning, danger }
 
 class AppStatusBadge extends StatelessWidget {
   final String label;
@@ -38,27 +32,29 @@ class AppStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: colors.$2.withValues(alpha: 0.24)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14, color: colors.$2),
-            const SizedBox(width: 6),
-          ],
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 148),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colors.$2,
-                    height: 1.05,
-                  ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 148),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: colors.$2),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colors.$2,
+                  height: 1.05,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

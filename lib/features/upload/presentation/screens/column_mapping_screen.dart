@@ -2,8 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
-import 'package:reconciliation_app/core/theme/app_radius.dart';
-import 'package:reconciliation_app/core/theme/app_spacing.dart';
 
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
 import 'package:reconciliation_app/features/upload/models/excel_preview_data.dart';
@@ -154,8 +152,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   bool isValidMapping(bool is26Q, List<String?> mapped) {
     if (_isGenericLedgerFile) {
-      return hasRequiredFields(mapped, genericLedgerRequiredFields) &&
-          (mapped.contains('pan_number') || mapped.contains('gst_no'));
+      return hasRequiredFields(mapped, genericLedgerRequiredFields);
     }
 
     if (is26Q) {
@@ -182,9 +179,6 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       }
       if (!mappedSet.contains('amount')) {
         messages.add('Amount is required');
-      }
-      if (!mappedSet.contains('pan_number') && !mappedSet.contains('gst_no')) {
-        messages.add('PAN or GST No is required');
       }
       final amountColumnKey = _selectedColumnFor('amount');
       final amountColumnLabel = amountColumnKey == null
@@ -419,7 +413,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             _isPurchaseFile
                 ? 'Required: Party Name, Date, Amount, and PAN/GST.'
                 : _isGenericLedgerFile
-                ? 'Required: Date, Party Name, Amount, and PAN/GST. Closing Balance is not allowed.'
+                ? 'Required: Date, Party Name, and Amount. PAN/GST is optional. Closing Balance is not allowed.'
                 : 'Required: Party Name, PAN, Section, Amount Paid, TDS Amount, and Date.',
             style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
           ),
@@ -474,18 +468,23 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       labelStatus = 'Conditional';
       statusColor = AppColorScheme.warning;
     } else if (field.key == 'pan_number' || field.key == 'gst_no') {
-      final hasIdentity =
-          selections.containsValue('pan_number') ||
-          selections.containsValue('gst_no');
-      if (_isTdsFile && field.key == 'pan_number') {
-        labelStatus = 'Missing';
-        statusColor = AppColorScheme.danger;
-      } else if (hasIdentity) {
+      if (_isGenericLedgerFile) {
         labelStatus = 'Optional';
         statusColor = AppColorScheme.textSecondary;
       } else {
-        labelStatus = 'Missing';
-        statusColor = AppColorScheme.danger;
+        final hasIdentity =
+            selections.containsValue('pan_number') ||
+            selections.containsValue('gst_no');
+        if (_isTdsFile && field.key == 'pan_number') {
+          labelStatus = 'Missing';
+          statusColor = AppColorScheme.danger;
+        } else if (hasIdentity) {
+          labelStatus = 'Optional';
+          statusColor = AppColorScheme.textSecondary;
+        } else {
+          labelStatus = 'Missing';
+          statusColor = AppColorScheme.danger;
+        }
       }
     } else if (field.key == 'date' || field.key == 'eom') {
       final hasDate =
