@@ -291,6 +291,32 @@ class ExcelService {
     return _normalizeCellValue(value, canonicalField: canonicalField);
   }
 
+  static Map<String, dynamic> purchaseRowToStagingMap(PurchaseRow row) {
+    return <String, dynamic>{
+      'date': row.date,
+      'bill_no': row.billNo,
+      'party_name': row.partyName,
+      'gst_no': row.gstNo,
+      'pan_number': row.panNumber,
+      'productname': row.productName,
+      'basic_amount': row.basicAmount,
+      'bill_amount': row.billAmount,
+    };
+  }
+
+  static Map<String, dynamic> tds26QRowToStagingMap(Tds26QRow row) {
+    return <String, dynamic>{
+      'date_month': row.month,
+      'financial_year': row.financialYear,
+      'party_name': row.deducteeName,
+      'pan_number': row.panNumber,
+      'amount_paid': row.deductedAmount,
+      'tds_amount': row.tds,
+      'section': row.section,
+      'nature_of_payment': '',
+    };
+  }
+
   static List<Map<String, dynamic>> _serializePurchaseRowsForIsolate(
     List<PurchaseRow> rows,
   ) {

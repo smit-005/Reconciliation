@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:reconciliation_app/data/local/db_helper.dart';
+import 'package:reconciliation_app/data/local/import_staging_repository.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
@@ -42,6 +44,7 @@ class ImportWorkflowResponse<T> {
 
 class PurchaseImportPreparation {
   final List<PurchaseRow> parsedRows;
+  final String? stagingImportId;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
   final String? sheetName;
@@ -53,6 +56,7 @@ class PurchaseImportPreparation {
 
   const PurchaseImportPreparation({
     required this.parsedRows,
+    required this.stagingImportId,
     required this.mappingStatus,
     required this.wasManuallyMapped,
     required this.sheetName,
@@ -90,6 +94,7 @@ class GenericLedgerImportPreparation {
 
 class Tds26QImportPreparation {
   final List<Tds26QRow> parsedRows;
+  final String? stagingImportId;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
   final String? sheetName;
@@ -100,6 +105,7 @@ class Tds26QImportPreparation {
 
   const Tds26QImportPreparation({
     required this.parsedRows,
+    required this.stagingImportId,
     required this.mappingStatus,
     required this.wasManuallyMapped,
     required this.sheetName,
@@ -143,6 +149,8 @@ class Tds26QRemapPreparation {
 }
 
 class ImportUploadFlowService {
+  static final ImportStagingRepository _stagingRepository =
+      ImportStagingRepository();
   static const List<String> supportedUploadExtensions = [
     'xlsx',
     'xls',
@@ -234,10 +242,19 @@ class ImportUploadFlowService {
         debugPrint(
           'UPLOAD FREEZE PERF => step=parse_purchase_with_profile ms=${parseWatch.elapsedMilliseconds} rows=${parsedRows.length}',
         );
+        final stagingImportId = await _stagePurchaseRows(
+          buyerId: buyerId,
+          sourceFileName: fileName,
+          sheetName: inspection.sheetName,
+          headerRowIndex: matchedProfile.headerRowIndex,
+          headersTrusted: matchedProfile.headersTrusted,
+          rows: parsedRows,
+        );
 
         return ImportWorkflowResponse.success(
           PurchaseImportPreparation(
             parsedRows: parsedRows,
+            stagingImportId: stagingImportId,
             mappingStatus: UploadMappingStatus.autoMapped,
             wasManuallyMapped: false,
             sheetName: inspection.sheetName,
@@ -302,10 +319,19 @@ class ImportUploadFlowService {
         debugPrint(
           'UPLOAD FREEZE PERF => step=parse_purchase_after_mapping ms=${parseMappedWatch.elapsedMilliseconds} rows=${parsedRows.length}',
         );
+        final stagingImportId = await _stagePurchaseRows(
+          buyerId: buyerId,
+          sourceFileName: fileName,
+          sheetName: columnMappingResult.sheetName,
+          headerRowIndex: columnMappingResult.headerRowIndex,
+          headersTrusted: columnMappingResult.headersTrusted,
+          rows: parsedRows,
+        );
 
         return ImportWorkflowResponse.success(
           PurchaseImportPreparation(
             parsedRows: parsedRows,
+            stagingImportId: stagingImportId,
             mappingStatus: UploadMappingStatus.confirmed,
             wasManuallyMapped: true,
             sheetName: columnMappingResult.sheetName,
@@ -326,10 +352,19 @@ class ImportUploadFlowService {
 
       final parsedRows =
           purchasePreparation.parsedRows ?? const <PurchaseRow>[];
+      final stagingImportId = await _stagePurchaseRows(
+        buyerId: buyerId,
+        sourceFileName: fileName,
+        sheetName: inspection.sheetName,
+        headerRowIndex: validation.headerRowIndex,
+        headersTrusted: null,
+        rows: parsedRows,
+      );
 
       return ImportWorkflowResponse.success(
         PurchaseImportPreparation(
           parsedRows: parsedRows,
+          stagingImportId: stagingImportId,
           mappingStatus: _initialMappingStatusForValidation(validation),
           wasManuallyMapped: false,
           sheetName: inspection.sheetName,
@@ -584,10 +619,19 @@ class ImportUploadFlowService {
           headersTrusted: columnMappingResult.headersTrusted,
           columnMapping: columnMappingResult.columnMapping,
         );
+        final stagingImportId = await _stage26QRows(
+          sourceFileName: fileName,
+          buyerId: null,
+          sheetName: columnMappingResult.sheetName,
+          headerRowIndex: columnMappingResult.headerRowIndex,
+          headersTrusted: columnMappingResult.headersTrusted,
+          rows: parsedRows,
+        );
 
         return ImportWorkflowResponse.success(
           Tds26QImportPreparation(
             parsedRows: parsedRows,
+            stagingImportId: stagingImportId,
             mappingStatus: UploadMappingStatus.confirmed,
             wasManuallyMapped: true,
             sheetName: columnMappingResult.sheetName,
@@ -609,10 +653,19 @@ class ImportUploadFlowService {
         sessionCache?.bytes ?? Uint8List.fromList(bytes),
         sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
       );
+      final stagingImportId = await _stage26QRows(
+        sourceFileName: fileName,
+        buyerId: null,
+        sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
+        headerRowIndex: effectiveValidation.headerRowIndex,
+        headersTrusted: null,
+        rows: parsedRows,
+      );
 
       return ImportWorkflowResponse.success(
         Tds26QImportPreparation(
           parsedRows: parsedRows,
+          stagingImportId: stagingImportId,
           mappingStatus: _initialMappingStatusForValidation(
             effectiveValidation,
           ),
@@ -795,6 +848,74 @@ String? _preflightUploadFormat(String fileName) {
   }
 
   return null;
+}
+
+String _buildStagingImportId(String prefix) {
+  return '${prefix}_${DateTime.now().microsecondsSinceEpoch}';
+}
+
+Future<String?> _lookupBuyerPanById(String buyerId) async {
+  if (buyerId.trim().isEmpty) return null;
+
+  final db = await DBHelper.database;
+  final rows = await db.query(
+    'buyers',
+    columns: ['pan'],
+    where: 'id = ?',
+    whereArgs: [buyerId],
+    limit: 1,
+  );
+  if (rows.isEmpty) return null;
+  return (rows.first['pan'] ?? '').toString().trim().toUpperCase();
+}
+
+Future<String?> _stagePurchaseRows({
+  required String buyerId,
+  required String sourceFileName,
+  required String? sheetName,
+  required int? headerRowIndex,
+  required bool? headersTrusted,
+  required List<PurchaseRow> rows,
+}) async {
+  if (rows.isEmpty) return null;
+
+  final importId = _buildStagingImportId('purchase');
+  final buyerPan = await _lookupBuyerPanById(buyerId);
+  await ImportUploadFlowService._stagingRepository.stagePurchaseRows(
+    importId: importId,
+    rows: rows,
+    sourceFileName: sourceFileName,
+    buyerId: buyerId,
+    buyerPan: buyerPan,
+    sectionCode: '194Q',
+    sheetName: sheetName,
+    headerRowIndex: headerRowIndex,
+    headersTrusted: headersTrusted,
+  );
+  return importId;
+}
+
+Future<String?> _stage26QRows({
+  required String sourceFileName,
+  required String? buyerId,
+  required String? sheetName,
+  required int? headerRowIndex,
+  required bool? headersTrusted,
+  required List<Tds26QRow> rows,
+}) async {
+  if (rows.isEmpty) return null;
+
+  final importId = _buildStagingImportId('tds26q');
+  await ImportUploadFlowService._stagingRepository.stage26QRows(
+    importId: importId,
+    rows: rows,
+    sourceFileName: sourceFileName,
+    buyerId: buyerId,
+    sheetName: sheetName,
+    headerRowIndex: headerRowIndex,
+    headersTrusted: headersTrusted,
+  );
+  return importId;
 }
 
 String _readFailureMessage({

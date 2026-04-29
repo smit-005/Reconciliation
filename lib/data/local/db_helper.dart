@@ -5,7 +5,8 @@ import '../../core/utils/normalize_utils.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 6;
+  static const int _dbVersion = 7;
+  static String? _dbNameOverrideForTest;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
@@ -15,7 +16,7 @@ class DBHelper {
 
   static Future<Database> _initDb() async {
     final dbPath = await databaseFactory.getDatabasesPath();
-    final path = join(dbPath, _dbName);
+    final path = join(dbPath, _dbNameOverrideForTest ?? _dbName);
 
     return await databaseFactory.openDatabase(
       path,
@@ -27,10 +28,10 @@ class DBHelper {
     );
   }
   static Future<void> _onUpgrade(
-      Database db,
-      int oldVersion,
-      int newVersion,
-      ) async {
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
     if (oldVersion < 2) {
       // Future schema updates here
       // Example:
@@ -61,6 +62,24 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
     if (oldVersion < 6) {
       await _migrateBuyersTable(db);
     }
+    if (oldVersion < 7) {
+      await _createStagingTables(db);
+    }
+  }
+
+  static Future<void> debugResetForTest({String? databaseName}) async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+    _dbNameOverrideForTest = databaseName;
+    if (databaseName == null) {
+      return;
+    }
+
+    final dbPath = await databaseFactory.getDatabasesPath();
+    final path = join(dbPath, databaseName);
+    await databaseFactory.deleteDatabase(path);
   }
 
   static Future<void> _onCreate(Database db, int version) async {
@@ -74,6 +93,7 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
     ''');
     await _createSellerMappingsTable(db);
     await _createImportFormatProfilesTable(db);
+    await _createStagingTables(db);
   }
 
   static Future<void> _createSellerMappingsTable(DatabaseExecutor db) async {
@@ -108,6 +128,70 @@ CREATE TABLE import_format_profiles (
   last_used_at TEXT NOT NULL,
   UNIQUE(buyer_id, file_type, sample_signature)
 )
+''');
+  }
+
+  static Future<void> _createStagingTables(DatabaseExecutor db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS staged_purchase_rows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  import_id TEXT NOT NULL,
+  source_file_name TEXT NOT NULL,
+  buyer_id TEXT,
+  buyer_pan TEXT,
+  section_code TEXT,
+  sheet_name TEXT,
+  header_row_index INTEGER,
+  headers_trusted INTEGER NOT NULL DEFAULT 0,
+  row_number INTEGER NOT NULL,
+  date TEXT,
+  bill_no TEXT,
+  party_name TEXT,
+  gst_no TEXT,
+  pan_number TEXT,
+  productname TEXT,
+  basic_amount REAL NOT NULL DEFAULT 0,
+  bill_amount REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_staged_purchase_import_row
+ON staged_purchase_rows(import_id, row_number)
+''');
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_staged_purchase_created_at
+ON staged_purchase_rows(created_at)
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS staged_26q_rows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  import_id TEXT NOT NULL,
+  source_file_name TEXT NOT NULL,
+  buyer_id TEXT,
+  sheet_name TEXT,
+  header_row_index INTEGER,
+  headers_trusted INTEGER NOT NULL DEFAULT 0,
+  row_number INTEGER NOT NULL,
+  date_month TEXT,
+  financial_year TEXT,
+  party_name TEXT,
+  pan_number TEXT,
+  amount_paid REAL NOT NULL DEFAULT 0,
+  tds_amount REAL NOT NULL DEFAULT 0,
+  section TEXT,
+  nature_of_payment TEXT,
+  created_at TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_staged_26q_import_row
+ON staged_26q_rows(import_id, row_number)
+''');
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_staged_26q_created_at
+ON staged_26q_rows(created_at)
 ''');
   }
 
