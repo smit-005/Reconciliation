@@ -9,6 +9,7 @@ class SellerIdentityObservation {
   final String normalizedName;
   final String originalPan;
   final String normalizedPan;
+  final int observationCount;
 
   const SellerIdentityObservation({
     required this.originalName,
@@ -16,6 +17,7 @@ class SellerIdentityObservation {
     required this.normalizedName,
     required this.originalPan,
     required this.normalizedPan,
+    this.observationCount = 1,
   });
 }
 
@@ -92,6 +94,9 @@ class SellerIdentityResolver {
     for (final item in observations) {
       final normalizedName = normalizeName(item.normalizedName);
       final normalizedPan = normalizePan(item.normalizedPan);
+      final observationCount = item.observationCount < 1
+          ? 1
+          : item.observationCount;
       final displayName = item.mappedName.trim().isNotEmpty
           ? item.mappedName.trim()
           : item.originalName.trim();
@@ -110,7 +115,7 @@ class SellerIdentityResolver {
             .add(normalizedName);
         final observationKey = '$normalizedName|$normalizedPan';
         namePanObservationCounts[observationKey] =
-            (namePanObservationCounts[observationKey] ?? 0) + 1;
+            (namePanObservationCounts[observationKey] ?? 0) + observationCount;
       }
     }
 

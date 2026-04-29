@@ -82,14 +82,36 @@ class SellerMappingPreflightService {
       'mappings=${existingMappings.length}',
     );
 
+    final compactWatch = Stopwatch()..start();
+    final compactedSourceRowsBySection = _compactSourceIdentitiesBySection(
+      sourceRowsBySection,
+    );
+    final rawSourceRowCount = sourceRowsBySection.values.fold<int>(
+      0,
+      (sum, rows) => sum + rows.length,
+    );
+    final compactedSourceCount = compactedSourceRowsBySection.values.fold<int>(
+      0,
+      (sum, rows) => sum + rows.length,
+    );
+    final compression = rawSourceRowCount == 0 || compactedSourceCount == 0
+        ? '1.00x'
+        : '${(rawSourceRowCount / compactedSourceCount).toStringAsFixed(2)}x';
+    debugPrint(
+      'PREFLIGHT COMPACT SOURCE => rawRows=$rawSourceRowCount compacted=$compactedSourceCount compression=$compression',
+    );
+    debugPrint(
+      'PREFLIGHT PERF => step=compact_source_identities ms=${compactWatch.elapsedMilliseconds}',
+    );
+
     final analyzeWatch = Stopwatch()..start();
     final payload = await compute(_analyzeSellerMappingPreflightInIsolate, {
       'buyerPan': buyerPan,
       'tdsRows': tdsRows.map(_serializeTdsRowForIsolate).toList(),
       'sourceRowsBySection': {
-        for (final entry in sourceRowsBySection.entries)
+        for (final entry in compactedSourceRowsBySection.entries)
           entry.key: entry.value
-              .map(_serializeNormalizedRowForIsolate)
+              .map(_serializeCompactSourceIdentityForIsolate)
               .toList(),
       },
       'existingMappings': existingMappings
@@ -98,7 +120,7 @@ class SellerMappingPreflightService {
     });
     debugPrint(
       'PREFLIGHT PERF => step=compute_analyze ms=${analyzeWatch.elapsedMilliseconds} '
-      'tdsRows=${tdsRows.length} sourceRows=${sourceRowsBySection.values.fold<int>(0, (sum, rows) => sum + rows.length)}',
+      'tdsRows=${tdsRows.length} sourceRows=$compactedSourceCount',
     );
     return _deserializePreflightResultForIsolate(
       Map<String, dynamic>.from(payload),
@@ -108,7 +130,7 @@ class SellerMappingPreflightService {
   static SellerMappingPreflightResult _analyzeWithExistingMappings({
     required String buyerPan,
     required List<Tds26QRow> tdsRows,
-    required Map<String, List<NormalizedTransactionRow>> sourceRowsBySection,
+    required Map<String, List<_CompactSourceIdentity>> sourceRowsBySection,
     required List<SellerMapping> existingMappings,
   }) {
     final normalizedBuyerPan = buyerPan.trim().toUpperCase();
@@ -127,20 +149,20 @@ class SellerMappingPreflightService {
         if (normalizeSellerMappingSectionCode(mapping.sectionCode) == 'ALL')
           normalizeName(mapping.aliasName): normalizePan(mapping.mappedPan),
     };
-    final validSourceRowsBySection = <String, List<NormalizedTransactionRow>>{};
+    final validSourceRowsBySection = <String, List<_CompactSourceIdentity>>{};
     var droppedInvalidSellerKeys = 0;
     var keptSellerKeys = 0;
 
     for (final entry in sourceRowsBySection.entries) {
       for (final row in entry.value) {
         if (!_isValidSourceSellerKey(row.partyName)) {
-          droppedInvalidSellerKeys += 1;
+          droppedInvalidSellerKeys += row.observationCount;
           continue;
         }
         validSourceRowsBySection
-            .putIfAbsent(entry.key, () => <NormalizedTransactionRow>[])
+            .putIfAbsent(entry.key, () => <_CompactSourceIdentity>[])
             .add(row);
-        keptSellerKeys += 1;
+        keptSellerKeys += row.observationCount;
       }
     }
     debugPrint(
@@ -156,6 +178,7 @@ class SellerMappingPreflightService {
             normalizedName: row.normalizedName,
             originalPan: row.panNumber,
             normalizedPan: row.normalizedPan,
+            observationCount: row.observationCount,
           ),
         ),
       ),
@@ -711,6 +734,26 @@ class SellerMappingPreflightService {
   }
 }
 
+class _CompactSourceIdentity {
+  final String section;
+  final String partyName;
+  final String normalizedName;
+  final String panNumber;
+  final String normalizedPan;
+  final String gstNo;
+  final int observationCount;
+
+  const _CompactSourceIdentity({
+    required this.section,
+    required this.partyName,
+    required this.normalizedName,
+    required this.panNumber,
+    required this.normalizedPan,
+    required this.gstNo,
+    required this.observationCount,
+  });
+}
+
 class _SourceAliasAccumulator {
   final String alias;
   final String sectionCode;
@@ -1192,51 +1235,83 @@ bool _looksLikeInvoiceOrBillSellerKey(String value) {
       RegExp(r'^\d{5,}$').hasMatch(compact);
 }
 
-Map<String, dynamic> _serializeNormalizedRowForIsolate(
-  NormalizedTransactionRow row,
+Map<String, List<_CompactSourceIdentity>> _compactSourceIdentitiesBySection(
+  Map<String, List<NormalizedTransactionRow>> sourceRowsBySection,
+) {
+  final compacted = <String, List<_CompactSourceIdentity>>{};
+
+  for (final entry in sourceRowsBySection.entries) {
+    final sectionCompacted = <String, _CompactSourceIdentity>{};
+
+    for (final row in entry.value) {
+      final compactSection = normalizeSellerMappingSectionCode(row.section);
+      final compactPartyName = row.partyName.trim();
+      final normalizedName = row.normalizedName.trim().isNotEmpty
+          ? normalizeName(row.normalizedName)
+          : normalizeName(row.partyName);
+      final normalizedPan = row.normalizedPan.trim().isNotEmpty
+          ? normalizePan(row.normalizedPan)
+          : normalizePan(row.panNumber);
+      final compactGst = row.gstNo.trim().toUpperCase();
+      final compactKey =
+          '$compactSection|$compactPartyName|$normalizedName|$normalizedPan|$compactGst';
+
+      final existing = sectionCompacted[compactKey];
+      if (existing == null) {
+        sectionCompacted[compactKey] = _CompactSourceIdentity(
+          section: row.section,
+          partyName: row.partyName,
+          normalizedName: normalizedName,
+          panNumber: row.panNumber,
+          normalizedPan: normalizedPan,
+          gstNo: row.gstNo,
+          observationCount: 1,
+        );
+        continue;
+      }
+
+      sectionCompacted[compactKey] = _CompactSourceIdentity(
+        section: existing.section,
+        partyName: existing.partyName,
+        normalizedName: existing.normalizedName,
+        panNumber: existing.panNumber,
+        normalizedPan: existing.normalizedPan,
+        gstNo: existing.gstNo,
+        observationCount: existing.observationCount + 1,
+      );
+    }
+
+    compacted[entry.key] = sectionCompacted.values.toList();
+  }
+
+  return compacted;
+}
+
+Map<String, dynamic> _serializeCompactSourceIdentityForIsolate(
+  _CompactSourceIdentity row,
 ) {
   return {
-    'sourceType': row.sourceType,
-    'transactionDateRaw': row.transactionDateRaw,
-    'month': row.month,
-    'financialYear': row.financialYear,
-    'partyName': row.partyName,
-    'panNumber': row.panNumber,
-    'gstNo': row.gstNo,
-    'documentNo': row.documentNo,
-    'description': row.description,
-    'amount': row.amount,
-    'taxableAmount': row.taxableAmount,
-    'tdsAmount': row.tdsAmount,
     'section': row.section,
+    'partyName': row.partyName,
     'normalizedName': row.normalizedName,
+    'panNumber': row.panNumber,
     'normalizedPan': row.normalizedPan,
-    'normalizedMonth': row.normalizedMonth,
-    'normalizedSection': row.normalizedSection,
+    'gstNo': row.gstNo,
+    'observationCount': row.observationCount,
   };
 }
 
-NormalizedTransactionRow _deserializeNormalizedRowForIsolate(
+_CompactSourceIdentity _deserializeCompactSourceIdentityForIsolate(
   Map<String, dynamic> row,
 ) {
-  return NormalizedTransactionRow(
-    sourceType: row['sourceType'] as String? ?? '',
-    transactionDateRaw: row['transactionDateRaw'] as String? ?? '',
-    month: row['month'] as String? ?? '',
-    financialYear: row['financialYear'] as String? ?? '',
-    partyName: row['partyName'] as String? ?? '',
-    panNumber: row['panNumber'] as String? ?? '',
-    gstNo: row['gstNo'] as String? ?? '',
-    documentNo: row['documentNo'] as String? ?? '',
-    description: row['description'] as String? ?? '',
-    amount: (row['amount'] as num?)?.toDouble() ?? 0.0,
-    taxableAmount: (row['taxableAmount'] as num?)?.toDouble() ?? 0.0,
-    tdsAmount: (row['tdsAmount'] as num?)?.toDouble() ?? 0.0,
+  return _CompactSourceIdentity(
     section: row['section'] as String? ?? '',
+    partyName: row['partyName'] as String? ?? '',
     normalizedName: row['normalizedName'] as String? ?? '',
+    panNumber: row['panNumber'] as String? ?? '',
     normalizedPan: row['normalizedPan'] as String? ?? '',
-    normalizedMonth: row['normalizedMonth'] as String? ?? '',
-    normalizedSection: row['normalizedSection'] as String? ?? '',
+    gstNo: row['gstNo'] as String? ?? '',
+    observationCount: row['observationCount'] as int? ?? 1,
   );
 }
 
@@ -1400,14 +1475,14 @@ SellerMappingPreflightResult _deserializePreflightResultForIsolate(
 Future<Map<String, dynamic>> _analyzeSellerMappingPreflightInIsolate(
   Map<String, dynamic> payload,
 ) async {
-  final sourceRowsBySection = <String, List<NormalizedTransactionRow>>{};
+  final sourceRowsBySection = <String, List<_CompactSourceIdentity>>{};
   final rawSourceRowsBySection = Map<String, dynamic>.from(
     payload['sourceRowsBySection'] as Map? ?? const {},
   );
   for (final entry in rawSourceRowsBySection.entries) {
     sourceRowsBySection[entry.key] = List<Map<String, dynamic>>.from(
       entry.value as List? ?? const [],
-    ).map(_deserializeNormalizedRowForIsolate).toList();
+    ).map(_deserializeCompactSourceIdentityForIsolate).toList();
   }
 
   final result = SellerMappingPreflightService._analyzeWithExistingMappings(

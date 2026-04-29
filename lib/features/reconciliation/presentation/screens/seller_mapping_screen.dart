@@ -141,6 +141,32 @@ class _SellerMappingDisplayRow {
   });
 }
 
+class _SellerFilterRowState {
+  final String? selectedValue;
+  final String selectedPan;
+  final String status;
+  final AutoMapDecision? autoMapDetail;
+  final String searchHaystack;
+  final bool matchesNeedsAction;
+  final bool matchesAboveThreshold;
+  final bool matchesUnmatched26Q;
+  final bool isDangerousRowExplicitlyResolved;
+  final bool isUnresolvedDangerousPreflightRow;
+
+  const _SellerFilterRowState({
+    required this.selectedValue,
+    required this.selectedPan,
+    required this.status,
+    required this.autoMapDetail,
+    required this.searchHaystack,
+    required this.matchesNeedsAction,
+    required this.matchesAboveThreshold,
+    required this.matchesUnmatched26Q,
+    required this.isDangerousRowExplicitlyResolved,
+    required this.isUnresolvedDangerousPreflightRow,
+  });
+}
+
 class _SellerMappingScreenState extends State<SellerMappingScreen> {
   static const List<String> _sectionTabOrder = <String>[
     '194Q',
@@ -191,6 +217,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   int _visibleRowLimit = _initialVisibleRowLimit;
   List<SellerMappingRowVm>? _cachedFilteredRows;
   Map<SellerMappingListView, int>? _cachedListViewCounts;
+  Map<String, _SellerFilterRowState> _rowStateByKey =
+      <String, _SellerFilterRowState>{};
   final Set<String> _expandedRowKeys = <String>{};
   final Stopwatch _screenOpenStopwatch = Stopwatch()..start();
   bool _isInitializing = true;
@@ -896,6 +924,83 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return !_isDangerousRowExplicitlyResolved(row);
   }
 
+  String _buildSearchHaystack({
+    required SellerMappingRowVm row,
+    required String? selectedValue,
+    required String selectedPan,
+    required String status,
+  }) {
+    return <String>[
+      row.purchasePartyDisplayName,
+      row.normalizedAlias,
+      row.sectionCode,
+      sectionDisplayLabel(row.sectionCode),
+      row.purchasePan,
+      row.purchaseGstNo,
+      selectedValue ?? '',
+      selectedPan,
+      status,
+      row.exactMapping?.mappedName ?? '',
+      row.exactMapping?.mappedPan ?? '',
+      row.fallbackMapping?.mappedName ?? '',
+      row.fallbackMapping?.mappedPan ?? '',
+      row.resolvedSuggestion?.mappedName ?? '',
+      row.resolvedSuggestion?.mappedPan ?? '',
+      row.preflightReasonLabel,
+      row.preflightReasonDetail,
+    ].join(' | ').toUpperCase();
+  }
+
+  _SellerFilterRowState _buildFilterRowState(SellerMappingRowVm row) {
+    final selectedValue = _getSelectedValue(row);
+    final selectedPan = _getPanForSelection(row, selectedValue);
+    final status = _getStatus(row: row, selectedValue: selectedValue);
+    final hasPanIssue =
+        row.hasMissingOrUncertainPan || row.hasNameOrPanConflict;
+    final matchesNeedsAction =
+        row.is26QUnmatched ||
+        row.requiresDangerousReview ||
+        row.hasReconciliationMismatch ||
+        hasPanIssue ||
+        ((row.isAboveThreshold || row.hasApplicableTdsImpact) &&
+            (selectedValue == null || selectedValue.trim().isEmpty));
+
+    return _SellerFilterRowState(
+      selectedValue: selectedValue,
+      selectedPan: selectedPan,
+      status: status,
+      autoMapDetail: autoMapDetails[row.rowKey],
+      searchHaystack: _buildSearchHaystack(
+        row: row,
+        selectedValue: selectedValue,
+        selectedPan: selectedPan,
+        status: status,
+      ),
+      matchesNeedsAction: matchesNeedsAction,
+      matchesAboveThreshold: row.isAboveThreshold,
+      matchesUnmatched26Q: row.is26QUnmatched,
+      isDangerousRowExplicitlyResolved: _isDangerousRowExplicitlyResolved(row),
+      isUnresolvedDangerousPreflightRow:
+          _isUnresolvedDangerousPreflightRow(row),
+    );
+  }
+
+  void _rebuildDerivedRowStateCache() {
+    final nextState = <String, _SellerFilterRowState>{};
+    final seenRowKeys = <String>{};
+
+    for (final rows in _mappingRowsBySectionCache.values) {
+      for (final row in rows) {
+        if (!seenRowKeys.add(row.rowKey)) {
+          continue;
+        }
+        nextState[row.rowKey] = _buildFilterRowState(row);
+      }
+    }
+
+    _rowStateByKey = nextState;
+  }
+
   List<SellerMappingRowVm> _filteredRows() {
     if (_cachedFilteredRows != null) return _cachedFilteredRows!;
 
@@ -904,95 +1009,61 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final activeRows = _rowsForCurrentViewScope();
 
     _cachedFilteredRows = activeRows.where((row) {
-      final selectedValue = _getSelectedValue(row);
-      final selectedPan = _getPanForSelection(row, selectedValue);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      final autoMapDetail = autoMapDetails[row.rowKey];
-
-      if (!_matchesListView(
-        row: row,
-        status: status,
-        selectedValue: selectedValue,
-        autoMapDetail: autoMapDetail,
-        view: _activeListView,
-      )) {
+      final state = _rowStateByKey[row.rowKey];
+      if (state == null) {
         return false;
       }
 
-      final matchesStatus = _statusFilter == 'All' || status == _statusFilter;
+      if (!_matchesListViewFromState(state, _activeListView)) {
+        return false;
+      }
+
+      final matchesStatus =
+          _statusFilter == 'All' || state.status == _statusFilter;
       if (!matchesStatus) return false;
 
       if (query.isEmpty) return true;
 
-      final searchHaystack = <String>[
-        row.purchasePartyDisplayName,
-        row.purchasePan,
-        row.sectionCode,
-        selectedValue ?? '',
-        selectedPan,
-        autoMapDetail?.autoMapReason ?? '',
-        row.fallbackMapping?.mappedName ?? '',
-        row.fallbackMapping?.mappedPan ?? '',
-        row.resolvedSuggestion?.mappedName ?? '',
-        row.resolvedSuggestion?.mappedPan ?? '',
-        row.resolvedSuggestion?.helperText ?? '',
-        row.is26QUnmatched ? '26Q Unmatched' : '',
-        row.isAboveThreshold ? 'Above Threshold' : 'Below Threshold',
-        widget.blockedAliases.contains(row.normalizedAlias)
-            ? 'Blocked Alias'
-            : '',
-      ].join(' ').toUpperCase();
-
-      return searchHaystack.contains(query);
+      return state.searchHaystack.contains(query);
     }).toList();
     stopwatch.stop();
-    debugPrint('SELLER MAP PERF filterMs=${stopwatch.elapsedMilliseconds}');
+    debugPrint(
+      'SELLER FILTER PERF => ms=${stopwatch.elapsedMilliseconds} '
+      'scope=${activeRows.length} result=${_cachedFilteredRows!.length} '
+      'query="${_searchQuery.trim()}" section=$_activeSectionCode '
+      'view=${_activeListView.name} status=$_statusFilter',
+    );
     return _cachedFilteredRows!;
   }
 
-  List<_SellerMappingDisplayRow> _buildDisplayRows(
-    List<SellerMappingRowVm> visibleRows,
-  ) {
-    final stopwatch = Stopwatch()..start();
-    final rows = <_SellerMappingDisplayRow>[];
-    var expandedCount = 0;
-
-    for (var index = 0; index < visibleRows.length; index++) {
-      final row = visibleRows[index];
-      final selectedValue = _getSelectedValue(row);
-      final selectedPan = _getPanForSelection(row, selectedValue);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      final autoMapDetail = autoMapDetails[row.rowKey];
-      final isExpanded = _isRowExpanded(row.rowKey);
-      if (isExpanded) {
-        expandedCount += 1;
-      }
-
-      rows.add(
-        _SellerMappingDisplayRow(
-          row: row,
-          selectedValue: selectedValue,
-          selectedPan: selectedPan,
-          status: status,
-          autoMapDetail: autoMapDetail,
-          helperMessages: isExpanded
-              ? _helperMessages(
-                  row: row,
-                  status: status,
-                  selectedValue: selectedValue,
-                )
-              : const <String>[],
-          index: index,
-          isLast: index == visibleRows.length - 1,
-          isExpanded: isExpanded,
-        ),
-      );
-    }
-
-    stopwatch.stop();
-    debugPrint('SELLER MAP ROW BUILD ms=${stopwatch.elapsedMilliseconds}');
-    debugPrint('SELLER MAP EXPANDED ROWS count=$expandedCount');
-    return rows;
+  _SellerMappingDisplayRow _buildDisplayRowView({
+    required SellerMappingRowVm row,
+    required int index,
+    required bool isLast,
+  }) {
+    final state = _rowStateByKey[row.rowKey];
+    final selectedValue = state?.selectedValue;
+    final status =
+        state?.status ?? _getStatus(row: row, selectedValue: selectedValue);
+    final isExpanded = _isRowExpanded(row.rowKey);
+    return _SellerMappingDisplayRow(
+      row: row,
+      selectedValue: selectedValue,
+      selectedPan:
+          state?.selectedPan ?? _getPanForSelection(row, selectedValue),
+      status: status,
+      autoMapDetail: state?.autoMapDetail ?? autoMapDetails[row.rowKey],
+      helperMessages: isExpanded
+          ? _helperMessages(
+              row: row,
+              status: status,
+              selectedValue: selectedValue,
+            )
+          : const <String>[],
+      index: index,
+      isLast: isLast,
+      isExpanded: isExpanded,
+    );
   }
 
   void _applyAutoMap() {
@@ -1016,6 +1087,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
 
       autoMapDetails = nextDetails;
+      _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
     });
   }
@@ -1029,6 +1101,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         selectedMappings.remove(row.rowKey);
         autoMapDetails.remove(row.rowKey);
       }
+      _rebuildDerivedRowStateCache();
       _invalidateViewCaches(resetPage: true);
     });
   }
@@ -1039,6 +1112,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       _clearedRowKeys.add(row.rowKey);
       selectedMappings.remove(row.rowKey);
       autoMapDetails.remove(row.rowKey);
+      _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
     });
   }
@@ -1092,6 +1166,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       selectedMappings = readyState.selectedMappings;
       autoMapDetails = <String, AutoMapDecision>{};
       _activeSectionCode = readyState.activeSectionCode;
+      _rebuildDerivedRowStateCache();
       _isInitializing = false;
       _invalidateViewCaches(resetPage: true);
     });
@@ -1279,14 +1354,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     var verifyPan = 0;
 
     for (final row in visibleRows) {
-      final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      if (selectedValue != null && selectedValue.trim().isNotEmpty) {
+      final state = _rowStateByKey[row.rowKey];
+      if (state == null) continue;
+      if (state.selectedValue != null && state.selectedValue!.trim().isNotEmpty) {
         mapped++;
       }
-      if (status == 'Unmapped') unmapped++;
-      if (status == 'PAN Conflict') conflicts++;
-      if (status == 'Mapped (PAN missing)') verifyPan++;
+      if (state.status == 'Unmapped') unmapped++;
+      if (state.status == 'PAN Conflict') conflicts++;
+      if (state.status == 'Mapped (PAN missing)') verifyPan++;
     }
 
     return [
@@ -1569,17 +1644,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   List<SellerMappingRowVm> _filteredRowsForViewModeOnly() {
     return _rowsForCurrentViewScope().where((row) {
-      final selectedValue = _getSelectedValue(row);
-      final status = _getStatus(row: row, selectedValue: selectedValue);
-      final autoMapDetail = autoMapDetails[row.rowKey];
-
-      return _matchesListView(
-        row: row,
-        status: status,
-        selectedValue: selectedValue,
-        autoMapDetail: autoMapDetail,
-        view: _activeListView,
-      );
+      final state = _rowStateByKey[row.rowKey];
+      return state != null && _matchesListViewFromState(state, _activeListView);
     }).toList();
   }
 
@@ -2082,6 +2148,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = normalizedValue;
       }
+      _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
     });
   }
@@ -2114,6 +2181,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       autoMapDetails.remove(row.rowKey);
       _clearedRowKeys.remove(row.rowKey);
       selectedMappings[row.rowKey] = _separateSelectionValue(row);
+      _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
     });
   }
@@ -2545,7 +2613,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     );
   }
 
-  Widget _buildTableSection(List<_SellerMappingDisplayRow> visibleRows) {
+  Widget _buildTableSection(List<SellerMappingRowVm> visibleRows) {
     return Container(
       decoration: BoxDecoration(
         color: SellerMappingTheme.surfaceColor,
@@ -2578,8 +2646,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                               padding: EdgeInsets.zero,
                               itemCount: visibleRows.length,
                               itemBuilder: (context, index) {
+                                final rowView = _buildDisplayRowView(
+                                  row: visibleRows[index],
+                                  index: index,
+                                  isLast: index == visibleRows.length - 1,
+                                );
                                 return _buildTableRow(
-                                  rowView: visibleRows[index],
+                                  rowView: rowView,
                                 );
                               },
                             ),
@@ -2598,14 +2671,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final visibleCount = visibleRows.length;
     final totalCount = _rowsForCurrentViewScope().length;
     final conflictCount = visibleRows.where((row) {
-      final selectedValue = _getSelectedValue(row);
-      return _getStatus(row: row, selectedValue: selectedValue) ==
-          'PAN Conflict';
+      return _rowStateByKey[row.rowKey]?.status == 'PAN Conflict';
     }).length;
     final missingPanCount = visibleRows.where((row) {
-      final selectedValue = _getSelectedValue(row);
-      return _getStatus(row: row, selectedValue: selectedValue) ==
-          'Mapped (PAN missing)';
+      return _rowStateByKey[row.rowKey]?.status == 'Mapped (PAN missing)';
     }).length;
 
     final summaryText = visibleCount == totalCount
@@ -2618,7 +2687,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         ? '$missingPanCount row ${missingPanCount == 1 ? 'has' : 'have'} mapped selections that still need PAN verification.'
         : 'All visible mappings are ready for reconciliation review.';
     final preflightReviewCount = visibleRows.where((row) {
-      return _isUnresolvedDangerousPreflightRow(row);
+      return _rowStateByKey[row.rowKey]?.isUnresolvedDangerousPreflightRow ??
+          false;
     }).length;
 
     final reviewColor = conflictCount > 0
@@ -2713,53 +2783,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     );
   }
 
-  bool _matchesListView({
-    required SellerMappingRowVm row,
-    required String status,
-    required String? selectedValue,
-    required AutoMapDecision? autoMapDetail,
-    required SellerMappingListView view,
-  }) {
-    if (_isPreflightMode) {
-      final needsAction = _isUnresolvedDangerousPreflightRow(row);
-
-      switch (view) {
-        case SellerMappingListView.needsAction:
-          return needsAction;
-        case SellerMappingListView.aboveThreshold:
-          return false;
-        case SellerMappingListView.unmatched26Q:
-          return row.is26QUnmatched;
-        case SellerMappingListView.allSellers:
-          return true;
-      }
-    }
-
-    final isBlockedAlias = widget.blockedAliases.contains(row.normalizedAlias);
-    final wasCleared = _clearedRowKeys.contains(row.rowKey);
-    final isUnmapped = selectedValue == null || selectedValue.trim().isEmpty;
-    final hasPanIssue =
-        status == 'PAN Conflict' ||
-        status == 'Mapped (PAN missing)' ||
-        row.hasMissingOrUncertainPan ||
-        row.hasNameOrPanConflict ||
-        autoMapDetail?.blockedByPanConflict == true ||
-        autoMapDetail?.ambiguous == true;
-    final hasManualMappingIssue = isBlockedAlias || wasCleared;
-    final needsAction =
-        row.is26QUnmatched ||
-        hasManualMappingIssue ||
-        row.hasReconciliationMismatch ||
-        hasPanIssue ||
-        ((row.isAboveThreshold || row.hasApplicableTdsImpact) && isUnmapped);
-
+  bool _matchesListViewFromState(
+    _SellerFilterRowState state,
+    SellerMappingListView view,
+  ) {
     switch (view) {
       case SellerMappingListView.needsAction:
-        return needsAction;
+        return state.matchesNeedsAction;
       case SellerMappingListView.aboveThreshold:
-        return row.isAboveThreshold || row.hasApplicableTdsImpact;
+        return state.matchesAboveThreshold;
       case SellerMappingListView.unmatched26Q:
-        return row.is26QUnmatched;
+        return state.matchesUnmatched26Q;
       case SellerMappingListView.allSellers:
         return true;
     }
@@ -2767,6 +2801,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   Map<SellerMappingListView, int> _listViewCounts() {
     if (_cachedListViewCounts != null) return _cachedListViewCounts!;
+    final stopwatch = Stopwatch()..start();
     final counts = <SellerMappingListView, int>{
       for (final view in SellerMappingListView.values) view: 0,
     };
@@ -2776,21 +2811,18 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           ? _rowsForSection(_allSectionsAuditCode)
           : _rowsForActiveSection();
       for (final row in rowsForView) {
-        final selectedValue = _getSelectedValue(row);
-        final status = _getStatus(row: row, selectedValue: selectedValue);
-        final autoMapDetail = autoMapDetails[row.rowKey];
-        if (_matchesListView(
-          row: row,
-          status: status,
-          selectedValue: selectedValue,
-          autoMapDetail: autoMapDetail,
-          view: view,
-        )) {
+        final state = _rowStateByKey[row.rowKey];
+        if (state != null && _matchesListViewFromState(state, view)) {
           counts[view] = (counts[view] ?? 0) + 1;
         }
       }
     }
+    stopwatch.stop();
     _cachedListViewCounts = counts;
+    debugPrint(
+      'SELLER FILTER PERF => listCountsMs=${stopwatch.elapsedMilliseconds} '
+      'section=$_activeSectionCode view=${_activeListView.name}',
+    );
     return counts;
   }
 
@@ -2805,7 +2837,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final visibleRows = allFiltered.isNotEmpty
         ? allFiltered.sublist(0, visibleCount)
         : <SellerMappingRowVm>[];
-    final pagedRowViews = _buildDisplayRows(visibleRows);
+    debugPrint(
+      'SELLER ROW BUILD PERF => visibleRows=$visibleCount totalFiltered=${allFiltered.length} mode=lazy',
+    );
 
     final stopwatch = Stopwatch()..start();
 
@@ -2821,7 +2855,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               const SizedBox(height: 14),
               _buildTopToolbar(),
               const SizedBox(height: 16),
-              Expanded(child: _buildTableSection(pagedRowViews)),
+              Expanded(child: _buildTableSection(visibleRows)),
               if (visibleCount < allFiltered.length)
                 _buildLoadMore(allFiltered),
             ],

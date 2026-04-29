@@ -110,6 +110,79 @@ void main() {
       expect(find.text('Showing all 150 seller rows.'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'seller mapping screen search filter narrows cached rows without breaking pagination',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final purchaseRows = List<SellerMappingScreenRowData>.generate(130, (
+        index,
+      ) {
+        final sellerNumber = index.toString().padLeft(3, '0');
+        return SellerMappingScreenRowData(
+          purchasePartyDisplayName: 'Seller $sellerNumber',
+          normalizedAlias: 'Seller $sellerNumber',
+          sectionCode: '194C',
+          purchasePan: '',
+          resolvedSuggestion: SellerMappingResolvedSuggestion(
+            mappedName: 'Mapped Seller $sellerNumber',
+            mappedPan: 'ABCDE1234F',
+            source: 'backend_inferred',
+          ),
+          hasApplicableTdsImpact: true,
+          preflightReasonCode: 'unresolved_identity',
+          preflightReasonLabel: 'Unresolved Identity',
+          preflightReasonDetail: 'Needs review',
+          requiresDangerousReview: true,
+        );
+      });
+
+      final tdsPartyPans = <String, List<String>>{
+        for (var index = 0; index < 130; index++)
+          'Mapped Seller ${index.toString().padLeft(3, '0')}': <String>[
+            'ABCDE1234F',
+          ],
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194C',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: purchaseRows,
+              tdsParties: tdsPartyPans.keys.toList(),
+              existingMappings: const <SellerMapping>[],
+              blockedAliases: const <String>{},
+              tdsPartyPans: tdsPartyPans,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Showing 100 of 130 seller rows.'), findsOneWidget);
+
+      await tester.enterText(
+        find.byType(TextField),
+        'Seller 129',
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Showing 1 of 130 seller rows.'), findsOneWidget);
+      expect(find.text('Seller 129'), findsWidgets);
+      expect(find.text('Seller 128'), findsNothing);
+      expect(find.textContaining('Load More'), findsNothing);
+    },
+  );
 }
 
 class _SellerMappingLaunchHarness extends StatelessWidget {

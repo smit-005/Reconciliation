@@ -4,7 +4,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
+import 'package:reconciliation_app/features/reconciliation/models/result/resolved_seller_identity.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
+import 'package:reconciliation_app/features/reconciliation/services/seller_identity_resolver.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_preflight_service.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
 
@@ -296,6 +298,116 @@ void main() {
           ),
           isTrue,
         );
+      },
+    );
+
+    test(
+      'duplicate raw source rows preserve dangerous review parity after compaction',
+      () async {
+        const buyerPan = 'PREFT8888H';
+        await _clearMappings(buyerPan);
+
+        final duplicateResult = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Eight',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(
+              name: 'Dual PAN Vendor',
+              pan: 'ABCDE1234F',
+              section: '194C',
+            ),
+            _tdsRow(
+              name: 'Dual PAN Vendor',
+              pan: 'PQRSX6789L',
+              section: '194C',
+            ),
+          ],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(name: 'Dual PAN Vendor', pan: '', section: '194C'),
+              _sourceRow(name: 'Dual PAN Vendor', pan: '', section: '194C'),
+            ],
+          },
+        );
+
+        final singleResult = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Eight',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(
+              name: 'Dual PAN Vendor',
+              pan: 'ABCDE1234F',
+              section: '194C',
+            ),
+            _tdsRow(
+              name: 'Dual PAN Vendor',
+              pan: 'PQRSX6789L',
+              section: '194C',
+            ),
+          ],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(name: 'Dual PAN Vendor', pan: '', section: '194C'),
+            ],
+          },
+        );
+
+        expect(
+          duplicateResult.pendingReviewCount,
+          singleResult.pendingReviewCount,
+        );
+        expect(
+          duplicateResult.reviewRows
+              .where((row) => row.requiresDangerousReview)
+              .map((row) => row.preflightReasonCode)
+              .toList(),
+          singleResult.reviewRows
+              .where((row) => row.requiresDangerousReview)
+              .map((row) => row.preflightReasonCode)
+              .toList(),
+        );
+      },
+    );
+
+    test(
+      'weighted observations preserve unresolved identity threshold behavior',
+      () {
+        ResolvedSellerIdentity resolveWithCount(int observationCount) {
+          final resolver = SellerIdentityResolver.build(
+            observations: [
+              SellerIdentityObservation(
+                originalName: 'Evidence Vendor',
+                mappedName: 'Evidence Vendor',
+                normalizedName: 'EVIDENCE VENDOR',
+                originalPan: 'AAAAA1111A',
+                normalizedPan: 'AAAAA1111A',
+                observationCount: observationCount,
+              ),
+            ],
+            savedMappings: const <SellerMapping>[],
+            savedAliasToPan: const <String, String>{},
+          );
+
+          return resolver.resolve(
+            buyerPan: 'PREFT9999I',
+            originalName: 'Evidence Vendor',
+            mappedName: 'Evidence Vendor',
+            originalPan: '',
+            sectionCode: '194C',
+          );
+        }
+
+        final weakEvidence = resolveWithCount(1);
+        final strongEvidence = resolveWithCount(2);
+
+        expect(weakEvidence.identityFlags, contains('unresolved_identity'));
+        expect(weakEvidence.resolvedPan, isEmpty);
+
+        expect(
+          strongEvidence.identityFlags,
+          isNot(contains('unresolved_identity')),
+        );
+        expect(strongEvidence.resolvedPan, 'AAAAA1111A');
       },
     );
   });

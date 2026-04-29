@@ -4,6 +4,7 @@ import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_ro
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
+import 'package:reconciliation_app/features/upload/services/auto_mapping_service.dart';
 
 /// Service for preparing seller mapping data independent of reconciliation
 /// This decouples seller mapping initialization from the ReconciliationScreen

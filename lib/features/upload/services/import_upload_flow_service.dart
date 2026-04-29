@@ -160,6 +160,16 @@ class ImportUploadFlowService {
   static const String supportedUploadFilterLabel =
       'Excel Files (*.xlsx;*.xls;*.xlsm;*.csv)';
 
+  static Map<String, String> _canonicalizeValidationMapping(
+    Map<String, String> rawToCanonical,
+  ) {
+    return ImportMappingService.dedupeSourceColumns(
+      ImportMappingService.buildCanonicalMapping(
+        Map<String, String>.from(rawToCanonical),
+      ),
+    );
+  }
+
   static bool shouldAutoOpenColumnMapping({
     required ExcelValidationResult validation,
     required ExcelImportType fileType,
@@ -370,8 +380,8 @@ class ImportUploadFlowService {
           sheetName: inspection.sheetName,
           headerRowIndex: validation.headerRowIndex,
           headersTrusted: null,
-          columnMapping: ImportMappingService.dedupeSourceColumns(
-            Map<String, String>.from(validation.mappedColumns),
+          columnMapping: _canonicalizeValidationMapping(
+            validation.mappedColumns,
           ),
           sampleSignature: signature,
           columnMappingResult: null,
@@ -539,8 +549,8 @@ class ImportUploadFlowService {
           sheetName: validation.detectedSheet,
           headerRowIndex: validation.headerRowIndex,
           headersTrusted: null,
-          columnMapping: ImportMappingService.dedupeSourceColumns(
-            Map<String, String>.from(validation.mappedColumns),
+          columnMapping: _canonicalizeValidationMapping(
+            validation.mappedColumns,
           ),
           sampleSignature: signature,
           columnMappingResult: null,
@@ -673,8 +683,8 @@ class ImportUploadFlowService {
           sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
           headerRowIndex: effectiveValidation.headerRowIndex,
           headersTrusted: null,
-          columnMapping: ImportMappingService.dedupeSourceColumns(
-            Map<String, String>.from(effectiveValidation.mappedColumns),
+          columnMapping: _canonicalizeValidationMapping(
+            effectiveValidation.mappedColumns,
           ),
           columnMappingResult: null,
         ),
