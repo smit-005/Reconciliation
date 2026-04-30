@@ -161,8 +161,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
     return hasRequiredFields(mapped, const ['party_name']) &&
         (mapped.contains('date') || mapped.contains('eom')) &&
-        (mapped.contains('basic_amount') || mapped.contains('bill_amount')) &&
-        (mapped.contains('pan_number') || mapped.contains('gst_no'));
+        (mapped.contains('basic_amount') || mapped.contains('bill_amount'));
   }
 
   List<String> get _requiredValidationMessages {
@@ -212,12 +211,21 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           !mappedSet.contains('bill_amount')) {
         messages.add('Map either Basic Amount or Bill Amount');
       }
-      if (!mappedSet.contains('pan_number') && !mappedSet.contains('gst_no')) {
-        messages.add('PAN or GST No is required');
-      }
     }
 
     return messages;
+  }
+
+  List<String> get _advisoryValidationMessages {
+    if (_isPurchaseFile &&
+        !_mappedFieldKeys.contains('pan_number') &&
+        !_mappedFieldKeys.contains('gst_no')) {
+      return const [
+        'PAN/GST is optional for 194Q purchase files, but recommended for seller identity review.',
+      ];
+    }
+
+    return const [];
   }
 
   String? _selectedColumnFor(String canonicalKey) {
@@ -558,8 +566,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           labelStatus = 'Optional';
           statusColor = AppColorScheme.textSecondary;
         } else {
-          labelStatus = 'Missing';
-          statusColor = AppColorScheme.danger;
+          labelStatus = _isPurchaseFile ? 'Recommended' : 'Missing';
+          statusColor = _isPurchaseFile
+              ? AppColorScheme.warning
+              : AppColorScheme.danger;
         }
       }
     } else if (field.key == 'date' || field.key == 'eom') {
@@ -801,6 +811,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 warnings: [
                   ..._previewData.warnings,
                   ..._requiredValidationMessages,
+                  ..._advisoryValidationMessages,
                   if (_previewData.unmappedRawHeaders.isNotEmpty)
                     '${_previewData.unmappedRawHeaders.length} columns still need review',
                 ],

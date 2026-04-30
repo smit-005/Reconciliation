@@ -122,7 +122,6 @@ class ImportMappingService {
         key: 'bill_no',
         label: 'Bill No',
         description: 'Invoice or voucher number',
-        requiredField: true,
         importantField: true,
       ),
       MappingFieldOption(
@@ -236,12 +235,6 @@ class ImportMappingService {
         requiredField: true,
       ),
       MappingFieldOption(
-        key: 'bill_no',
-        label: 'Bill No',
-        description: 'Required',
-        requiredField: true,
-      ),
-      MappingFieldOption(
         key: 'amount_column',
         label: 'Amount Column',
         description: 'Map Bill Amount or Basic Amount',
@@ -347,20 +340,9 @@ class ImportMappingService {
     }
 
     if (fileType == purchaseFileType &&
-        !canonicalMapping.containsKey('bill_no')) {
-      errors.add('Bill No is required');
-    }
-
-    if (fileType == purchaseFileType &&
         !canonicalMapping.containsKey('bill_amount') &&
         !canonicalMapping.containsKey('basic_amount')) {
       errors.add('Map either Bill Amount or Basic Amount');
-    }
-
-    if (fileType == purchaseFileType &&
-        !canonicalMapping.containsKey('pan_number') &&
-        !canonicalMapping.containsKey('gst_no')) {
-      errors.add('PAN or GST No is required');
     }
 
     if (fileType == tds26qFileType &&

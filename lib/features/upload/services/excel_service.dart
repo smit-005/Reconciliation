@@ -1007,7 +1007,6 @@ class ExcelService {
     final missing = <String>[
       if (!hasPurchaseDate) 'Date / EOM',
       if (!presentHeaders.contains('party_name')) 'Party Name',
-      if (!presentHeaders.contains('bill_no')) 'Bill No',
       if (!hasPurchaseAmount) 'Amount Column',
     ];
 
@@ -1514,7 +1513,6 @@ class ExcelService {
     final missing = <String>[
       if (!hasPurchaseDate) 'Date / EOM',
       if (!presentHeaders.contains('party_name')) 'Party Name',
-      if (!presentHeaders.contains('bill_no')) 'Bill No',
       if (!hasPurchaseAmount) 'Amount Column',
     ];
 

@@ -69,7 +69,9 @@ class BatchMappingReviewService {
       mapping: columnMapping,
     );
     final mappedRequiredCount = requiredFields.keys
-        .where((key) => _isRequiredFieldMapped(fileType, key, normalizedMapping))
+        .where(
+          (key) => _isRequiredFieldMapped(fileType, key, normalizedMapping),
+        )
         .length;
     final issues = _buildIssues(
       fileType: fileType,
@@ -116,7 +118,6 @@ class BatchMappingReviewService {
     return const {
       'date_or_eom': 'Bill Date or EOM',
       'party_name': 'Party Name',
-      'bill_no': 'Bill No',
       'amount_column': 'Bill Amount or Basic Amount',
     };
   }
@@ -135,10 +136,12 @@ class BatchMappingReviewService {
       normalized['tds_amount'] = tdsColumn;
     }
     final deductedAmountColumn = normalized.remove('deducted_amount');
-    if (deductedAmountColumn != null && deductedAmountColumn.trim().isNotEmpty) {
+    if (deductedAmountColumn != null &&
+        deductedAmountColumn.trim().isNotEmpty) {
       normalized[fileType == ImportMappingService.genericLedgerFileType
-          ? 'amount'
-          : 'amount_paid'] = deductedAmountColumn;
+              ? 'amount'
+              : 'amount_paid'] =
+          deductedAmountColumn;
     }
     final productColumn = normalized.remove('productname');
     if (productColumn != null &&
