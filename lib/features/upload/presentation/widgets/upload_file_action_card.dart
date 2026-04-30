@@ -73,10 +73,26 @@ class UploadFileActionCard extends StatelessWidget {
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              is26Q ? Icons.fact_check_rounded : Icons.description_rounded,
-              color: const Color(0xFF2563EB),
-              size: 20,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Opacity(
+                  opacity: isBusy ? 0.30 : 1,
+                  child: Icon(
+                    is26Q
+                        ? Icons.fact_check_rounded
+                        : Icons.description_rounded,
+                    color: const Color(0xFF2563EB),
+                    size: 20,
+                  ),
+                ),
+                if (isBusy)
+                  const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  ),
+              ],
             ),
           ),
           const SizedBox(width: 12),

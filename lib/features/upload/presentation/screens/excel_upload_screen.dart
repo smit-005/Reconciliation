@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/widgets/app_page_scaffold.dart';
+import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
@@ -311,13 +312,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   void _showUploadSnackBar(String message) {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..clearSnackBars()
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(behavior: SnackBarBehavior.fixed, content: Text(message)),
-      );
+    AppRectSnackBar.show(context, message);
   }
 
   Future<PlatformFile?> _pickExcelFile() async {
@@ -579,6 +574,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Future<void> _upload194QFile() async {
     _setSectionLoading('194Q', true);
+    await WidgetsBinding.instance.endOfFrame;
 
     try {
       final pickedFile = await _pickExcelFile();
@@ -608,9 +604,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionLoading['194Q'] = false;
       });
 
-      _showUploadSnackBar(
-        '194Q source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Review Mapping to confirm columns.',
-      );
+      _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       _setSectionLoading('194Q', false);
       _showUploadSnackBar('194Q upload error: $e');
@@ -619,6 +613,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Future<void> _uploadGenericSectionFile(String sectionCode) async {
     _setSectionLoading(sectionCode, true);
+    await WidgetsBinding.instance.endOfFrame;
 
     try {
       final pickedFile = await _pickExcelFile();
@@ -651,9 +646,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionLoading[sectionCode] = false;
       });
 
-      _showUploadSnackBar(
-        '$sectionCode source uploaded: ${uploadFile.rowCount} rows from ${pickedFile.name}. Review Mapping to confirm columns.',
-      );
+      _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       _setSectionLoading(sectionCode, false);
       _showUploadSnackBar('$sectionCode upload error: $e');
@@ -664,6 +657,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     setState(() {
       isLoadingTds = true;
     });
+    await WidgetsBinding.instance.endOfFrame;
 
     try {
       final uploadWatch = Stopwatch()..start();
@@ -757,9 +751,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
       debugPrint('UPLOAD COUNT => 26Q rows=${result.parsedRows.length}');
 
-      _showUploadSnackBar(
-        '26Q uploaded: ${result.parsedRows.length} rows. Review Mapping to confirm columns.',
-      );
+      _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       setState(() => isLoadingTds = false);
       _showUploadSnackBar('26Q upload error: $e');
@@ -1605,7 +1597,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     final mappingStatus = file?.mappingStatus ?? UploadMappingStatus.notMapped;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: _panelDecoration(
         borderColor: const Color(0xFF1D4ED8).withValues(alpha: 0.35),
         backgroundColor: Colors.white,
@@ -1626,8 +1618,35 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Spacer(),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDBEAFE),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.insert_drive_file_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  '26Q Master File',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -1646,15 +1665,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            '26Q Master File',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -1688,22 +1698,47 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'No 26Q file uploaded yet',
-                    style: TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Upload the statutory 26Q workbook to unlock reconciliation.',
-                    style: TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDBEAFE),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.upload_file_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'No 26Q file uploaded yet',
+                              style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 5),
+                            Text(
+                              'Upload the statutory 26Q workbook to unlock reconciliation.',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -1718,7 +1753,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      icon: const Icon(Icons.upload_rounded),
+                      icon: isLoadingTds
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.upload_rounded),
                       label: Text(isLoadingTds ? 'Uploading...' : 'Upload 26Q'),
                     ),
                   ),
@@ -2080,10 +2124,24 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       color: accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(
-                      Icons.folder_open_rounded,
-                      color: accent,
-                      size: 20,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Opacity(
+                          opacity: isLoading ? 0.30 : 1,
+                          child: Icon(
+                            Icons.folder_open_rounded,
+                            color: accent,
+                            size: 20,
+                          ),
+                        ),
+                        if (isLoading)
+                          const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2.2),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 12),
