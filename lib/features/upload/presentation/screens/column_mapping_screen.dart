@@ -35,6 +35,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   ];
 
   late final List<MappingFieldOption> fieldOptions;
+  late ExcelPreviewData _previewData;
   late Map<String, String> selections;
   late final ScrollController _columnsScrollController;
   bool saveProfile = true;
@@ -44,11 +45,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   void initState() {
     super.initState();
     _columnsScrollController = ScrollController();
-    fieldOptions = ImportMappingService.fieldOptionsFor(
-      widget.previewData.fileType,
-    );
+    _previewData = widget.previewData;
+    fieldOptions = ImportMappingService.fieldOptionsFor(_previewData.fileType);
     selections = {
-      for (final entry in widget.previewData.suggestedMappings.entries)
+      for (final entry in _previewData.suggestedMappings.entries)
         entry.key: _normalizeSelectionValue(entry.value),
     };
   }
@@ -100,13 +100,13 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   };
 
   bool get _isPurchaseFile =>
-      widget.previewData.fileType == ImportMappingService.purchaseFileType;
+      _previewData.fileType == ImportMappingService.purchaseFileType;
 
   bool get _isTdsFile =>
-      widget.previewData.fileType == ImportMappingService.tds26qFileType;
+      _previewData.fileType == ImportMappingService.tds26qFileType;
 
   bool get _isGenericLedgerFile =>
-      widget.previewData.fileType == ImportMappingService.genericLedgerFileType;
+      _previewData.fileType == ImportMappingService.genericLedgerFileType;
 
   String _normalizeSelectionValue(String value) {
     switch (value.trim()) {
@@ -183,8 +183,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
       final amountColumnKey = _selectedColumnFor('amount');
       final amountColumnLabel = amountColumnKey == null
           ? ''
-          : (widget.previewData.columnLabels[amountColumnKey] ??
-                amountColumnKey);
+          : (_previewData.columnLabels[amountColumnKey] ?? amountColumnKey);
       final normalizedAmountLabel = amountColumnLabel.trim().toLowerCase();
       if (normalizedAmountLabel.contains('closing balance')) {
         messages.add('Closing Balance cannot be used as Amount');
@@ -251,7 +250,27 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
   void _autoMapBestGuess() {
     setState(() {
       selections = {
-        for (final entry in widget.previewData.suggestedMappings.entries)
+        for (final entry in _previewData.suggestedMappings.entries)
+          entry.key: _normalizeSelectionValue(entry.value),
+      };
+      validationErrors = _requiredValidationMessages;
+    });
+  }
+
+  void _selectHeaderCandidate(int? headerRowIndex) {
+    if (headerRowIndex == null) {
+      return;
+    }
+
+    final candidate = _previewData.headerRowCandidates.firstWhere(
+      (item) => item.headerRowIndex == headerRowIndex,
+      orElse: () => _previewData.headerRowCandidates.first,
+    );
+
+    setState(() {
+      _previewData = _previewData.copyWithHeaderCandidate(candidate);
+      selections = {
+        for (final entry in _previewData.suggestedMappings.entries)
           entry.key: _normalizeSelectionValue(entry.value),
       };
       validationErrors = _requiredValidationMessages;
@@ -271,10 +290,10 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     Navigator.pop(
       context,
       ColumnMappingResult(
-        fileType: widget.previewData.fileType,
-        sheetName: widget.previewData.sheetName,
-        headerRowIndex: widget.previewData.headerRowIndex,
-        headersTrusted: widget.previewData.headersTrusted,
+        fileType: _previewData.fileType,
+        sheetName: _previewData.sheetName,
+        headerRowIndex: _previewData.headerRowIndex,
+        headersTrusted: _previewData.headersTrusted,
         saveProfile: saveProfile,
         rawToCanonicalMapping: Map<String, String>.from(selections),
         columnMapping: _canonicalMapping,
@@ -284,7 +303,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
 
   double get _displayConfidence {
     return math.max(
-      widget.previewData.confidenceScore.clamp(0.0, 1.0),
+      _previewData.confidenceScore.clamp(0.0, 1.0),
       _isMappingValid ? 0.7 : 0.0,
     );
   }
@@ -297,7 +316,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     if (selectedColumn == null) return false;
 
     final suggested =
-        widget.previewData.suggestedMappings[selectedColumn]?.trim() ?? '';
+        _previewData.suggestedMappings[selectedColumn]?.trim() ?? '';
     return _displayConfidence < 0.75 && fieldKey == suggested;
   }
 
@@ -314,41 +333,98 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
     final confidenceColor = _displayConfidence < 0.75
         ? AppColorScheme.warning
         : AppColorScheme.primary;
+    final showHeaderSelector =
+        (_isPurchaseFile || _isGenericLedgerFile) &&
+        _previewData.hasManualHeaderRowOptions;
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: _panelDecoration(),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _buildInfoChip('File', widget.previewData.fileName),
-                _buildInfoChip('Sheet', widget.previewData.sheetName),
-                _buildInfoChip(
-                  'Header',
-                  'Row ${widget.previewData.headerRowIndex + 1}',
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _buildInfoChip('File', _previewData.fileName),
+                    _buildInfoChip('Sheet', _previewData.sheetName),
+                    _buildInfoChip(
+                      'Header',
+                      'Row ${_previewData.headerRowIndex + 1}',
+                    ),
+                    _buildInfoChip(
+                      'Confidence',
+                      '$confidencePercent%',
+                      accentColor: confidenceColor,
+                    ),
+                  ],
                 ),
-                _buildInfoChip(
-                  'Confidence',
-                  '$confidencePercent%',
-                  accentColor: confidenceColor,
+              ),
+              const SizedBox(width: 16),
+              FilledButton.icon(
+                onPressed: _autoMapBestGuess,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColorScheme.primary,
+                  foregroundColor: AppColorScheme.textPrimary,
                 ),
-              ],
-            ),
+                icon: const Icon(Icons.auto_fix_high),
+                label: const Text('Auto Map Best Guess'),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          FilledButton.icon(
-            onPressed: _autoMapBestGuess,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColorScheme.primary,
-              foregroundColor: AppColorScheme.textPrimary,
+          if (showHeaderSelector) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Header Row',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: AppColorScheme.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            icon: const Icon(Icons.auto_fix_high),
-            label: const Text('Auto Map Best Guess'),
-          ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int>(
+              initialValue: _previewData.headerRowIndex,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColorScheme.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                ),
+              ),
+              items: _previewData.headerRowCandidates.map((candidate) {
+                final matchedFields = candidate.matchedFields
+                    .map((field) => _fieldLabels[field] ?? field)
+                    .take(3)
+                    .join(', ');
+                final previewHeaders = candidate.columnLabels.values
+                    .where((value) => value.trim().isNotEmpty)
+                    .take(3)
+                    .join(' | ');
+                final detail = matchedFields.isNotEmpty
+                    ? matchedFields
+                    : previewHeaders;
+                return DropdownMenuItem<int>(
+                  value: candidate.headerRowIndex,
+                  child: Text(
+                    detail.isEmpty
+                        ? 'Row ${candidate.headerRowIndex + 1}'
+                        : 'Row ${candidate.headerRowIndex + 1} - $detail',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: _selectHeaderCandidate,
+            ),
+          ],
         ],
       ),
     );
@@ -642,9 +718,8 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                     style: TextStyle(color: Color(0xFF94A3B8)),
                   ),
                 ),
-                ...widget.previewData.columnKeys.map((colKey) {
-                  final colLabel =
-                      widget.previewData.columnLabels[colKey] ?? colKey;
+                ..._previewData.columnKeys.map((colKey) {
+                  final colLabel = _previewData.columnLabels[colKey] ?? colKey;
                   return DropdownMenuItem<String>(
                     value: colKey,
                     child: Text(colLabel, overflow: TextOverflow.ellipsis),
@@ -679,9 +754,9 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           backgroundColor: AppColorScheme.background,
           elevation: 0,
           title: Text(
-            widget.previewData.fileType == ImportMappingService.purchaseFileType
+            _previewData.fileType == ImportMappingService.purchaseFileType
                 ? 'Purchase Import Mapping'
-                : widget.previewData.fileType ==
+                : _previewData.fileType ==
                       ImportMappingService.genericLedgerFileType
                 ? 'Generic Ledger Import Mapping'
                 : '26Q Import Mapping',
@@ -709,7 +784,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                     const SizedBox(width: 18),
                     Expanded(
                       child: MappingPreviewTable(
-                        previewData: widget.previewData,
+                        previewData: _previewData,
                         selections: selections,
                         fieldLabels: _fieldLabels,
                       ),
@@ -722,12 +797,12 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 mappedCount: selections.values
                     .where((value) => value.trim().isNotEmpty)
                     .length,
-                totalColumns: widget.previewData.columnKeys.length,
+                totalColumns: _previewData.columnKeys.length,
                 warnings: [
-                  ...widget.previewData.warnings,
+                  ..._previewData.warnings,
                   ..._requiredValidationMessages,
-                  if (widget.previewData.unmappedRawHeaders.isNotEmpty)
-                    '${widget.previewData.unmappedRawHeaders.length} columns still need review',
+                  if (_previewData.unmappedRawHeaders.isNotEmpty)
+                    '${_previewData.unmappedRawHeaders.length} columns still need review',
                 ],
                 saveProfile: saveProfile,
                 onSaveProfileChanged: (value) {

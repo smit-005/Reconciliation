@@ -2085,6 +2085,30 @@ class ExcelService {
         continue;
       }
 
+      if (forcedType == ExcelImportType.purchase) {
+        final purchaseCandidates = _collectStructuredHeaderCandidates(
+          table.rows,
+          type: ExcelImportType.purchase,
+          fileLabel: sheetName,
+        );
+        if (purchaseCandidates.isNotEmpty) {
+          final purchaseCandidate = purchaseCandidates.first;
+          final purchaseScore =
+              purchaseCandidate.score +
+              _sheetNameBonus(sheetName, type: ExcelImportType.purchase);
+          if (best == null || purchaseScore > best.score) {
+            best = (
+              sheetName: sheetName,
+              headerRowIndex: purchaseCandidate.headerRowIndex,
+              detectedType: ExcelImportType.purchase,
+              headersTrusted: true,
+              score: purchaseScore,
+            );
+          }
+        }
+        continue;
+      }
+
       for (int i = 0; i < table.rows.length && i < 20; i++) {
         final row = table.rows[i];
 
@@ -2489,6 +2513,226 @@ class ExcelService {
     }
 
     return bestIndex;
+  }
+
+  static List<({int headerRowIndex, int score, List<String> matchedFields})>
+  _collectStructuredHeaderCandidates(
+    List<List<dynamic>> rows, {
+    required ExcelImportType type,
+    required String fileLabel,
+  }) {
+    final candidates =
+        <({int headerRowIndex, int score, List<String> matchedFields})>[];
+
+    for (int i = 0; i < rows.length && i < 30; i++) {
+      final evaluation = _evaluateStructuredHeaderRow(rows[i], type: type);
+      if (evaluation == null) {
+        continue;
+      }
+
+      candidates.add((
+        headerRowIndex: i,
+        score: evaluation.score,
+        matchedFields: evaluation.matchedFields,
+      ));
+    }
+
+    candidates.sort((left, right) {
+      final scoreCompare = right.score.compareTo(left.score);
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+      return left.headerRowIndex.compareTo(right.headerRowIndex);
+    });
+
+    final selected = candidates.isEmpty ? null : candidates.first;
+    debugPrint(
+      'UPLOAD HEADER DETECT => '
+      'file=$fileLabel '
+      'selectedRow=${selected == null ? 0 : selected.headerRowIndex + 1} '
+      'score=${selected?.score ?? 0} '
+      'matchedFields=${selected == null ? '' : selected.matchedFields.join('|')}',
+    );
+
+    return candidates;
+  }
+
+  static ({int score, List<String> matchedFields})?
+  _evaluateStructuredHeaderRow(
+    List<dynamic> row, {
+    required ExcelImportType type,
+  }) {
+    if (type != ExcelImportType.purchase &&
+        type != ExcelImportType.genericLedger) {
+      return null;
+    }
+
+    final normalizedCells = row
+        .map((cell) => _normalizeLooseText(cell?.toString() ?? ''))
+        .where((value) => value.isNotEmpty)
+        .toList();
+    final nonEmptyCount = normalizedCells.length;
+    if (nonEmptyCount < 2) {
+      return null;
+    }
+
+    final mappedHeaders = _buildMappedHeaders(row, forcedType: type);
+    final presentHeaders = mappedHeaders.whereType<String>().toSet();
+    if (presentHeaders.isEmpty) {
+      return null;
+    }
+
+    if (_looksLikeDecorativePreludeRow(
+      normalizedCells,
+      presentHeaders: presentHeaders,
+      type: type,
+    )) {
+      return null;
+    }
+
+    final matchedFields = presentHeaders.toList()..sort();
+    final signalCount = _headerSignalCount(presentHeaders, type: type);
+    var score = _scoreHeaderRow(row, type: type);
+
+    if (type == ExcelImportType.purchase) {
+      if (signalCount >= 4) {
+        score += 20;
+      } else if (signalCount == 3) {
+        score += 8;
+      }
+      if (presentHeaders.contains('date') && presentHeaders.contains('eom')) {
+        score += 10;
+      }
+      if ((presentHeaders.contains('pan_number') ||
+              presentHeaders.contains('gst_no')) &&
+          presentHeaders.contains('party_name')) {
+        score += 6;
+      }
+      if (signalCount < 3 && presentHeaders.length < 4) {
+        return null;
+      }
+      if (score < 55) {
+        return null;
+      }
+    } else {
+      if (signalCount == 3) {
+        score += 18;
+      } else if (signalCount == 2) {
+        score += 6;
+      }
+      if ((presentHeaders.contains('party_name') ||
+              presentHeaders.contains('description')) &&
+          presentHeaders.contains('bill_no')) {
+        score += 4;
+      }
+      if (signalCount < 2 || score < 45) {
+        return null;
+      }
+    }
+
+    if (nonEmptyCount >= 4 && nonEmptyCount <= 14) {
+      score += 8;
+    } else if (nonEmptyCount >= 20) {
+      score -= 6;
+    }
+
+    return (score: score, matchedFields: matchedFields);
+  }
+
+  static int _headerSignalCount(
+    Set<String> presentHeaders, {
+    required ExcelImportType type,
+  }) {
+    if (type == ExcelImportType.purchase) {
+      return [
+        presentHeaders.contains('date') || presentHeaders.contains('eom'),
+        presentHeaders.contains('bill_no'),
+        presentHeaders.contains('party_name'),
+        presentHeaders.contains('bill_amount') ||
+            presentHeaders.contains('basic_amount'),
+        presentHeaders.contains('pan_number') ||
+            presentHeaders.contains('gst_no'),
+      ].where((value) => value).length;
+    }
+
+    return [
+      presentHeaders.contains('date'),
+      presentHeaders.contains('party_name') ||
+          presentHeaders.contains('description'),
+      presentHeaders.contains('amount'),
+      presentHeaders.contains('bill_no'),
+      presentHeaders.contains('pan_number') ||
+          presentHeaders.contains('gst_no'),
+    ].where((value) => value).length;
+  }
+
+  static bool _looksLikeDecorativePreludeRow(
+    List<String> normalizedCells, {
+    required Set<String> presentHeaders,
+    required ExcelImportType type,
+  }) {
+    final joined = normalizedCells.join(' ');
+    final headerKeywordHit = normalizedCells.any(
+      (cell) => _rowContainsKnownHeaderKeyword(cell, type: type),
+    );
+    final looksLikeDateRange = _looksLikeDateRangeText(joined);
+    final looksLikeMetaTitle =
+        joined.contains('report') ||
+        joined.contains('register') ||
+        joined.contains('statement') ||
+        joined.contains('summary');
+    final looksLikeAddress =
+        joined.contains('address') ||
+        joined.contains('road') ||
+        joined.contains('street') ||
+        joined.contains('near ') ||
+        joined.contains('dist ') ||
+        joined.contains('pin ');
+
+    if (presentHeaders.length == 1 &&
+        presentHeaders.contains('party_name') &&
+        normalizedCells.length <= 2) {
+      return true;
+    }
+
+    if (!headerKeywordHit &&
+        normalizedCells.length <= 2 &&
+        (looksLikeDateRange || looksLikeMetaTitle || looksLikeAddress)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool _rowContainsKnownHeaderKeyword(
+    String text, {
+    required ExcelImportType type,
+  }) {
+    final dictionary = type == ExcelImportType.purchase
+        ? _purchaseHeaderDictionary
+        : _genericLedgerHeaderDictionary;
+
+    for (final aliases in dictionary.values) {
+      for (final alias in aliases) {
+        if (_headerSimilarityScore(text, alias) >= 90) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  static bool _looksLikeDateRangeText(String text) {
+    final hasTwoDates =
+        RegExp(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}').allMatches(text).length >= 2;
+    if (hasTwoDates) {
+      return true;
+    }
+
+    return (text.contains('from') && text.contains('to')) ||
+        text.contains('period') ||
+        text.contains('date range');
   }
 
   static double? _tryParseNumericCell(dynamic value) {
@@ -3499,7 +3743,9 @@ class ExcelService {
     if (_isPreferredGenericLedgerAmountHeader(normalizedHeader)) return false;
     if (_isTextHeavyGenericLedgerAmountHeader(normalizedHeader)) return false;
     if (_isDateLikeAmountCandidateHeader(normalizedHeader)) return false;
-    if (_genericLedgerAmountRejectReason(normalizedHeader) != null) return false;
+    if (_genericLedgerAmountRejectReason(normalizedHeader) != null) {
+      return false;
+    }
     if (normalizedHeader.contains('bill') ||
         normalizedHeader.contains('invoice') ||
         normalizedHeader.contains('voucher') ||
@@ -3812,11 +4058,7 @@ class ExcelService {
         reason: rejectReason,
         numericRatio: 0.0,
       );
-      return (
-        selectedColumn: '',
-        numericRatio: 0.0,
-        reason: rejectReason,
-      );
+      return (selectedColumn: '', numericRatio: 0.0, reason: rejectReason);
     }
 
     final dataStartIndex = headersTrusted ? headerRowIndex + 1 : headerRowIndex;
@@ -4611,6 +4853,7 @@ class ExcelService {
       'party name',
       'party_name',
       'party',
+      'particulars',
       'vendor',
       'vendor name',
       'supplier',
@@ -4637,9 +4880,15 @@ class ExcelService {
     ],
     'basic_amount': [
       'basic amount',
+      'taxable amount',
+      'taxable value',
       'product amount',
       'product_amount',
       'item bill amount',
+      'debit',
+      'dr',
+      'debit amount',
+      'dr amount',
     ],
     'bill_amount': [
       'bill amount',
@@ -4649,6 +4898,10 @@ class ExcelService {
       'gross amount',
       'net amount',
       'invoice amount',
+      'debit',
+      'dr',
+      'debit amount',
+      'dr amount',
       'bill amt',
       'total bill amount',
     ],
@@ -4731,6 +4984,7 @@ class ExcelService {
       'party',
       'ledger name',
       'account name',
+      'seller name',
       'vendor name',
       'supplier name',
       'name',
@@ -4784,59 +5038,21 @@ class ExcelService {
     List<List<dynamic>> rows, {
     required String sheetName,
   }) {
-    const strongHeaderScoreThreshold = 120;
-    ({int headerRowIndex, int score, bool headersTrusted})? best;
-
-    for (int i = 0; i < rows.length && i < 30; i++) {
-      final row = rows[i];
-      final mappedHeaders = _buildMappedHeaders(
-        row,
-        forcedType: ExcelImportType.genericLedger,
-      );
-      final presentHeaders = mappedHeaders.whereType<String>().toSet();
-      final matchedHeaders = presentHeaders.toList()..sort();
-      var score = _scoreHeaderRow(row, type: ExcelImportType.genericLedger);
-
-      final hasDate = presentHeaders.contains('date');
-      final hasPartyLike =
-          presentHeaders.contains('party_name') ||
-          presentHeaders.contains('description');
-      final hasAmountLike = presentHeaders.contains('amount');
-      final requiredSignalCount = [
-        hasDate,
-        hasPartyLike,
-        hasAmountLike,
-      ].where((value) => value).length;
-
-      if (requiredSignalCount == 3) {
-        score += 15;
-      } else if (requiredSignalCount == 2) {
-        score += 5;
-      }
-
-      debugPrint(
-        'HEADER DETECT => sheet=$sheetName candidateRow=$i score=$score matchedHeaders=${matchedHeaders.join('|')}',
-      );
-
-      if (requiredSignalCount < 2 || score < 40) {
-        continue;
-      }
-
-      if (best == null || score > best.score) {
-        best = (headerRowIndex: i, score: score, headersTrusted: true);
-      }
-
-      if (score > strongHeaderScoreThreshold) {
-        debugPrint('HEADER EARLY EXIT => row=$i score=$score');
-        break;
-      }
+    final candidates = _collectStructuredHeaderCandidates(
+      rows,
+      type: ExcelImportType.genericLedger,
+      fileLabel: sheetName,
+    );
+    if (candidates.isEmpty) {
+      return null;
     }
 
-    debugPrint(
-      'HEADER DETECT => sheet=$sheetName selectedHeaderRow=${best?.headerRowIndex ?? -1}',
+    final best = candidates.first;
+    return (
+      headerRowIndex: best.headerRowIndex,
+      score: best.score,
+      headersTrusted: true,
     );
-
-    return best;
   }
 }
 
