@@ -1,5 +1,23 @@
 part of 'excel_service.dart';
 
+const int _previewStructuredHeaderScanLimit = 60;
+const int _previewManualHeaderScanLimit = 30;
+const int _previewSampleRowLimit = 8;
+
+List<List<dynamic>> _previewScanRows(
+  List<List<dynamic>> rows, {
+  required int headerRowIndex,
+}) {
+  if (rows.isEmpty) return rows;
+
+  final limit = _previewStructuredHeaderScanLimit;
+  if (rows.length <= limit) return rows;
+
+  final safeHeaderRowIndex = headerRowIndex < 0 ? 0 : headerRowIndex;
+  final end = (safeHeaderRowIndex + limit).clamp(0, rows.length);
+  return rows.sublist(0, end);
+}
+
 ExcelPreviewData? _buildPreviewData(
   List<int> bytes, {
   required ExcelImportType fileType,
@@ -25,9 +43,13 @@ ExcelPreviewData? _buildPreviewData(
 
   final table = decoder.tables[sheetInfo.sheetName];
   if (table == null || table.rows.isEmpty) return null;
+  final previewRows = _previewScanRows(
+    table.rows,
+    headerRowIndex: sheetInfo.headerRowIndex,
+  );
   final structuredCandidates = _supportsManualHeaderRowSelection(fileType)
       ? ExcelService._collectStructuredHeaderCandidates(
-          table.rows,
+          previewRows,
           type: fileType,
           fileLabel: fileName,
         )
@@ -50,7 +72,7 @@ ExcelPreviewData? _buildPreviewData(
   if (primaryCandidate == null) return null;
 
   final headerRowCandidates = _buildManualHeaderRowCandidates(
-    rows: table.rows,
+    rows: previewRows,
     fileType: fileType,
     primaryCandidate: primaryCandidate,
     initialMappedColumns: initialMappedColumns,
@@ -96,9 +118,13 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   if (sheetName.isEmpty) return null;
   final table = decoder.tables[sheetName];
   if (table == null || table.rows.isEmpty) return null;
+  final previewRows = _previewScanRows(
+    table.rows,
+    headerRowIndex: headerRowIndex,
+  );
   final structuredCandidates = _supportsManualHeaderRowSelection(fileType)
       ? ExcelService._collectStructuredHeaderCandidates(
-          table.rows,
+          previewRows,
           type: fileType,
           fileLabel: fileName,
         )
@@ -122,7 +148,7 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   if (primaryCandidate == null) return null;
 
   final headerRowCandidates = _buildManualHeaderRowCandidates(
-    rows: table.rows,
+    rows: previewRows,
     fileType: fileType,
     primaryCandidate: primaryCandidate,
     initialMappedColumns: columnMapping,
@@ -236,7 +262,11 @@ ExcelPreviewHeaderCandidate? _buildPreviewHeaderCandidateFromTable({
   final rawSampleRows = <Map<String, dynamic>>[];
   final sampleRows = <Map<String, String>>[];
 
-  for (int i = dataStartIndex; i < rows.length && sampleRows.length < 8; i++) {
+  for (
+    int i = dataStartIndex;
+    i < rows.length && sampleRows.length < _previewSampleRowLimit;
+    i++
+  ) {
     final row = rows[i];
     final rawSampleRow = <String, dynamic>{};
     final sampleRow = <String, String>{};
@@ -314,7 +344,7 @@ List<ExcelPreviewHeaderCandidate> _buildManualHeaderRowCandidates({
     rowIndexes.add(candidate.headerRowIndex);
   }
 
-  for (int i = 0; i < rows.length && i < 30; i++) {
+  for (int i = 0; i < rows.length && i < _previewManualHeaderScanLimit; i++) {
     if (_looksLikeManualHeaderSelectionRow(rows[i])) {
       rowIndexes.add(i);
     }

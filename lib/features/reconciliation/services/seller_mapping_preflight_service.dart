@@ -224,6 +224,7 @@ class SellerMappingPreflightService {
             displayName: row.partyName.trim(),
             sourcePan: normalizePan(row.panNumber),
             sourceGst: row.gstNo.trim().toUpperCase(),
+            sourceRowCount: row.observationCount,
           ),
         );
         accumulator.add(identity);
@@ -311,6 +312,11 @@ class SellerMappingPreflightService {
           matches.reviewedSeparateSkippedBlockers;
 
       if (matches.rows.isEmpty) {
+        final reviewedExceptionDisposition =
+            savedMappingLookup.reviewedExceptionDisposition(
+              alias: tdsGroup.normalizedName,
+              sectionCode: tdsGroup.sectionCode,
+            );
         rows.add(
           SellerMappingScreenRowData(
             purchasePartyDisplayName: tdsGroup.displayName,
@@ -325,12 +331,29 @@ class SellerMappingPreflightService {
                   '26Q seller has no same-section source alias candidates in preflight review.',
             ),
             isReadOnly: true,
+            sourceRowCount: 0,
+            tdsRowCount: tdsGroup.tdsRowCount,
             is26QUnmatched: true,
-            preflightReasonCode: matches.reasonCode,
-            preflightReasonLabel: matches.reasonLabel,
-            preflightReasonDetail: matches.reasonDetail,
+            preflightReasonCode:
+                reviewedExceptionDisposition == 'timing_difference'
+                ? 'timing_difference'
+                : reviewedExceptionDisposition == 'missing_in_books'
+                ? 'missing_in_books'
+                : matches.reasonCode,
+            preflightReasonLabel:
+                reviewedExceptionDisposition == 'timing_difference'
+                ? 'Timing Difference'
+                : reviewedExceptionDisposition == 'missing_in_books'
+                ? 'Missing in Books'
+                : matches.reasonLabel,
+            preflightReasonDetail:
+                reviewedExceptionDisposition == null
+                ? matches.reasonDetail
+                : 'Reviewed unmatched 26Q seller classification is already saved.',
             requiresDangerousReview:
-                isSectionInUploadedScope && matches.requiresDangerousReview,
+                reviewedExceptionDisposition == null &&
+                isSectionInUploadedScope &&
+                matches.requiresDangerousReview,
           ),
         );
         if (!isSectionInUploadedScope) {
@@ -350,6 +373,8 @@ class SellerMappingPreflightService {
             sectionCode: match.sourceAlias.sectionCode,
             purchasePan: match.sourceAlias.sourcePan,
             purchaseGstNo: match.sourceAlias.sourceGst,
+            sourceRowCount: match.sourceAlias.sourceRowCount,
+            tdsRowCount: tdsGroup.tdsRowCount,
             resolvedSuggestion: SellerMappingResolvedSuggestion(
               mappedName: tdsGroup.displayName,
               mappedPan: tdsGroup.effectivePan,
@@ -382,6 +407,8 @@ class SellerMappingPreflightService {
             sectionCode: sourceGroup.sectionCode,
             purchasePan: sourceGroup.sourcePan,
             purchaseGstNo: sourceGroup.sourceGst,
+            sourceRowCount: sourceGroup.sourceRowCount,
+            tdsRowCount: 0,
             resolvedSuggestion: sourceGroup.suggestedName.isNotEmpty
                 ? SellerMappingResolvedSuggestion(
                     mappedName: sourceGroup.suggestedName,
@@ -757,6 +784,7 @@ class _CompactSourceIdentity {
 class _SourceAliasAccumulator {
   final String alias;
   final String sectionCode;
+  final int sourceRowCount;
   String displayName;
   String sourcePan;
   String sourceGst;
@@ -769,6 +797,7 @@ class _SourceAliasAccumulator {
   _SourceAliasAccumulator({
     required this.alias,
     required this.sectionCode,
+    required this.sourceRowCount,
     required this.displayName,
     required this.sourcePan,
     required this.sourceGst,
@@ -1011,6 +1040,7 @@ class _SourceAliasCandidateIndex {
 class _TdsSellerAccumulator {
   final String normalizedName;
   final String sectionCode;
+  int tdsRowCount = 0;
   String displayName;
   String tdsPan;
   final Set<String> pans = <String>{};
@@ -1025,6 +1055,7 @@ class _TdsSellerAccumulator {
   });
 
   void add(ResolvedSellerIdentity identity) {
+    tdsRowCount += 1;
     identityFlags.addAll(identity.identityFlags);
     final notes = identity.identityNotes.trim();
     if (notes.isNotEmpty) {
@@ -1083,6 +1114,7 @@ class _SavedMappingLookup {
   final Set<String> _savedAliasSectionKeys;
   final Set<String> _savedAliasFallbackKeys;
   final Set<String> _reviewedSeparateAliasSectionKeys;
+  final Map<String, String> _reviewedExceptionAliasSectionKeys;
 
   const _SavedMappingLookup._({
     required Set<String> exactMappingKeys,
@@ -1090,11 +1122,13 @@ class _SavedMappingLookup {
     required Set<String> savedAliasSectionKeys,
     required Set<String> savedAliasFallbackKeys,
     required Set<String> reviewedSeparateAliasSectionKeys,
+    required Map<String, String> reviewedExceptionAliasSectionKeys,
   }) : _exactMappingKeys = exactMappingKeys,
        _fallbackMappingKeys = fallbackMappingKeys,
        _savedAliasSectionKeys = savedAliasSectionKeys,
        _savedAliasFallbackKeys = savedAliasFallbackKeys,
-       _reviewedSeparateAliasSectionKeys = reviewedSeparateAliasSectionKeys;
+       _reviewedSeparateAliasSectionKeys = reviewedSeparateAliasSectionKeys,
+       _reviewedExceptionAliasSectionKeys = reviewedExceptionAliasSectionKeys;
 
   factory _SavedMappingLookup.build(List<SellerMapping> existingMappings) {
     final exactMappingKeys = <String>{};
@@ -1102,6 +1136,7 @@ class _SavedMappingLookup {
     final savedAliasSectionKeys = <String>{};
     final savedAliasFallbackKeys = <String>{};
     final reviewedSeparateAliasSectionKeys = <String>{};
+    final reviewedExceptionAliasSectionKeys = <String, String>{};
 
     for (final mapping in existingMappings) {
       final alias = normalizeName(mapping.aliasName);
@@ -1112,6 +1147,14 @@ class _SavedMappingLookup {
           .trim()
           .toUpperCase()
           .startsWith('__SEPARATE__:');
+      final isTimingDifference = mapping.mappedName
+          .trim()
+          .toUpperCase()
+          .startsWith('__TIMING_DIFFERENCE__:');
+      final isMissingInBooks = mapping.mappedName
+          .trim()
+          .toUpperCase()
+          .startsWith('__MISSING_IN_BOOKS__:');
       final normalizedMappedName = normalizeName(mapping.mappedName);
 
       if (alias.isEmpty || sectionCode.isEmpty) continue;
@@ -1120,6 +1163,10 @@ class _SavedMappingLookup {
       exactMappingKeys.add('$alias|$sectionCode|$normalizedMappedName');
       if (sectionCode != 'ALL' && isReviewedSeparate) {
         reviewedSeparateAliasSectionKeys.add('$alias|$sectionCode');
+      }
+      if (sectionCode != 'ALL' && (isTimingDifference || isMissingInBooks)) {
+        reviewedExceptionAliasSectionKeys['$alias|$sectionCode'] =
+            isTimingDifference ? 'timing_difference' : 'missing_in_books';
       }
 
       if (sectionCode == 'ALL' && !isReviewedSeparate) {
@@ -1134,6 +1181,7 @@ class _SavedMappingLookup {
       savedAliasSectionKeys: savedAliasSectionKeys,
       savedAliasFallbackKeys: savedAliasFallbackKeys,
       reviewedSeparateAliasSectionKeys: reviewedSeparateAliasSectionKeys,
+      reviewedExceptionAliasSectionKeys: reviewedExceptionAliasSectionKeys,
     );
   }
 
@@ -1172,6 +1220,13 @@ class _SavedMappingLookup {
     required String sectionCode,
   }) {
     return _reviewedSeparateAliasSectionKeys.contains('$alias|$sectionCode');
+  }
+
+  String? reviewedExceptionDisposition({
+    required String alias,
+    required String sectionCode,
+  }) {
+    return _reviewedExceptionAliasSectionKeys['$alias|$sectionCode'];
   }
 }
 
@@ -1372,6 +1427,8 @@ Map<String, dynamic> _serializeScreenRowForIsolate(
     'sectionCode': row.sectionCode,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
+    'sourceRowCount': row.sourceRowCount,
+    'tdsRowCount': row.tdsRowCount,
     'resolvedSuggestion': row.resolvedSuggestion == null
         ? null
         : {
@@ -1405,6 +1462,8 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     sectionCode: row['sectionCode'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
+    sourceRowCount: row['sourceRowCount'] as int? ?? 0,
+    tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     resolvedSuggestion: suggestion == null
         ? null
         : SellerMappingResolvedSuggestion(

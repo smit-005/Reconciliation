@@ -122,6 +122,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   // Seller mapping state
   bool _isSellerMappingConfirmed = false;
   bool _isLoadingSellerMapping = false;
+  SellerMappingPreflightResult? _cachedPreflightResult;
+  bool _isSellerPreflightDirty = true;
 
   final Set<String> selectedSections = {'194Q'};
   final Map<String, bool> sectionLoading = {
@@ -315,6 +317,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     AppRectSnackBar.show(context, message);
   }
 
+  void _markSellerPreflightDirty() {
+    _cachedPreflightResult = null;
+    _isSellerPreflightDirty = true;
+    _isSellerMappingConfirmed = false;
+  }
+
   Future<PlatformFile?> _pickExcelFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -359,6 +367,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   void _removeSectionFile(String sectionCode, LedgerUploadFile file) {
     setState(() {
+      _markSellerPreflightDirty();
       sectionFiles[sectionCode] = sectionFiles[sectionCode]!
           .where((item) => item.id != file.id)
           .toList();
@@ -550,6 +559,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final resolvedUpdatedFile = result.updatedFile;
 
       setState(() {
+        _markSellerPreflightDirty();
         sectionFiles[sectionCode] = sectionFiles[sectionCode]!
             .map<LedgerUploadFile>(
               (item) => item.id == file.id ? resolvedUpdatedFile : item,
@@ -599,6 +609,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
+        _markSellerPreflightDirty();
         sectionFiles['194Q'] = [...sectionFiles['194Q']!, uploadFile];
         _rebuildPurchaseState();
         sectionLoading['194Q'] = false;
@@ -639,6 +650,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
+        _markSellerPreflightDirty();
         sectionFiles[sectionCode] = [...sectionFiles[sectionCode]!, uploadFile];
         ledgerRowsBySection[sectionCode] = sectionFiles[sectionCode]!
             .expand((item) => item.rows)
@@ -724,6 +736,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
+        _markSellerPreflightDirty();
         tdsUploadFile = Tds26QUploadFile(
           fileName: pickedFile.name,
           bytes: bytes,
@@ -790,6 +803,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       setState(() {
+        _markSellerPreflightDirty();
         tdsUploadFile = Tds26QUploadFile(
           fileName: file.fileName,
           bytes: file.bytes,
@@ -890,12 +904,24 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     setState(() => _isLoadingSellerMapping = true);
 
     try {
-      final preflightResult = await SellerMappingPreflightService.analyze(
-        buyerName: widget.selectedBuyerName,
-        buyerPan: widget.selectedBuyerPan,
-        tdsRows: tdsRows,
-        sourceRowsBySection: sourceRowsBySection,
-      );
+      final preflightWatch = Stopwatch()..start();
+      final SellerMappingPreflightResult preflightResult;
+      if (!_isSellerPreflightDirty && _cachedPreflightResult != null) {
+        preflightResult = _cachedPreflightResult!;
+        debugPrint('UPLOAD POSTMAP PERF => preflight_cache_hit');
+      } else {
+        preflightResult = await SellerMappingPreflightService.analyze(
+          buyerName: widget.selectedBuyerName,
+          buyerPan: widget.selectedBuyerPan,
+          tdsRows: tdsRows,
+          sourceRowsBySection: sourceRowsBySection,
+        );
+        _cachedPreflightResult = preflightResult;
+        _isSellerPreflightDirty = false;
+        debugPrint(
+          'UPLOAD POSTMAP PERF => preflight_analyze ms=${preflightWatch.elapsedMilliseconds}',
+        );
+      }
 
       if (!mounted) return;
 
@@ -927,6 +953,24 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         ),
       );
 
+      // Phase 2 perf: if SellerMappingScreen already proves review is safe,
+      // skip the expensive full seller preflight refresh.
+      if (result != null &&
+          result.dangerousRemaining == 0 &&
+          result.unreviewedExceptionCount == 0) {
+        debugPrint(
+          'UPLOAD POSTMAP PERF => refresh_preflight_skipped dangerousRemaining=0',
+        );
+
+        setState(() {
+          _isSellerMappingConfirmed = true;
+          _isLoadingSellerMapping = false;
+          _isSellerPreflightDirty = false;
+        });
+
+        _showUploadSnackBar('Seller mapping saved');
+        return;
+      }
       if (result == null) {
         setState(() => _isLoadingSellerMapping = false);
         _showUploadSnackBar('Seller mapping review cancelled');

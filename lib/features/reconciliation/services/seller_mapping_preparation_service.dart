@@ -4,7 +4,6 @@ import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_ro
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
-import 'package:reconciliation_app/features/upload/services/auto_mapping_service.dart';
 
 /// Service for preparing seller mapping data independent of reconciliation
 /// This decouples seller mapping initialization from the ReconciliationScreen
@@ -109,10 +108,18 @@ class SellerMappingPreparationService {
     required List<SellerMapping> existingMappings,
   }) {
     final rowsData = <SellerMappingScreenRowData>[];
-    final seen = <String>{};
+    final sourceCountsByAlias = <String, int>{};
+
+    for (final entry in sourceRowsBySection.entries) {
+      for (final row in entry.value) {
+        final aliasKey = _buildAliasKey(row.partyName, row.section);
+        sourceCountsByAlias[aliasKey] = (sourceCountsByAlias[aliasKey] ?? 0) + 1;
+      }
+    }
 
     for (final section in sourceRowsBySection.keys) {
       final rows = sourceRowsBySection[section] ?? [];
+      final seen = <String>{};
 
       for (final row in rows) {
         final aliasKey = _buildAliasKey(row.partyName, row.section);
@@ -157,6 +164,8 @@ class SellerMappingPreparationService {
             normalizedAlias: normalizedAlias,
             sectionCode: sectionCode,
             purchasePan: normalizePan(row.panNumber),
+            sourceRowCount: sourceCountsByAlias[aliasKey] ?? 0,
+            tdsRowCount: 0,
             resolvedSuggestion: resolvedSuggestion,
             isReadOnly: false,
             isAboveThreshold: false,

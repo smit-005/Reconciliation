@@ -113,17 +113,11 @@ class ExcelService {
   static String _columnScoreCacheKey({
     required List<dynamic> rawHeaderRow,
     required ExcelImportType forcedType,
-    required List<List<dynamic>> sampleRows,
   }) {
     final headerKey = rawHeaderRow
-        .map((cell) => cell?.toString().trim() ?? '')
+        .map((cell) => cell?.toString().trim().toLowerCase() ?? '')
         .join('|');
-    final sampleKey = sampleRows
-        .map(
-          (row) => row.map((cell) => cell?.toString().trim() ?? '').join('^'),
-        )
-        .join('||');
-    return '${forcedType.name}|$headerKey|$sampleKey';
+    return '${forcedType.name}|$headerKey';
   }
 
   static Future<List<ImportFormatProfile>> getBuyerImportProfiles({
@@ -804,23 +798,49 @@ class ExcelService {
     final result = <_ImportedRowCandidate>[];
     final auditRecords = <ImportAuditRecord>[];
 
+    final validHeaderIndexes = <int>[];
+    for (int j = 0; j < mappedHeaders.length; j++) {
+      final header = mappedHeaders[j];
+      if (header != null && header.isNotEmpty) {
+        validHeaderIndexes.add(j);
+      }
+    }
+
     for (int i = dataStartIndex; i < rows.length; i++) {
       final row = rows[i];
       bool isEmptyRow = true;
       final rowMap = <String, dynamic>{};
 
-      for (int j = 0; j < mappedHeaders.length; j++) {
-        final header = mappedHeaders[j];
-        if (header == null || header.isEmpty) continue;
-
+      for (final j in validHeaderIndexes) {
+        final header = mappedHeaders[j]!;
         final value = j < row.length ? row[j] : null;
-        final normalizedValue = _normalizeCellValue(
-          value,
-          canonicalField: header,
-        );
-        final textValue = normalizedValue.toString().trim();
 
-        if (textValue.isNotEmpty) {
+        dynamic normalizedValue;
+
+        // Fast path for blank, numeric, and already-clean text cells. This
+        // avoids running the heavier date/amount normalization for every cell.
+        if (value == null) {
+          normalizedValue = null;
+        } else if (value is num) {
+          normalizedValue = value;
+        } else if (value is String) {
+          final trimmed = value.trim();
+          if (trimmed.isEmpty) {
+            normalizedValue = '';
+          } else {
+            normalizedValue = _normalizeCellValue(
+              trimmed,
+              canonicalField: header,
+            );
+          }
+        } else {
+          normalizedValue = _normalizeCellValue(value, canonicalField: header);
+        }
+
+        // Fast blank check: avoid normalizedValue.toString().trim() on every
+        // imported cell. _normalizeCellValue already returns trimmed strings
+        // for text-like cells and numeric values for amount/date-like cells.
+        if (normalizedValue != null && normalizedValue != '') {
           isEmptyRow = false;
         }
 
@@ -3514,11 +3534,10 @@ class ExcelService {
     final cacheKey = _columnScoreCacheKey(
       rawHeaderRow: rawHeaderRow,
       forcedType: forcedType,
-      sampleRows: sampleRows,
     );
     final cached = _columnScoreCache[cacheKey];
     if (cached != null) {
-      debugPrint(
+      _debugVerbose(
         'COLUMN SCORE CACHE HIT => type=${forcedType.name} columns=${rawHeaderRow.length}',
       );
       return List<String?>.from(cached);
@@ -3561,7 +3580,7 @@ class ExcelService {
     }
 
     stopwatch.stop();
-    debugPrint(
+    _debugVerbose(
       'COLUMN SCORE PERF => columns=${rawHeaderRow.length} rowsSampled=${sampleRows.length} ms=${stopwatch.elapsedMilliseconds}',
     );
 
@@ -3628,7 +3647,7 @@ class ExcelService {
     required String rawHeader,
     required String reason,
   }) {
-    debugPrint(
+    _debugVerbose(
       'AUTO MAP DEBUG => rejectedColumn=$rawHeader for amount reason=$reason',
     );
   }
@@ -3638,7 +3657,7 @@ class ExcelService {
     required String reason,
     required double numericRatio,
   }) {
-    debugPrint(
+    _debugVerbose(
       'AUTO MAP DEBUG => field=amount selectedColumn=$selectedColumn reason=$reason numericRatio=${numericRatio.toStringAsFixed(2)}',
     );
   }
@@ -3648,7 +3667,7 @@ class ExcelService {
     required String column,
     required String reason,
   }) {
-    debugPrint(
+    _debugVerbose(
       'AUTO MAP DOMAIN REJECT => field=$field column=$column reason=$reason',
     );
   }
@@ -3966,7 +3985,7 @@ class ExcelService {
     }
 
     if (bestKey != null) {
-      debugPrint(
+      _debugVerbose(
         'FIELD MAP SCORE field=$bestKey column=$raw score=$bestScore dateLike=$dateLikeCount amountLike=$amountLikeCount',
       );
       if (type == ExcelImportType.genericLedger && bestKey == 'amount') {

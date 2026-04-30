@@ -195,12 +195,8 @@ class _MonthlyBucketKey {
   }
 
   @override
-  int get hashCode => Object.hash(
-    resolvedSellerId,
-    financialYear,
-    section,
-    month,
-  );
+  int get hashCode =>
+      Object.hash(resolvedSellerId, financialYear, section, month);
 }
 
 class _SkippedRowAccumulator {
@@ -224,9 +220,7 @@ class _SkippedRowAccumulator {
     if (sellerKey.isNotEmpty) {
       final sellerImpact = _sellerImpacts.putIfAbsent(
         sellerKey,
-        () => _SkippedSellerImpactAccumulator(
-          sellerName: sellerName.trim(),
-        ),
+        () => _SkippedSellerImpactAccumulator(sellerName: sellerName.trim()),
       );
       sellerImpact.add(reason);
     }
@@ -253,14 +247,10 @@ class _SkippedRowAccumulator {
 
     return SkippedRowSummary(
       total: _total,
-      reasonCounts: {
-        for (final entry in sortedCounts) entry.key: entry.value,
-      },
+      reasonCounts: {for (final entry in sortedCounts) entry.key: entry.value},
       samples: List<SkippedRowSample>.unmodifiable(_samples),
       sellerImpacts: List<SkippedSellerImpact>.unmodifiable(
-        _sellerImpacts.values
-            .map((impact) => impact.build())
-            .toList()
+        _sellerImpacts.values.map((impact) => impact.build()).toList()
           ..sort((a, b) {
             final countCompare = b.total.compareTo(a.total);
             if (countCompare != 0) return countCompare;
@@ -276,9 +266,7 @@ class _SkippedSellerImpactAccumulator {
   final Map<String, int> _reasonCounts = <String, int>{};
   int _total = 0;
 
-  _SkippedSellerImpactAccumulator({
-    required this.sellerName,
-  });
+  _SkippedSellerImpactAccumulator({required this.sellerName});
 
   void add(String reason) {
     _total += 1;
@@ -296,9 +284,7 @@ class _SkippedSellerImpactAccumulator {
     return SkippedSellerImpact(
       sellerName: sellerName,
       total: _total,
-      reasonCounts: {
-        for (final entry in sortedCounts) entry.key: entry.value,
-      },
+      reasonCounts: {for (final entry in sortedCounts) entry.key: entry.value},
     );
   }
 }
@@ -321,6 +307,10 @@ class CalculationService {
     '194J_A',
     '194J_B',
   ];
+  // Phase 3A safe perf patch: keep duplicate leakage diagnostics off by default.
+  // Your current stress test uploads the same source file in multiple sections,
+  // so duplicate-section fingerprints are expected and should not cost runtime.
+  static const bool _enableDuplicateSourceLeakageDebug = false;
 
   static int compareMonthLabels(String a, String b) {
     return compareMonthKeys(a, b);
@@ -343,18 +333,21 @@ class CalculationService {
     final normalizedBuyerPan = normalizePan(buyerPan);
     final normalizedMapping = _normalizeNameMapping(nameMapping ?? {});
     final skippedRows = _SkippedRowAccumulator();
-    final activeSections = (sections ?? supportedSections)
-        .map(_normalizeSupportedSection)
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final activeSections =
+        (sections ?? supportedSections)
+            .map(_normalizeSupportedSection)
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
-    final savedMappings = await SellerMappingService.getAllMappings(normalizedBuyerPan);
+    final savedMappings = await SellerMappingService.getAllMappings(
+      normalizedBuyerPan,
+    );
     final savedAliasToPan = <String, String>{
       for (final mapping in savedMappings)
         if (normalizeSellerMappingSectionCode(mapping.sectionCode) == 'ALL')
-        normalizeName(mapping.aliasName): normalizePan(mapping.mappedPan),
+          normalizeName(mapping.aliasName): normalizePan(mapping.mappedPan),
     };
 
     final observations = <SellerIdentityObservation>[
@@ -362,7 +355,10 @@ class CalculationService {
         (row) => SellerIdentityObservation(
           originalName: row.partyName,
           mappedName: _applyNameMapping(row.partyName, normalizedMapping),
-          normalizedName: _normalizeSellerName(row.partyName, normalizedMapping),
+          normalizedName: _normalizeSellerName(
+            row.partyName,
+            normalizedMapping,
+          ),
           originalPan: row.panNumber,
           normalizedPan: normalizePan(row.panNumber),
         ),
@@ -371,7 +367,10 @@ class CalculationService {
         (row) => SellerIdentityObservation(
           originalName: row.deducteeName,
           mappedName: _applyNameMapping(row.deducteeName, normalizedMapping),
-          normalizedName: _normalizeSellerName(row.deducteeName, normalizedMapping),
+          normalizedName: _normalizeSellerName(
+            row.deducteeName,
+            normalizedMapping,
+          ),
           originalPan: row.panNumber,
           normalizedPan: normalizePan(row.panNumber),
         ),
@@ -445,7 +444,9 @@ class CalculationService {
         'SECTION INPUT ROWS => section=$section sourceRows=$sectionSourceRows tdsRows=$sectionTdsRows',
       );
     }
-    _debugDuplicateSourceSectionLeakage(resolvedPurchases);
+    if (_enableDuplicateSourceLeakageDebug) {
+      _debugDuplicateSourceSectionLeakage(resolvedPurchases);
+    }
     await Future<void>.delayed(Duration.zero);
 
     final aggregationWatch = Stopwatch()..start();
@@ -454,8 +455,7 @@ class CalculationService {
     final allKeys = <_MonthlyBucketKey>{
       ...purchaseBuckets.keys,
       ...tdsBuckets.keys,
-    }.toList()
-      ..sort(_compareMonthlyBucketKeys);
+    }.toList()..sort(_compareMonthlyBucketKeys);
     aggregationWatch.stop();
     debugPrint(
       'RECON ORCH PERF => aggregation ${aggregationWatch.elapsedMilliseconds} ms | '
@@ -469,9 +469,7 @@ class CalculationService {
       final purchase = purchaseBuckets[key];
       final tds = tdsBuckets[key];
 
-      if (!includeAllRows &&
-          purchase == null &&
-          tds == null) {
+      if (!includeAllRows && purchase == null && tds == null) {
         continue;
       }
 
@@ -530,9 +528,7 @@ class CalculationService {
     }
 
     totalWatch.stop();
-    debugPrint(
-      'RECON ORCH PERF => total ${totalWatch.elapsedMilliseconds} ms',
-    );
+    debugPrint('RECON ORCH PERF => total ${totalWatch.elapsedMilliseconds} ms');
 
     return SectionReconciliationResult(
       rows: timedRows,
@@ -651,7 +647,9 @@ class CalculationService {
         ? row.financialYear.trim()
         : financialYearFromMonthKey(month);
     final section = _normalizeSourceSection(row.section, row.normalizedSection);
-    final amount = round2(row.taxableAmount > 0 ? row.taxableAmount : row.amount);
+    final amount = round2(
+      row.taxableAmount > 0 ? row.taxableAmount : row.amount,
+    );
 
     if (month.isEmpty || financialYear.isEmpty) {
       skippedRows.add(
@@ -750,9 +748,8 @@ class CalculationService {
     );
   }
 
-  static Map<_MonthlyBucketKey, _MonthlyPurchaseBucket> _aggregatePurchaseBuckets(
-    List<_ResolvedSourceRow> rows,
-  ) {
+  static Map<_MonthlyBucketKey, _MonthlyPurchaseBucket>
+  _aggregatePurchaseBuckets(List<_ResolvedSourceRow> rows) {
     final groupedBySellerFy = <String, List<_ResolvedSourceRow>>{};
     for (final row in rows) {
       final key =
@@ -768,7 +765,9 @@ class CalculationService {
 
       for (final entry in entries) {
         final normalizedSection = _normalizeSupportedSection(entry.section);
-        final sectionKey = normalizedSection.isNotEmpty ? normalizedSection : entry.section;
+        final sectionKey = normalizedSection.isNotEmpty
+            ? normalizedSection
+            : entry.section;
         final previousOverall = cumulative194Q;
         final previousSection = sectionTotals[sectionKey] ?? 0.0;
         final nextOverall = normalizedSection == '194Q'
@@ -779,10 +778,12 @@ class CalculationService {
         final rule = normalizedSection.isNotEmpty
             ? SectionRuleService.applyRule(
                 section: normalizedSection,
-                cumulativePurchase:
-                    normalizedSection == '194Q' ? nextOverall : nextSection,
-                previousCumulative:
-                    normalizedSection == '194Q' ? previousOverall : previousSection,
+                cumulativePurchase: normalizedSection == '194Q'
+                    ? nextOverall
+                    : nextSection,
+                previousCumulative: normalizedSection == '194Q'
+                    ? previousOverall
+                    : previousSection,
                 currentAmount: entry.amount,
                 sectionCumulative: nextSection,
                 previousSectionCumulative: previousSection,
@@ -807,8 +808,12 @@ class CalculationService {
           applicableAmount: round2(rule.applicableAmount),
           expectedTds: round2(rule.expectedTds),
           tdsRateUsed: rule.rate,
-          cumulativeBefore: normalizedSection == '194Q' ? previousOverall : previousSection,
-          cumulativeAfter: normalizedSection == '194Q' ? nextOverall : nextSection,
+          cumulativeBefore: normalizedSection == '194Q'
+              ? previousOverall
+              : previousSection,
+          cumulativeAfter: normalizedSection == '194Q'
+              ? nextOverall
+              : nextSection,
           thresholdCrossed: normalizedSection == '194Q'
               ? previousOverall < threshold && nextOverall > threshold
               : previousSection < nextSection && rule.applicableAmount > 0,
@@ -817,10 +822,12 @@ class CalculationService {
           applicableAmountReason: _buildApplicableReason(
             section: entry.section,
             amount: entry.amount,
-            previousCumulative:
-                normalizedSection == '194Q' ? previousOverall : previousSection,
-            currentCumulative:
-                normalizedSection == '194Q' ? nextOverall : nextSection,
+            previousCumulative: normalizedSection == '194Q'
+                ? previousOverall
+                : previousSection,
+            currentCumulative: normalizedSection == '194Q'
+                ? nextOverall
+                : nextSection,
             applicableAmount: round2(rule.applicableAmount),
           ),
           expectedTdsReason: _buildExpectedTdsReason(
@@ -927,7 +934,8 @@ class CalculationService {
 
     final remarks = <String>[
       statusAndRemarks.remarks.trim(),
-      if (identity.identityNotes.trim().isNotEmpty) identity.identityNotes.trim(),
+      if (identity.identityNotes.trim().isNotEmpty)
+        identity.identityNotes.trim(),
     ].where((value) => value.isNotEmpty).join(', ');
 
     final finalStatusReason = _buildFinalStatusReason(
@@ -966,7 +974,9 @@ class CalculationService {
         calculationRemark: <String>[
           purchase == null
               ? ''
-              : purchase.expectedReasons.where((value) => value.isNotEmpty).join(', '),
+              : purchase.expectedReasons
+                    .where((value) => value.isNotEmpty)
+                    .join(', '),
         ].where((value) => value.isNotEmpty).join(', '),
         purchasePresent: purchase != null,
         tdsPresent: tds != null,
@@ -974,24 +984,18 @@ class CalculationService {
         monthTdsDifference: computedAmounts.monthTdsDifference,
         closingTimingBalance: 0.0,
         debugInfo: ReconciliationDebugInfo(
-          originalSellerNames: _sortedValues(
-            <String>{
-              ...?purchase?.originalSellerNames,
-              ...?tds?.originalSellerNames,
-            },
-          ),
-          normalizedSellerNames: _sortedValues(
-            <String>{
-              ...?purchase?.normalizedSellerNames,
-              ...?tds?.normalizedSellerNames,
-            },
-          ),
-          originalPans: _sortedValues(
-            <String>{
-              ...?purchase?.originalPans,
-              ...?tds?.originalPans,
-            },
-          ),
+          originalSellerNames: _sortedValues(<String>{
+            ...?purchase?.originalSellerNames,
+            ...?tds?.originalSellerNames,
+          }),
+          normalizedSellerNames: _sortedValues(<String>{
+            ...?purchase?.normalizedSellerNames,
+            ...?tds?.normalizedSellerNames,
+          }),
+          originalPans: _sortedValues(<String>{
+            ...?purchase?.originalPans,
+            ...?tds?.originalPans,
+          }),
           resolvedSellerId: identity.resolvedSellerId,
           resolvedIdentitySource: identity.identitySource,
           section: key.section,
@@ -1001,16 +1005,22 @@ class CalculationService {
           thresholdCrossed: purchase?.thresholdCrossed ?? false,
           applicableAmountReason: purchase == null
               ? 'No purchase row for this seller/FY/section/month bucket.'
-              : purchase.applicableReasons.where((value) => value.isNotEmpty).join(', '),
+              : purchase.applicableReasons
+                    .where((value) => value.isNotEmpty)
+                    .join(', '),
           expectedTdsReason: purchase == null
               ? 'Expected TDS is zero because there is no purchase row in this bucket.'
-              : purchase.expectedReasons.where((value) => value.isNotEmpty).join(', '),
+              : purchase.expectedReasons
+                    .where((value) => value.isNotEmpty)
+                    .join(', '),
           finalStatusReason: finalStatusReason,
           mappingAttempted: identity.mappingAttempted,
           mappingSectionUsed: identity.mappingSectionUsed,
           mappingHit: identity.mappingHit,
-          identityFlags: _sortedValues(identity.identityFlags.toSet()
-            ..addAll(purchase?.identityFlags ?? const <String>{})),
+          identityFlags: _sortedValues(
+            identity.identityFlags.toSet()
+              ..addAll(purchase?.identityFlags ?? const <String>{}),
+          ),
           identityNotes: identity.identityNotes,
         ),
       ),
@@ -1025,8 +1035,9 @@ class CalculationService {
     _PurchaseComputation computation,
   ) {
     bucket.basicAmount = round2(bucket.basicAmount + computation.basicAmount);
-    bucket.applicableAmount =
-        round2(bucket.applicableAmount + computation.applicableAmount);
+    bucket.applicableAmount = round2(
+      bucket.applicableAmount + computation.applicableAmount,
+    );
     bucket.expectedTds = round2(bucket.expectedTds + computation.expectedTds);
     bucket.tdsRateUsed = computation.tdsRateUsed > 0
         ? computation.tdsRateUsed
@@ -1035,14 +1046,17 @@ class CalculationService {
         ? computation.cumulativeBefore
         : bucket.cumulativeBefore;
     bucket.cumulativeAfter = computation.cumulativeAfter;
-    bucket.thresholdCrossed = bucket.thresholdCrossed || computation.thresholdCrossed;
+    bucket.thresholdCrossed =
+        bucket.thresholdCrossed || computation.thresholdCrossed;
     bucket.manualReviewRequired =
         bucket.manualReviewRequired || computation.manualReviewRequired;
     if (bucket.manualReviewReason.trim().isEmpty &&
         computation.manualReviewReason.trim().isNotEmpty) {
       bucket.manualReviewReason = computation.manualReviewReason.trim();
     }
-    bucket.originalSellerNames.add(computation.source.originalSellerName.trim());
+    bucket.originalSellerNames.add(
+      computation.source.originalSellerName.trim(),
+    );
     bucket.normalizedSellerNames.add(computation.source.normalizedSellerName);
     final originalPan = normalizePan(computation.source.originalPan);
     if (originalPan.isNotEmpty) {
@@ -1057,38 +1071,52 @@ class CalculationService {
     bucket.identityFlags.addAll(computation.source.identity.identityFlags);
   }
 
-  static List<ReconciliationRow> _applyTimingBySeller(List<ReconciliationRow> rows) {
+  static List<ReconciliationRow> _applyTimingBySeller(
+    List<ReconciliationRow> rows,
+  ) {
     final grouped = <String, List<ReconciliationRow>>{};
+    final buyerPanCache = <String, String>{};
+
     for (final row in rows) {
-      final key = '${normalizePan(row.buyerPan)}|${row.resolvedSellerId}';
+      final normalizedBuyerPan = buyerPanCache.putIfAbsent(
+        row.buyerPan,
+        () => normalizePan(row.buyerPan),
+      );
+      final key = '$normalizedBuyerPan|${row.resolvedSellerId}';
       grouped.putIfAbsent(key, () => <ReconciliationRow>[]).add(row);
     }
 
     final output = <ReconciliationRow>[];
     final sellerKeys = grouped.keys.toList()..sort();
     for (final sellerKey in sellerKeys) {
-      final timed = TimingService.applyTimingLogic(grouped[sellerKey]!)
-          .map(
-            (row) => row.copyWith(
-              debugInfo: row.debugInfo.copyWith(
-                finalStatusReason: row.debugInfo.finalStatusReason,
-              ),
-            ),
-          )
-          .toList();
-      output.addAll(timed);
+      output.addAll(TimingService.applyTimingLogic(grouped[sellerKey]!));
+    }
+
+    final sellerNameSortCache = <String, String>{};
+    final sectionSortCache = <String, String>{};
+
+    String sellerSortValue(ReconciliationRow row) {
+      return sellerNameSortCache.putIfAbsent(
+        row.resolvedSellerId,
+        () => row.resolvedSellerName.toUpperCase(),
+      );
+    }
+
+    String sectionSortValue(String section) {
+      return sectionSortCache.putIfAbsent(
+        section,
+        () => sortKeyForSection(section),
+      );
     }
 
     output.sort((a, b) {
-      final sellerCompare = a.resolvedSellerName
-          .toUpperCase()
-          .compareTo(b.resolvedSellerName.toUpperCase());
+      final sellerCompare = sellerSortValue(a).compareTo(sellerSortValue(b));
       if (sellerCompare != 0) return sellerCompare;
       final fyCompare = a.financialYear.compareTo(b.financialYear);
       if (fyCompare != 0) return fyCompare;
-      final sectionCompare = sortKeyForSection(a.section).compareTo(
-        sortKeyForSection(b.section),
-      );
+      final sectionCompare = sectionSortValue(
+        a.section,
+      ).compareTo(sectionSortValue(b.section));
       if (sectionCompare != 0) return sectionCompare;
       return compareMonthKeys(a.month, b.month);
     });
@@ -1103,11 +1131,18 @@ class CalculationService {
       grouped.putIfAbsent(row.section, () => <ReconciliationRow>[]).add(row);
     }
 
+    final sellerNameSortCache = <String, String>{};
+
+    String sellerSortValue(ReconciliationRow row) {
+      return sellerNameSortCache.putIfAbsent(
+        row.resolvedSellerId,
+        () => row.resolvedSellerName.toUpperCase(),
+      );
+    }
+
     for (final value in grouped.values) {
       value.sort((a, b) {
-        final sellerCompare = a.resolvedSellerName
-            .toUpperCase()
-            .compareTo(b.resolvedSellerName.toUpperCase());
+        final sellerCompare = sellerSortValue(a).compareTo(sellerSortValue(b));
         if (sellerCompare != 0) return sellerCompare;
         final fyCompare = a.financialYear.compareTo(b.financialYear);
         if (fyCompare != 0) return fyCompare;
@@ -1122,38 +1157,65 @@ class CalculationService {
     required String section,
     required List<ReconciliationRow> rows,
   }) {
-    final mismatchRows = rows
-        .where((row) => row.status.trim().toUpperCase() != 'MATCHED')
-        .length;
-    final applicableButNo26QRows = rows
-        .where(
-          (row) =>
-              row.applicableAmount > 0 &&
-              row.tds26QAmount == 0 &&
-              row.actualTds == 0,
-        )
-        .length;
+    var matchedRows = 0;
+    var mismatchRows = 0;
+    var purchaseOnlyRows = 0;
+    var only26QRows = 0;
+    var applicableButNo26QRows = 0;
+
+    var sourceAmount = 0.0;
+    var applicableAmount = 0.0;
+    var tds26QAmount = 0.0;
+    var expectedTds = 0.0;
+    var actualTds = 0.0;
+    var amountDifference = 0.0;
+    var tdsDifference = 0.0;
+
+    for (final row in rows) {
+      final status = row.status.trim();
+
+      if (status == ReconciliationStatus.matched) {
+        matchedRows += 1;
+      } else {
+        mismatchRows += 1;
+      }
+
+      if (status == ReconciliationStatus.purchaseOnly) {
+        purchaseOnlyRows += 1;
+      }
+      if (status == ReconciliationStatus.onlyIn26Q) {
+        only26QRows += 1;
+      }
+      if (row.applicableAmount > 0 &&
+          row.tds26QAmount == 0 &&
+          row.actualTds == 0) {
+        applicableButNo26QRows += 1;
+      }
+
+      sourceAmount += row.basicAmount;
+      applicableAmount += row.applicableAmount;
+      tds26QAmount += row.tds26QAmount;
+      expectedTds += row.expectedTds;
+      actualTds += row.actualTds;
+      amountDifference += row.amountDifference;
+      tdsDifference += row.tdsDifference;
+    }
 
     return ReconciliationSummary(
       section: section,
       totalRows: rows.length,
-      matchedRows:
-          rows.where((row) => row.status == ReconciliationStatus.matched).length,
+      matchedRows: matchedRows,
       mismatchRows: mismatchRows,
-      purchaseOnlyRows: rows
-          .where((row) => row.status == ReconciliationStatus.purchaseOnly)
-          .length,
-      only26QRows: rows
-          .where((row) => row.status == ReconciliationStatus.onlyIn26Q)
-          .length,
+      purchaseOnlyRows: purchaseOnlyRows,
+      only26QRows: only26QRows,
       applicableButNo26QRows: applicableButNo26QRows,
-      sourceAmount: rows.fold(0.0, (sum, row) => sum + row.basicAmount),
-      applicableAmount: rows.fold(0.0, (sum, row) => sum + row.applicableAmount),
-      tds26QAmount: rows.fold(0.0, (sum, row) => sum + row.tds26QAmount),
-      expectedTds: rows.fold(0.0, (sum, row) => sum + row.expectedTds),
-      actualTds: rows.fold(0.0, (sum, row) => sum + row.actualTds),
-      amountDifference: rows.fold(0.0, (sum, row) => sum + row.amountDifference),
-      tdsDifference: rows.fold(0.0, (sum, row) => sum + row.tdsDifference),
+      sourceAmount: sourceAmount,
+      applicableAmount: applicableAmount,
+      tds26QAmount: tds26QAmount,
+      expectedTds: expectedTds,
+      actualTds: actualTds,
+      amountDifference: amountDifference,
+      tdsDifference: tdsDifference,
     );
   }
 
@@ -1168,7 +1230,9 @@ class CalculationService {
     return normalizeName(_applyNameMapping(name, mapping));
   }
 
-  static Map<String, String> _normalizeNameMapping(Map<String, String> mapping) {
+  static Map<String, String> _normalizeNameMapping(
+    Map<String, String> mapping,
+  ) {
     final normalized = <String, String>{};
     for (final entry in mapping.entries) {
       final key = normalizeName(entry.key);
@@ -1180,7 +1244,10 @@ class CalculationService {
     return normalized;
   }
 
-  static String _normalizeSourceSection(String section, String normalizedSection) {
+  static String _normalizeSourceSection(
+    String section,
+    String normalizedSection,
+  ) {
     final normalized = _normalizeSupportedSection(normalizedSection);
     if (normalized.isNotEmpty) return normalized;
     final rawNormalized = _normalizeSupportedSection(section);
@@ -1209,10 +1276,15 @@ class CalculationService {
   }
 
   static DateTime _resolveChronologyDate(String rawValue, String month) {
-    return tryParseDate(rawValue) ?? monthKeyToDate(month) ?? DateTime(1970, 1, 1);
+    return tryParseDate(rawValue) ??
+        monthKeyToDate(month) ??
+        DateTime(1970, 1, 1);
   }
 
-  static int _compareResolvedSourceRows(_ResolvedSourceRow a, _ResolvedSourceRow b) {
+  static int _compareResolvedSourceRows(
+    _ResolvedSourceRow a,
+    _ResolvedSourceRow b,
+  ) {
     final dateCompare = a.chronologyDate.compareTo(b.chronologyDate);
     if (dateCompare != 0) return dateCompare;
     final monthCompare = compareMonthKeys(a.month, b.month);
@@ -1224,14 +1296,17 @@ class CalculationService {
     );
   }
 
-  static int _compareMonthlyBucketKeys(_MonthlyBucketKey a, _MonthlyBucketKey b) {
+  static int _compareMonthlyBucketKeys(
+    _MonthlyBucketKey a,
+    _MonthlyBucketKey b,
+  ) {
     final sellerCompare = a.resolvedSellerId.compareTo(b.resolvedSellerId);
     if (sellerCompare != 0) return sellerCompare;
     final fyCompare = a.financialYear.compareTo(b.financialYear);
     if (fyCompare != 0) return fyCompare;
-    final sectionCompare = sortKeyForSection(a.section).compareTo(
-      sortKeyForSection(b.section),
-    );
+    final sectionCompare = sortKeyForSection(
+      a.section,
+    ).compareTo(sortKeyForSection(b.section));
     if (sectionCompare != 0) return sectionCompare;
     return compareMonthKeys(a.month, b.month);
   }
@@ -1374,7 +1449,8 @@ class CalculationService {
   }
 
   static List<String> _sortedValues(Set<String> values) {
-    final list = values.where((value) => value.trim().isNotEmpty).toList()..sort();
+    final list = values.where((value) => value.trim().isNotEmpty).toList()
+      ..sort();
     return list;
   }
 }
