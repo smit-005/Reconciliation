@@ -39,7 +39,8 @@ class AppSearchAutocompleteField extends StatefulWidget {
       _AppSearchAutocompleteFieldState();
 }
 
-class _AppSearchAutocompleteFieldState extends State<AppSearchAutocompleteField> {
+class _AppSearchAutocompleteFieldState
+    extends State<AppSearchAutocompleteField> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
@@ -101,9 +102,9 @@ class _AppSearchAutocompleteFieldState extends State<AppSearchAutocompleteField>
     final candidates = query.isEmpty
         ? widget.options
         : widget.options.where((option) {
-            return _searchableTerms(option).any(
-              (term) => term.toUpperCase().contains(query),
-            );
+            return _searchableTerms(
+              option,
+            ).any((term) => term.toUpperCase().contains(query));
           });
 
     return candidates.take(widget.maxVisibleOptions);
@@ -230,7 +231,8 @@ class _AppSearchAutocompleteFieldState extends State<AppSearchAutocompleteField>
                                 color: AppColorScheme.textPrimary,
                               ),
                             ),
-                            if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                            if (subtitle != null &&
+                                subtitle.trim().isNotEmpty) ...[
                               const SizedBox(height: 2),
                               Text(
                                 subtitle,

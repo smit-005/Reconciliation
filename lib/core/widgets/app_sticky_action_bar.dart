@@ -28,9 +28,7 @@ class AppStickyActionBar extends StatelessWidget {
         padding: padding,
         decoration: BoxDecoration(
           color: backgroundColor ?? AppColorScheme.surface,
-          border: const Border(
-            top: BorderSide(color: AppColorScheme.border),
-          ),
+          border: const Border(top: BorderSide(color: AppColorScheme.border)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),

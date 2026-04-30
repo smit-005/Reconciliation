@@ -22,9 +22,6 @@ class AppSecondaryButton extends StatelessWidget {
       );
     }
 
-    return OutlinedButton(
-      onPressed: onPressed,
-      child: Text(label),
-    );
+    return OutlinedButton(onPressed: onPressed, child: Text(label));
   }
 }

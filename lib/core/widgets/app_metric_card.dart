@@ -46,8 +46,7 @@ class AppMetricCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
               ),
-              if (icon != null)
-                Icon(icon, size: 18, color: resolvedAccent),
+              if (icon != null) Icon(icon, size: 18, color: resolvedAccent),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -55,16 +54,13 @@ class AppMetricCard extends StatelessWidget {
             value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColorScheme.textPrimary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: AppColorScheme.textPrimary),
           ),
           if (helper != null && helper!.trim().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              helper!,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(helper!, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
       ),

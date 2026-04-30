@@ -38,9 +38,6 @@ class AppPrimaryButton extends StatelessWidget {
       );
     }
 
-    return FilledButton(
-      onPressed: resolvedOnPressed,
-      child: Text(label),
-    );
+    return FilledButton(onPressed: resolvedOnPressed, child: Text(label));
   }
 }

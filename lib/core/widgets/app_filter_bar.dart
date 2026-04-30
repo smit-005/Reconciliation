@@ -16,10 +16,6 @@ class AppFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: spacing,
-      runSpacing: runSpacing,
-      children: children,
-    );
+    return Wrap(spacing: spacing, runSpacing: runSpacing, children: children);
   }
 }

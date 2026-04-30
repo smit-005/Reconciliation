@@ -59,9 +59,7 @@ class AppCompactSelectField extends StatelessWidget {
               return PopupMenuItem<String>(
                 value: option,
                 height: 38,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Row(
                   children: [
                     Expanded(
@@ -71,8 +69,9 @@ class AppCompactSelectField extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight:
-                              isSelected ? FontWeight.w800 : FontWeight.w700,
+                          fontWeight: isSelected
+                              ? FontWeight.w800
+                              : FontWeight.w700,
                           color: AppColorScheme.textPrimary,
                         ),
                       ),
@@ -107,7 +106,8 @@ class AppCompactSelectField extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (labelText != null && labelText!.trim().isNotEmpty) ...[
+                      if (labelText != null &&
+                          labelText!.trim().isNotEmpty) ...[
                         Text(
                           labelText!,
                           maxLines: 1,

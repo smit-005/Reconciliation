@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_spacing.dart';
-
 class AppSearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String>? onChanged;
