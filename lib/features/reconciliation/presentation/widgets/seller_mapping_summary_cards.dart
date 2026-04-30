@@ -25,7 +25,7 @@ class SellerMappingMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppMetricCard(
       label: metric.label,
-      value: '',
+      value: metric.value.toString(),
       icon: metric.icon,
       accentColor: metric.color,
       width: 130,

@@ -21,6 +21,8 @@ class SellerMappingScreenRowData {
   final String sectionCode;
   final String purchasePan;
   final String purchaseGstNo;
+  final int sourceRowCount;
+  final int tdsRowCount;
   final SellerMappingResolvedSuggestion? resolvedSuggestion;
   final bool isReadOnly;
   final bool isAboveThreshold;
@@ -41,6 +43,8 @@ class SellerMappingScreenRowData {
     required this.sectionCode,
     required this.purchasePan,
     this.purchaseGstNo = '',
+    this.sourceRowCount = 0,
+    this.tdsRowCount = 0,
     this.resolvedSuggestion,
     this.isReadOnly = false,
     this.isAboveThreshold = false,
@@ -75,11 +79,13 @@ class SellerMappingScreenResult {
   final List<Map<String, String>> upserts;
   final List<Map<String, String>> deleted;
   final int dangerousRemaining;
+  final int unreviewedExceptionCount;
 
   const SellerMappingScreenResult({
     this.upserts = const <Map<String, String>>[],
     this.deleted = const <Map<String, String>>[],
     this.dangerousRemaining = 0,
+    this.unreviewedExceptionCount = 0,
   });
 }
 
@@ -95,6 +101,8 @@ class SellerMappingScreen extends StatefulWidget {
   final List<SellerMapping> existingMappings;
   final Set<String> blockedAliases;
   final Map<String, List<String>> tdsPartyPans;
+  final int rawSourceRowCount;
+  final String buyerGstNo;
 
   const SellerMappingScreen({
     super.key,
@@ -109,6 +117,8 @@ class SellerMappingScreen extends StatefulWidget {
     this.existingMappings = const [],
     required this.blockedAliases,
     this.tdsPartyPans = const {},
+    this.rawSourceRowCount = 0,
+    this.buyerGstNo = '',
   });
 
   @override
@@ -126,7 +136,6 @@ class _SellerMappingDisplayRow {
   final List<String> helperMessages;
   final int index;
   final bool isLast;
-  final bool isExpanded;
 
   const _SellerMappingDisplayRow({
     required this.row,
@@ -137,7 +146,6 @@ class _SellerMappingDisplayRow {
     required this.helperMessages,
     required this.index,
     required this.isLast,
-    required this.isExpanded,
   });
 }
 
@@ -167,6 +175,20 @@ class _SellerFilterRowState {
   });
 }
 
+class _LedgerLinkOption {
+  final String linkedRowKey;
+  final String displayValue;
+  final String subtitle;
+  final List<String> searchableTerms;
+
+  const _LedgerLinkOption({
+    required this.linkedRowKey,
+    required this.displayValue,
+    required this.subtitle,
+    required this.searchableTerms,
+  });
+}
+
 class _SellerMappingScreenState extends State<SellerMappingScreen> {
   static const List<String> _sectionTabOrder = <String>[
     '194Q',
@@ -177,9 +199,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     '194J_A',
     '194J_B',
   ];
-  static const String _allSectionsAuditCode = 'ALL';
   static const int _initialVisibleRowLimit = 100;
   static const int _visibleRowIncrement = 100;
+  static const String _separatePrefix = '__SEPARATE__:';
+  static const String _timingDifferencePrefix = '__TIMING_DIFFERENCE__:';
+  static const String _missingInBooksPrefix = '__MISSING_IN_BOOKS__:';
+  static const String _linkLedgerPrefix = '__LINK_LEDGER__:';
 
   static const Set<String> _legalSuffixTokens = {
     'M',
@@ -219,7 +244,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   Map<SellerMappingListView, int>? _cachedListViewCounts;
   Map<String, _SellerFilterRowState> _rowStateByKey =
       <String, _SellerFilterRowState>{};
-  final Set<String> _expandedRowKeys = <String>{};
   final Stopwatch _screenOpenStopwatch = Stopwatch()..start();
   bool _isInitializing = true;
   bool _firstFrameLogged = false;
@@ -240,32 +264,48 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   bool get _isPreflightMode => widget.mode == SellerMappingScreenMode.preflight;
 
-  bool _isRowExpanded(String rowKey) => _expandedRowKeys.contains(rowKey);
-
-  void _toggleRowExpanded(String rowKey) {
-    setState(() {
-      if (!_expandedRowKeys.add(rowKey)) {
-        _expandedRowKeys.remove(rowKey);
-      }
-    });
-  }
-
   String _separateSelectionValue(SellerMappingRowVm row) {
-    return '__SEPARATE__:${row.rowKey}';
+    return '$_separatePrefix${row.rowKey}';
   }
 
   bool _isSeparateSelection(SellerMappingRowVm row, String? value) {
     return value == _separateSelectionValue(row);
   }
 
+  String _timingDifferenceValue(SellerMappingRowVm row) {
+    return '$_timingDifferencePrefix${row.rowKey}';
+  }
+
+  bool _isTimingDifferenceSelection(SellerMappingRowVm row, String? value) {
+    return value == _timingDifferenceValue(row);
+  }
+
+  String _missingInBooksValue(SellerMappingRowVm row) {
+    return '$_missingInBooksPrefix${row.rowKey}';
+  }
+
+  bool _isMissingInBooksSelection(SellerMappingRowVm row, String? value) {
+    return value == _missingInBooksValue(row);
+  }
+
+  String _linkLedgerValue(String linkedRowKey) =>
+      '$_linkLedgerPrefix$linkedRowKey';
+
+  bool _isLinkLedgerSelection(String? value) {
+    return value?.startsWith(_linkLedgerPrefix) ?? false;
+  }
+
+  String _linkedLedgerRowKey(String? value) {
+    if (!_isLinkLedgerSelection(value)) {
+      return '';
+    }
+    return value!.substring(_linkLedgerPrefix.length);
+  }
+
   List<String> get _availableSectionCodes {
-    final presentSections = _sectionTabOrder
+    return _sectionTabOrder
         .where((section) => (_rowDataBySection[section] ?? const []).isNotEmpty)
         .toList();
-    if (presentSections.length > 1) {
-      return <String>[...presentSections, _allSectionsAuditCode];
-    }
-    return presentSections;
   }
 
   List<SellerMappingRowVm> _rowsForActiveSection() {
@@ -280,13 +320,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   List<SellerMappingRowVm> _buildRowsForSection(String sectionCode) {
-    final sourceRows = sectionCode == _allSectionsAuditCode
-        ? _sectionTabOrder
-              .expand((section) => _rowDataBySection[section] ?? const [])
-              .toList()
-        : List<SellerMappingScreenRowData>.from(
-            _rowDataBySection[sectionCode] ?? const [],
-          );
+    final sourceRows = List<SellerMappingScreenRowData>.from(
+      _rowDataBySection[sectionCode] ?? const [],
+    );
 
     final rowMap = <String, SellerMappingRowVm>{};
     for (final row in sourceRows) {
@@ -313,6 +349,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
             ? row.purchaseGstNo.trim()
             : (existing?.purchaseGstNo ?? ''),
+        sourceRowCount: math.max(
+          row.sourceRowCount,
+          existing?.sourceRowCount ?? 0,
+        ),
+        tdsRowCount: math.max(row.tdsRowCount, existing?.tdsRowCount ?? 0),
         exactMapping: _exactMappingsByKey[rowKey] ?? existing?.exactMapping,
         fallbackMapping:
             _fallbackMappingsByAlias[aliasKey] ?? existing?.fallbackMapping,
@@ -438,10 +479,43 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   String _getPanForSelection(SellerMappingRowVm row, String? selectedValue) {
-    if (_isSeparateSelection(row, selectedValue)) {
+    if (_isSeparateSelection(row, selectedValue) ||
+        _isTimingDifferenceSelection(row, selectedValue) ||
+        _isMissingInBooksSelection(row, selectedValue) ||
+        _isLinkLedgerSelection(selectedValue)) {
       return row.purchasePan;
     }
     return _getPanForTdsParty(selectedValue);
+  }
+
+  SellerMappingRowVm? _linkedLedgerRowForSelection({
+    required String sectionCode,
+    required String? selectedValue,
+  }) {
+    final linkedRowKey = _linkedLedgerRowKey(selectedValue);
+    if (linkedRowKey.isEmpty) {
+      return null;
+    }
+    for (final candidate in _rowsForSection(sectionCode)) {
+      if (candidate.is26QUnmatched) {
+        continue;
+      }
+      if (candidate.rowKey == linkedRowKey) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  bool _hasValidLinkedLedgerSelection(
+    SellerMappingRowVm row,
+    String? selectedValue,
+  ) {
+    return _linkedLedgerRowForSelection(
+          sectionCode: row.sectionCode,
+          selectedValue: selectedValue,
+        ) !=
+        null;
   }
 
   String? _normalizeToKnownTdsParty(String? mappedName) {
@@ -793,14 +867,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required SellerMappingRowVm row,
     required String? selectedValue,
   }) {
+    if (row.is26QUnmatched) {
+      if (_hasValidLinkedLedgerSelection(row, selectedValue)) {
+        return 'Linked to Ledger';
+      }
+      if (_isTimingDifferenceSelection(row, selectedValue)) {
+        return 'Timing Difference';
+      }
+      if (_isMissingInBooksSelection(row, selectedValue)) {
+        return 'Missing in Books';
+      }
+      return '26Q Unmatched';
+    }
+
     if (_isPreflightMode &&
         selectedValue != null &&
         _isSeparateSelection(row, selectedValue)) {
       return 'Marked Separate';
-    }
-
-    if (row.is26QUnmatched) {
-      return '26Q Unmatched';
     }
 
     if (selectedValue == null || selectedValue.trim().isEmpty) {
@@ -855,7 +938,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (selectedValue == null) {
       return null;
     }
-    if (_isSeparateSelection(row, selectedValue)) {
+    if (_isSeparateSelection(row, selectedValue) ||
+        _isTimingDifferenceSelection(row, selectedValue) ||
+        _isMissingInBooksSelection(row, selectedValue) ||
+        _isLinkLedgerSelection(selectedValue)) {
       return selectedValue;
     }
     if (!uniqueTdsParties.contains(selectedValue)) {
@@ -881,15 +967,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return _getExplicitSelectedValue(row) ?? _getResolvedSuggestionValue(row);
   }
 
-  bool get _usesGlobalPreflightNeedsActionScope =>
-      _isPreflightMode && _activeListView == SellerMappingListView.needsAction;
-
-  List<SellerMappingRowVm> _rowsForCurrentViewScope() {
-    if (_usesGlobalPreflightNeedsActionScope) {
-      return _rowsForSection(_allSectionsAuditCode);
-    }
-    return _rowsForActiveSection();
-  }
+  List<SellerMappingRowVm> _rowsForCurrentViewScope() =>
+      _rowsForActiveSection();
 
   bool _isDangerousRowExplicitlyResolved(SellerMappingRowVm row) {
     if (!_isPreflightMode ||
@@ -924,6 +1003,31 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return !_isDangerousRowExplicitlyResolved(row);
   }
 
+  bool _matchesNeedsAction({
+    required SellerMappingRowVm row,
+    required String? selectedValue,
+    required String status,
+  }) {
+    final hasUnreviewedException =
+        row.is26QUnmatched &&
+        !_hasValidLinkedLedgerSelection(row, selectedValue) &&
+        !_isTimingDifferenceSelection(row, selectedValue) &&
+        !_isMissingInBooksSelection(row, selectedValue);
+
+    if (hasUnreviewedException) {
+      return true;
+    }
+
+    if (_isUnresolvedDangerousPreflightRow(row)) {
+      return true;
+    }
+
+    return status == 'PAN Conflict' ||
+        status == 'Conflicting PAN' ||
+        status == 'Ambiguous Identity' ||
+        status == 'Unresolved Identity';
+  }
+
   String _buildSearchHaystack({
     required SellerMappingRowVm row,
     required String? selectedValue,
@@ -955,15 +1059,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final selectedValue = _getSelectedValue(row);
     final selectedPan = _getPanForSelection(row, selectedValue);
     final status = _getStatus(row: row, selectedValue: selectedValue);
-    final hasPanIssue =
-        row.hasMissingOrUncertainPan || row.hasNameOrPanConflict;
-    final matchesNeedsAction =
-        row.is26QUnmatched ||
-        row.requiresDangerousReview ||
-        row.hasReconciliationMismatch ||
-        hasPanIssue ||
-        ((row.isAboveThreshold || row.hasApplicableTdsImpact) &&
-            (selectedValue == null || selectedValue.trim().isEmpty));
+    final matchesNeedsAction = _matchesNeedsAction(
+      row: row,
+      selectedValue: selectedValue,
+      status: status,
+    );
 
     return _SellerFilterRowState(
       selectedValue: selectedValue,
@@ -980,8 +1080,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       matchesAboveThreshold: row.isAboveThreshold,
       matchesUnmatched26Q: row.is26QUnmatched,
       isDangerousRowExplicitlyResolved: _isDangerousRowExplicitlyResolved(row),
-      isUnresolvedDangerousPreflightRow:
-          _isUnresolvedDangerousPreflightRow(row),
+      isUnresolvedDangerousPreflightRow: _isUnresolvedDangerousPreflightRow(
+        row,
+      ),
     );
   }
 
@@ -1045,7 +1146,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final selectedValue = state?.selectedValue;
     final status =
         state?.status ?? _getStatus(row: row, selectedValue: selectedValue);
-    final isExpanded = _isRowExpanded(row.rowKey);
     return _SellerMappingDisplayRow(
       row: row,
       selectedValue: selectedValue,
@@ -1053,16 +1153,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           state?.selectedPan ?? _getPanForSelection(row, selectedValue),
       status: status,
       autoMapDetail: state?.autoMapDetail ?? autoMapDetails[row.rowKey],
-      helperMessages: isExpanded
-          ? _helperMessages(
-              row: row,
-              status: status,
-              selectedValue: selectedValue,
-            )
-          : const <String>[],
+      helperMessages: _helperMessages(
+        row: row,
+        status: status,
+        selectedValue: selectedValue,
+      ),
       index: index,
       isLast: isLast,
-      isExpanded: isExpanded,
     );
   }
 
@@ -1107,7 +1204,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _clearMapping(SellerMappingRowVm row) {
-    if (row.isReadOnly) return;
+    if (row.isReadOnly && !row.is26QUnmatched) return;
     setState(() {
       _clearedRowKeys.add(row.rowKey);
       selectedMappings.remove(row.rowKey);
@@ -1198,7 +1295,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       );
       if (aliasKey.isEmpty || mapping.mappedName.trim().isEmpty) continue;
 
-      if (sectionCode == _allSectionsAuditCode) {
+      if (sectionCode == 'ALL') {
         fallbackMappingsByAlias[aliasKey] = mapping;
         continue;
       }
@@ -1256,10 +1353,50 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         dangerousRows[row.rowKey] = row;
       }
 
+      final currentMappedName = selectedMappings[row.rowKey]?.trim() ?? '';
+      final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
+
+      if (row.is26QUnmatched) {
+        if (_isLinkLedgerSelection(currentMappedName)) {
+          final linkedRow = _linkedLedgerRowForSelection(
+            sectionCode: row.sectionCode,
+            selectedValue: currentMappedName,
+          );
+          if (linkedRow != null) {
+            upserts.add({
+              'aliasName': linkedRow.normalizedAlias,
+              'sectionCode': row.sectionCode,
+              'mappedName': row.purchasePartyDisplayName,
+              'mappedPan': row.resolvedSuggestion?.mappedPan.trim() ?? '',
+            });
+            if (existingExactName.isNotEmpty) {
+              deleted.add({
+                'aliasName': row.normalizedAlias,
+                'sectionCode': row.sectionCode,
+              });
+            }
+          }
+        } else if (_isTimingDifferenceSelection(row, currentMappedName) ||
+            _isMissingInBooksSelection(row, currentMappedName)) {
+          upserts.add({
+            'aliasName': row.normalizedAlias,
+            'sectionCode': row.sectionCode,
+            'mappedName': currentMappedName,
+            'mappedPan': '',
+          });
+        } else if (existingExactName.isNotEmpty &&
+            _clearedRowKeys.contains(row.rowKey)) {
+          deleted.add({
+            'aliasName': row.normalizedAlias,
+            'sectionCode': row.sectionCode,
+          });
+        }
+        continue;
+      }
+
       if (row.isReadOnly) {
         continue;
       }
-      final currentMappedName = selectedMappings[row.rowKey]?.trim() ?? '';
       final resolvedSuggestionName =
           _normalizeToKnownTdsParty(
             row.resolvedSuggestion?.mappedName,
@@ -1270,7 +1407,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       final effectiveMappedName = currentMappedName.isNotEmpty
           ? currentMappedName
           : (shouldPersistSuggestionFallback ? resolvedSuggestionName : '');
-      final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
 
       if (effectiveMappedName.isEmpty) {
         if (existingExactName.isNotEmpty &&
@@ -1314,12 +1450,25 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final dangerousRemaining = dangerousRows.values
         .where((row) => !_isDangerousRowExplicitlyResolved(row))
         .length;
+    final unreviewedExceptionCount = _mappingRowsBySectionCache.values
+        .expand((rows) => rows)
+        .where((row) {
+          if (!row.is26QUnmatched) {
+            return false;
+          }
+          final selectedValue = selectedMappings[row.rowKey]?.trim() ?? '';
+          return !_hasValidLinkedLedgerSelection(row, selectedValue) &&
+              !_isTimingDifferenceSelection(row, selectedValue) &&
+              !_isMissingInBooksSelection(row, selectedValue);
+        })
+        .length;
 
     debugPrint(
       'SELLER MAP PREFLIGHT STATE dangerousRows=$dangerousRowCount '
       'dangerousSuggestionOnly=$dangerousSuggestionOnlyCount '
       'dangerousExplicitlyResolved=$dangerousExplicitlyResolvedCount '
-      'dangerousRemaining=$dangerousRemaining',
+      'dangerousRemaining=$dangerousRemaining '
+      'unreviewedExceptionCount=$unreviewedExceptionCount',
     );
 
     Navigator.pop(
@@ -1328,22 +1477,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         upserts: upserts,
         deleted: deleted,
         dangerousRemaining: dangerousRemaining,
+        unreviewedExceptionCount: unreviewedExceptionCount,
       ),
     );
-  }
-
-  String _buyerInitials() {
-    final segments = widget.buyerName
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((segment) => segment.isNotEmpty)
-        .toList();
-    if (segments.isEmpty) return 'BA';
-    if (segments.length == 1) {
-      return segments.first.substring(0, 1).toUpperCase();
-    }
-    return (segments.first.substring(0, 1) + segments.last.substring(0, 1))
-        .toUpperCase();
   }
 
   List<SellerMappingSummaryMetric> _buildSummaryMetrics() {
@@ -1356,7 +1492,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     for (final row in visibleRows) {
       final state = _rowStateByKey[row.rowKey];
       if (state == null) continue;
-      if (state.selectedValue != null && state.selectedValue!.trim().isNotEmpty) {
+      if (state.selectedValue != null &&
+          state.selectedValue!.trim().isNotEmpty) {
         mapped++;
       }
       if (state.status == 'Unmapped') unmapped++;
@@ -1406,6 +1543,54 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     ];
   }
 
+  int _needsActionCountForSection(String sectionCode) {
+    return _rowsForSection(sectionCode).where((row) {
+      final state = _rowStateByKey[row.rowKey];
+      return state != null && state.matchesNeedsAction;
+    }).length;
+  }
+
+  Iterable<SellerMappingRowVm> _allSectionRows() sync* {
+    for (final sectionCode in _availableSectionCodes) {
+      yield* _rowsForSection(sectionCode);
+    }
+  }
+
+  int _dangerousUnresolvedCount() {
+    return _allSectionRows().where((row) {
+      final state = _rowStateByKey[row.rowKey];
+      return state?.isUnresolvedDangerousPreflightRow ?? false;
+    }).length;
+  }
+
+  int _unreviewedExceptionCount() {
+    return _allSectionRows().where((row) {
+      if (!row.is26QUnmatched) {
+        return false;
+      }
+      final selectedValue = _rowStateByKey[row.rowKey]?.selectedValue;
+      return !_hasValidLinkedLedgerSelection(row, selectedValue) &&
+          !_isTimingDifferenceSelection(row, selectedValue) &&
+          !_isMissingInBooksSelection(row, selectedValue);
+    }).length;
+  }
+
+  bool _canContinue() {
+    return _dangerousUnresolvedCount() == 0 && _unreviewedExceptionCount() == 0;
+  }
+
+  void _logAuditViewSnapshot() {
+    debugPrint(
+      'SELLER AUDIT SNAPSHOT => rawSourceRows=${widget.rawSourceRowCount} '
+      'groupedSellers=${_rowsForCurrentViewScope().length} '
+      'selectedSection=$_activeSectionCode '
+      'needsActionCount=${_listViewCounts()[SellerMappingListView.needsAction] ?? 0} '
+      'allSellersCount=${_listViewCounts()[SellerMappingListView.allSellers] ?? 0} '
+      'dangerousUnresolved=${_dangerousUnresolvedCount()} '
+      'unreviewedExceptionCount=${_unreviewedExceptionCount()}',
+    );
+  }
+
   AppStatusBadgeTone _statusTone(String status) {
     switch (status) {
       case 'Mapped':
@@ -1416,6 +1601,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return AppStatusBadgeTone.neutral;
       case '26Q Unmatched':
         return AppStatusBadgeTone.warning;
+      case 'Linked to Ledger':
+      case 'Timing Difference':
+      case 'Missing in Books':
+        return AppStatusBadgeTone.info;
       case 'Conflicting PAN':
       case 'Ambiguous Identity':
       case 'Unresolved Identity':
@@ -1440,6 +1629,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return Icons.store_outlined;
       case '26Q Unmatched':
         return Icons.link_off_rounded;
+      case 'Linked to Ledger':
+        return Icons.account_tree_rounded;
+      case 'Timing Difference':
+        return Icons.schedule_rounded;
+      case 'Missing in Books':
+        return Icons.bookmark_remove_rounded;
       case 'Conflicting PAN':
         return Icons.warning_rounded;
       case 'Ambiguous Identity':
@@ -1469,6 +1664,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (status == '26Q Unmatched') {
       return Color.alphaBlend(
         const Color(0xFF7C3AED).withValues(alpha: 0.08),
+        base,
+      );
+    }
+    if (status == 'Linked to Ledger' ||
+        status == 'Timing Difference' ||
+        status == 'Missing in Books') {
+      return Color.alphaBlend(
+        const Color(0xFF2563EB).withValues(alpha: 0.06),
         base,
       );
     }
@@ -1571,6 +1774,18 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     if (status == '26Q Unmatched') {
       messages.add('Review the 26Q-only seller and link it manually if needed');
+    } else if (status == 'Linked to Ledger') {
+      messages.add(
+        'This 26Q seller is linked to an existing same-section ledger seller.',
+      );
+    } else if (status == 'Timing Difference') {
+      messages.add(
+        'Reviewed exception: keep this 26Q seller out of the current books timing.',
+      );
+    } else if (status == 'Missing in Books') {
+      messages.add(
+        'Reviewed exception: this 26Q seller is classified as missing in books.',
+      );
     } else if (status == 'Marked Separate') {
       messages.add('This seller will stay separate from 26Q after saving');
     } else if (_isPreflightMode &&
@@ -1613,6 +1828,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (status == '26Q Unmatched') {
       return const Color(0xFF6D28D9);
     }
+    if (status == 'Linked to Ledger' ||
+        status == 'Timing Difference' ||
+        status == 'Missing in Books') {
+      return const Color(0xFF1D4ED8);
+    }
     if (status == 'PAN Conflict' ||
         autoMapDetail?.blockedByPanConflict == true) {
       return SellerMappingTheme.dangerColor;
@@ -1633,162 +1853,153 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         (status == 'Mapped' || status == 'Mapped (PAN missing)');
   }
 
-  int _hiddenSummaryRowCount() {
-    if (_activeListView != SellerMappingListView.needsAction) {
-      return 0;
-    }
-
-    return _rowsForCurrentViewScope().length -
-        _filteredRowsForViewModeOnly().length;
-  }
-
-  List<SellerMappingRowVm> _filteredRowsForViewModeOnly() {
-    return _rowsForCurrentViewScope().where((row) {
-      final state = _rowStateByKey[row.rowKey];
-      return state != null && _matchesListViewFromState(state, _activeListView);
-    }).toList();
-  }
-
-  String? _viewModeHelperText() {
-    if (_activeListView != SellerMappingListView.needsAction) {
-      return null;
-    }
-
-    final hiddenRows = _hiddenSummaryRowCount();
-    if (hiddenRows <= 0) {
-      return null;
-    }
-
-    return '$hiddenRows non-actionable seller rows are hidden in Needs Action.';
-  }
-
   Widget _buildHeader() {
-    final selectedSection = _usesGlobalPreflightNeedsActionScope
-        ? 'All Sellers (Needs Action)'
-        : _activeSectionCode == _allSectionsAuditCode
-        ? 'All Sellers (Audit)'
-        : sectionDisplayLabel(_activeSectionCode);
-    final fyLabel = widget.financialYearLabel.trim().isEmpty
-        ? 'All FY'
-        : widget.financialYearLabel.trim();
-    final metrics = _buildSummaryMetrics();
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       decoration: BoxDecoration(
         color: SellerMappingTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: SellerMappingTheme.borderColor),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x120F172A),
-            blurRadius: 26,
-            offset: Offset(0, 10),
-          ),
-        ],
+        border: const Border(
+          bottom: BorderSide(color: SellerMappingTheme.borderColor),
+        ),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton.filledTonal(
-            onPressed: () => Navigator.maybePop(context),
-            style: IconButton.styleFrom(
-              backgroundColor: SellerMappingTheme.primarySoft,
-              foregroundColor: SellerMappingTheme.primaryColor,
-            ),
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4A6CF7), Color(0xFF2744C7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              _buyerInitials(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Seller Mapping',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: SellerMappingTheme.primaryColor,
-                    letterSpacing: 0.2,
-                  ),
+          Row(
+            children: [
+              IconButton.filledTonal(
+                onPressed: () => Navigator.maybePop(context),
+                style: IconButton.styleFrom(
+                  backgroundColor: SellerMappingTheme.primarySoft,
+                  foregroundColor: SellerMappingTheme.primaryColor,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  widget.buyerName.trim().isEmpty
-                      ? 'Unnamed Buyer'
-                      : widget.buyerName.trim(),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    height: 1.15,
-                    fontWeight: FontWeight.w800,
-                    color: SellerMappingTheme.titleTextColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SellerMappingPill(
-                      icon: Icons.badge_outlined,
-                      label: widget.buyerPan.trim().isEmpty
-                          ? 'PAN unavailable'
-                          : widget.buyerPan.trim().toUpperCase(),
+                    const Text(
+                      'Seller Mapping Audit',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: SellerMappingTheme.primaryColor,
+                      ),
                     ),
-                    SellerMappingPill(
-                      icon: Icons.calendar_today_outlined,
-                      label: fyLabel,
-                    ),
-                    SellerMappingPill(
-                      icon: Icons.tune_rounded,
-                      label: selectedSection,
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.buyerName.trim().isEmpty
+                          ? 'Unnamed Buyer'
+                          : widget.buyerName.trim(),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: SellerMappingTheme.titleTextColor,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  _isPreflightMode
-                      ? 'Preflight includes both purchase-register and 26Q sellers for this section to ensure complete visibility.'
-                      : 'Rows remain section-aware. Existing ALL mappings are shown as guidance only, and saving continues to create or update exact section mappings.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.45,
-                    color: SellerMappingTheme.mutedTextColor,
+              ),
+              SegmentedButton<SellerMappingListView>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: SellerMappingListView.needsAction,
+                    label: Text('Needs Action'),
                   ),
-                ),
-              ],
-            ),
+                  ButtonSegment(
+                    value: SellerMappingListView.allSellers,
+                    label: Text('All Sellers'),
+                  ),
+                ],
+                selected: <SellerMappingListView>{_activeListView},
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _activeListView = selection.first;
+                    _invalidateViewCaches(resetPage: true);
+                  });
+                },
+              ),
+            ],
           ),
-          const SizedBox(width: 24),
+          const SizedBox(height: 14),
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.end,
-            children: metrics
-                .map((metric) => SellerMappingMetricCard(metric: metric))
-                .toList(),
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              SellerMappingPill(
+                icon: Icons.badge_outlined,
+                label: widget.buyerPan.trim().isEmpty
+                    ? 'PAN unavailable'
+                    : widget.buyerPan.trim().toUpperCase(),
+              ),
+              if (widget.buyerGstNo.trim().isNotEmpty)
+                SellerMappingPill(
+                  icon: Icons.receipt_long_outlined,
+                  label: widget.buyerGstNo.trim().toUpperCase(),
+                ),
+              if (widget.financialYearLabel.trim().isNotEmpty)
+                SellerMappingPill(
+                  icon: Icons.calendar_today_outlined,
+                  label: widget.financialYearLabel.trim(),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _availableSectionCodes.map((sectionCode) {
+                    final isSelected = _activeSectionCode == sectionCode;
+                    final count = _needsActionCountForSection(sectionCode);
+                    return ChoiceChip(
+                      label: Text(
+                        '${sectionDisplayLabel(sectionCode)}($count)',
+                      ),
+                      selected: isSelected,
+                      onSelected: (_) {
+                        setState(() {
+                          _activeSectionCode = sectionCode;
+                          _invalidateViewCaches(resetPage: true);
+                        });
+                      },
+                      selectedColor: SellerMappingTheme.primarySoft,
+                      backgroundColor: Colors.white,
+                      side: BorderSide(
+                        color: isSelected
+                            ? SellerMappingTheme.primaryColor
+                            : SellerMappingTheme.borderColor,
+                      ),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: isSelected
+                            ? SellerMappingTheme.primaryColor
+                            : SellerMappingTheme.titleTextColor,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: _buildSummaryMetrics()
+                    .where((metric) => metric.value > 0)
+                    .map((metric) => SellerMappingMetricCard(metric: metric))
+                    .toList(),
+              ),
+            ],
           ),
         ],
       ),
@@ -1796,133 +2007,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   Widget _buildTopToolbar() {
-    final buttonStyle = OutlinedButton.styleFrom(
-      minimumSize: const Size(0, 46),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      side: const BorderSide(color: SellerMappingTheme.borderColor),
-      foregroundColor: SellerMappingTheme.titleTextColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-    );
-    final viewModeHelperText = _viewModeHelperText();
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
       decoration: BoxDecoration(
         color: SellerMappingTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: SellerMappingTheme.borderColor),
+        border: const Border(
+          bottom: BorderSide(color: SellerMappingTheme.borderColor),
+        ),
       ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Row(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Seller View',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  color: SellerMappingTheme.mutedTextColor,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: SellerMappingListView.values.map((view) {
-                  final isSelected = _activeListView == view;
-                  final count = _listViewCounts()[view] ?? 0;
-                  return ChoiceChip(
-                    label: Text('${view.label} ($count)'),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      setState(() {
-                        _activeListView = view;
-                        _invalidateViewCaches(resetPage: true);
-                      });
-                    },
-                    selectedColor: SellerMappingTheme.primarySoft,
-                    backgroundColor: Colors.white,
-                    side: BorderSide(
-                      color: isSelected
-                          ? const Color(0xFFBFCCF5)
-                          : SellerMappingTheme.borderColor,
-                    ),
-                    labelStyle: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? SellerMappingTheme.primaryColor
-                          : SellerMappingTheme.titleTextColor,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _availableSectionCodes.map((sectionCode) {
-                  final isSelected = _activeSectionCode == sectionCode;
-                  final label = sectionCode == _allSectionsAuditCode
-                      ? 'All Sellers'
-                      : sectionDisplayLabel(sectionCode);
-                  return ChoiceChip(
-                    label: Text(label),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      if (_activeSectionCode == sectionCode) return;
-                      setState(() {
-                        _activeSectionCode = sectionCode;
-                        _invalidateViewCaches(resetPage: true);
-                      });
-                    },
-                    selectedColor: SellerMappingTheme.primarySoft,
-                    backgroundColor: Colors.white,
-                    side: BorderSide(
-                      color: isSelected
-                          ? const Color(0xFFBFCCF5)
-                          : SellerMappingTheme.borderColor,
-                    ),
-                    labelStyle: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected
-                          ? SellerMappingTheme.primaryColor
-                          : SellerMappingTheme.titleTextColor,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  );
-                }).toList(),
-              ),
-              if (viewModeHelperText != null) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 320,
-                  child: Text(
-                    viewModeHelperText,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: SellerMappingTheme.mutedTextColor,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          SizedBox(
-            width: 360,
+          Expanded(
             child: TextField(
               controller: _searchController,
               onChanged: (value) {
@@ -1980,8 +2075,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               ),
             ),
           ),
+          const SizedBox(width: 12),
           SizedBox(
-            width: 190,
+            width: 210,
             child: AppCompactSelectField(
               value: _statusFilter,
               labelText: 'Status',
@@ -1989,9 +2085,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 'All',
                 'Mapped',
                 'Unmapped',
-                'Mapped (PAN missing)',
                 'PAN Conflict',
                 '26Q Unmatched',
+                'Timing Difference',
+                'Missing in Books',
               ],
               onChanged: (value) {
                 setState(() {
@@ -2001,135 +2098,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
               },
             ),
           ),
+          const SizedBox(width: 12),
           OutlinedButton.icon(
             onPressed: _applyAutoMap,
-            style: buttonStyle.copyWith(
-              foregroundColor: WidgetStatePropertyAll(
-                SellerMappingTheme.primaryColor,
-              ),
-              side: const WidgetStatePropertyAll(
-                BorderSide(color: Color(0xFFBFCCF5)),
-              ),
-              backgroundColor: const WidgetStatePropertyAll(
-                SellerMappingTheme.primarySoft,
-              ),
-            ),
             icon: const Icon(Icons.auto_fix_high_rounded),
             label: const Text('Auto Map'),
           ),
-          OutlinedButton.icon(
+          const SizedBox(width: 8),
+          TextButton.icon(
             onPressed: _clearVisibleMappings,
-            style: buttonStyle.copyWith(
-              foregroundColor: const WidgetStatePropertyAll(
-                SellerMappingTheme.dangerColor,
-              ),
-              side: WidgetStatePropertyAll(
-                BorderSide(
-                  color: SellerMappingTheme.dangerColor.withValues(alpha: 0.28),
-                ),
-              ),
-            ),
             icon: const Icon(Icons.layers_clear_rounded),
-            label: const Text('Clear Mapping'),
-          ),
-          FilledButton.icon(
-            onPressed: _saveMappings,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 46),
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              backgroundColor: SellerMappingTheme.primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('Save Mapping'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTableHeader() {
-    Widget headerCell(
-      String title,
-      int flex, {
-      Alignment? alignment,
-      String? tooltipMessage,
-    }) {
-      return Expanded(
-        flex: flex,
-        child: Align(
-          alignment: alignment ?? Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF344054),
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-              if (tooltipMessage != null &&
-                  tooltipMessage.trim().isNotEmpty) ...[
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: tooltipMessage,
-                  child: const Icon(
-                    Icons.info_outline_rounded,
-                    size: 14,
-                    color: SellerMappingTheme.mutedTextColor,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-    }
-
-    const sourcePanTooltip =
-        'PAN from source file, or inferred from GSTIN when available.';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8FAFC),
-        border: Border(
-          bottom: BorderSide(color: SellerMappingTheme.borderColor),
-        ),
-      ),
-      child: Row(
-        children: [
-          headerCell(_isPreflightMode ? 'Source Seller' : 'Purchase Party', 4),
-          headerCell('Section', 2),
-          headerCell(
-            _isPreflightMode ? 'Source/Inferred PAN' : 'Purchase PAN',
-            2,
-            tooltipMessage: _isPreflightMode ? sourcePanTooltip : null,
-          ),
-          headerCell(
-            _isPreflightMode
-                ? 'Matched / Selected 26Q Seller'
-                : 'Mapped 26Q Party',
-            4,
-          ),
-          headerCell('26Q PAN', 2),
-          headerCell('Status', 2),
-          headerCell(
-            'Actions',
-            _isPreflightMode ? 2 : 1,
-            alignment: Alignment.center,
+            label: const Text('Clear Visible'),
           ),
         ],
       ),
@@ -2137,7 +2116,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _setMappedParty(SellerMappingRowVm row, String? value) {
-    if (row.isReadOnly) return;
+    if (row.isReadOnly && !row.is26QUnmatched) return;
     setState(() {
       autoMapDetails.remove(row.rowKey);
       final normalizedValue = _normalizeToKnownTdsParty(value)?.trim() ?? '';
@@ -2147,6 +2126,117 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       } else {
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = normalizedValue;
+      }
+      _rebuildDerivedRowStateCache();
+      _invalidateViewCaches();
+    });
+  }
+
+  List<_LedgerLinkOption> _ledgerLinkOptionsForSection(String sectionCode) {
+    final candidateRows = <SellerMappingRowVm>[];
+    final seenRowKeys = <String>{};
+    final displayNameCounts = <String, int>{};
+
+    for (final row in _rowsForSection(sectionCode)) {
+      if (row.is26QUnmatched || !seenRowKeys.add(row.rowKey)) {
+        continue;
+      }
+      candidateRows.add(row);
+      final displayName = row.purchasePartyDisplayName.trim().isEmpty
+          ? row.normalizedAlias
+          : row.purchasePartyDisplayName.trim();
+      displayNameCounts[displayName] =
+          (displayNameCounts[displayName] ?? 0) + 1;
+    }
+
+    final options = candidateRows.map((row) {
+      final displayName = row.purchasePartyDisplayName.trim().isEmpty
+          ? row.normalizedAlias
+          : row.purchasePartyDisplayName.trim();
+      final identityParts = <String>[
+        'Alias ${row.normalizedAlias}',
+        if (row.purchasePan.isNotEmpty) 'PAN ${row.purchasePan}',
+        if (row.purchaseGstNo.isNotEmpty) 'GST ${row.purchaseGstNo}',
+      ];
+      final subtitle = identityParts.join(' | ');
+      final displayValue = (displayNameCounts[displayName] ?? 0) > 1
+          ? '$displayName ($subtitle)'
+          : displayName;
+      return _LedgerLinkOption(
+        linkedRowKey: row.rowKey,
+        displayValue: displayValue,
+        subtitle: subtitle,
+        searchableTerms: <String>[
+          displayName,
+          row.normalizedAlias,
+          row.purchasePan,
+          row.purchaseGstNo,
+          sectionDisplayLabel(row.sectionCode),
+        ],
+      );
+    }).toList()..sort((a, b) => a.displayValue.compareTo(b.displayValue));
+
+    return options;
+  }
+
+  _LedgerLinkOption? _ledgerLinkOptionByDisplayValue({
+    required String sectionCode,
+    required String displayValue,
+  }) {
+    for (final option in _ledgerLinkOptionsForSection(sectionCode)) {
+      if (option.displayValue == displayValue) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  String _linkedLedgerLabel(SellerMappingRowVm row, String? selectedValue) {
+    final linkedRow = _linkedLedgerRowForSelection(
+      sectionCode: row.sectionCode,
+      selectedValue: selectedValue,
+    );
+    if (linkedRow == null) {
+      return '';
+    }
+    for (final option in _ledgerLinkOptionsForSection(row.sectionCode)) {
+      if (option.linkedRowKey == linkedRow.rowKey) {
+        return option.displayValue;
+      }
+    }
+    return linkedRow.purchasePartyDisplayName;
+  }
+
+  void _setLinkedLedgerSeller(SellerMappingRowVm row, String? displayValue) {
+    final option = displayValue == null
+        ? null
+        : _ledgerLinkOptionByDisplayValue(
+            sectionCode: row.sectionCode,
+            displayValue: displayValue,
+          );
+    setState(() {
+      autoMapDetails.remove(row.rowKey);
+      if (option == null) {
+        _clearedRowKeys.add(row.rowKey);
+        selectedMappings.remove(row.rowKey);
+      } else {
+        _clearedRowKeys.remove(row.rowKey);
+        selectedMappings[row.rowKey] = _linkLedgerValue(option.linkedRowKey);
+      }
+      _rebuildDerivedRowStateCache();
+      _invalidateViewCaches();
+    });
+  }
+
+  void _setExceptionDecision(SellerMappingRowVm row, String? value) {
+    setState(() {
+      autoMapDetails.remove(row.rowKey);
+      if (value == null || value.isEmpty) {
+        _clearedRowKeys.add(row.rowKey);
+        selectedMappings.remove(row.rowKey);
+      } else {
+        _clearedRowKeys.remove(row.rowKey);
+        selectedMappings[row.rowKey] = value;
       }
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
@@ -2190,6 +2280,64 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required SellerMappingRowVm row,
     required String? selectedValue,
   }) {
+    if (row.is26QUnmatched) {
+      final ledgerLinkOptions = _ledgerLinkOptionsForSection(row.sectionCode);
+      return AppSearchAutocompleteField(
+        key: ValueKey('${row.rowKey}|ledger|${selectedValue ?? ''}'),
+        value: _linkedLedgerLabel(row, selectedValue),
+        options: ledgerLinkOptions
+            .map((option) => option.displayValue)
+            .toList(),
+        hintText: 'Link to existing ledger seller',
+        allowFreeText: false,
+        maxVisibleOptions: 8,
+        optionsMaxHeight: 320,
+        searchableTermsBuilder: (option) {
+          final match = _ledgerLinkOptionByDisplayValue(
+            sectionCode: row.sectionCode,
+            displayValue: option,
+          );
+          return match?.searchableTerms ?? <String>[option];
+        },
+        optionSubtitleBuilder: (option) {
+          return _ledgerLinkOptionByDisplayValue(
+            sectionCode: row.sectionCode,
+            displayValue: option,
+          )?.subtitle;
+        },
+        decoration: InputDecoration(
+          hintText: 'Select same-section ledger seller',
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: SellerMappingTheme.borderColor),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: SellerMappingTheme.borderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(
+              color: SellerMappingTheme.primaryColor,
+              width: 1.2,
+            ),
+          ),
+        ),
+        onChanged: (value) {
+          if (value.trim().isEmpty) {
+            _setLinkedLedgerSeller(row, null);
+          }
+        },
+        onSelected: (value) => _setLinkedLedgerSeller(row, value),
+      );
+    }
+
     if (row.isReadOnly) {
       final displayValue = selectedValue?.trim().isNotEmpty == true
           ? selectedValue!.trim()
@@ -2268,277 +2416,251 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     );
   }
 
-  String _summarySelectionLabel(SellerMappingRowVm row, String? selectedValue) {
-    if (_isSeparateSelection(row, selectedValue)) {
-      return 'Marked Separate';
+  bool _hasExplicitSelection(SellerMappingRowVm row, String? selectedValue) {
+    final explicit = _getExplicitSelectedValue(row);
+    if (explicit == null || explicit.trim().isEmpty) {
+      return false;
     }
-    final normalizedSelected = selectedValue?.trim() ?? '';
-    if (normalizedSelected.isNotEmpty) {
-      return normalizedSelected;
+    if (row.is26QUnmatched) {
+      return explicit == selectedValue;
     }
-
-    final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
-    if (suggestion.isNotEmpty) {
-      return suggestion;
-    }
-
-    return row.isReadOnly ? 'No purchase alias linked' : 'No suggestion';
+    return !_isSeparateSelection(row, explicit) || explicit == selectedValue;
   }
 
-  Widget _buildTableRow({required _SellerMappingDisplayRow rowView}) {
-    final row = rowView.row;
-    final selectedValue = rowView.selectedValue;
-    final selectedPan = rowView.selectedPan;
-    final status = rowView.status;
-    final helperMessages = rowView.helperMessages;
-    final autoMapDetail = rowView.autoMapDetail;
-    final isExpanded = rowView.isExpanded;
-
-    Widget cell({
-      required int flex,
-      required Widget child,
-      Alignment alignment = Alignment.centerLeft,
-    }) {
-      return Expanded(
-        flex: flex,
-        child: Align(alignment: alignment, child: child),
-      );
+  bool _canSkipSafely(SellerMappingRowVm row, String status) {
+    if (row.is26QUnmatched || row.requiresDangerousReview) {
+      return false;
     }
+    return status == 'Mapped' ||
+        status == 'Mapped (PAN missing)' ||
+        status == 'Purchase Only';
+  }
 
-    final actionChild = isExpanded
-        ? (_isPreflightMode
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_canAcceptSuggestion(row))
-                      TextButton(
-                        onPressed: row.isReadOnly
-                            ? null
-                            : () => _acceptSuggestedMapping(row),
-                        style: TextButton.styleFrom(
-                          minimumSize: const Size(0, 32),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text('Use Suggested Match'),
-                      ),
-                    if (!_isSeparateSelection(row, selectedValue))
-                      TextButton(
-                        onPressed: row.isReadOnly
-                            ? null
-                            : () => _markSeparate(row),
-                        style: TextButton.styleFrom(
-                          minimumSize: const Size(0, 32),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text('Separate'),
-                      ),
-                    IconButton(
-                      tooltip: row.isReadOnly
-                          ? '26Q-only row cannot be cleared here'
-                          : 'Clear Seller Mapping',
-                      onPressed: row.isReadOnly
-                          ? null
-                          : () => _clearMapping(row),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.white.withValues(alpha: 0.88),
-                        foregroundColor: SellerMappingTheme.dangerColor,
-                        minimumSize: const Size(32, 32),
-                        padding: const EdgeInsets.all(6),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                            color: SellerMappingTheme.dangerColor.withValues(
-                              alpha: 0.18,
-                            ),
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                    TextButton(
-                      onPressed: () => _toggleRowExpanded(row.rowKey),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(0, 32),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text('Done'),
-                    ),
-                  ],
-                )
-              : IconButton(
-                  tooltip: row.isReadOnly
-                      ? '26Q-only row cannot be cleared here'
-                      : 'Clear Seller Mapping',
-                  onPressed: row.isReadOnly ? null : () => _clearMapping(row),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.88),
-                    foregroundColor: SellerMappingTheme.dangerColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: SellerMappingTheme.dangerColor.withValues(
-                          alpha: 0.18,
-                        ),
-                      ),
-                    ),
-                  ),
-                  icon: const Icon(Icons.close_rounded),
-                ))
-        : OutlinedButton.icon(
-            onPressed: () => _toggleRowExpanded(row.rowKey),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 36),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            icon: const Icon(Icons.expand_more_rounded, size: 18),
-            label: Text(row.isReadOnly ? 'View' : 'Review'),
-          );
+  Widget _buildRoundActionIcon({
+    required IconData icon,
+    required String tooltip,
+    required bool isActive,
+    required VoidCallback? onPressed,
+    Color activeColor = SellerMappingTheme.primaryColor,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          backgroundColor: isActive ? activeColor : Colors.white,
+          foregroundColor: isActive ? Colors.white : activeColor,
+          disabledBackgroundColor: const Color(0xFFF1F5F9),
+          disabledForegroundColor: const Color(0xFF94A3B8),
+          side: BorderSide(
+            color: isActive ? activeColor : SellerMappingTheme.borderColor,
+          ),
+          shape: const CircleBorder(),
+          padding: const EdgeInsets.all(10),
+        ),
+        icon: Icon(icon, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildSellerCard({
+    required SellerMappingRowVm row,
+    required int index,
+  }) {
+    final rowView = _buildDisplayRowView(
+      row: row,
+      index: index,
+      isLast: index == _filteredRows().length - 1,
+    );
+    final selectedValue = rowView.selectedValue;
+    final status = rowView.status;
+    final sectionLabel = sectionDisplayLabel(row.sectionCode);
+    final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
+    final issueTone = _statusTone(status);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _rowBackgroundColorSafe(status: status, index: rowView.index),
-        border: Border(
-          bottom: BorderSide(
-            color: rowView.isLast
-                ? SellerMappingTheme.borderColor
-                : const Color(0xFFE8EEF8),
-          ),
-        ),
+        color: _rowBackgroundColorSafe(status: status, index: index),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: SellerMappingTheme.borderColor),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          cell(
-            flex: 4,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                row.purchasePartyDisplayName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
-                  color: SellerMappingTheme.titleTextColor,
-                ),
-              ),
-            ),
-          ),
-          cell(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: SellerMappingPill(
-                icon: Icons.grid_view_rounded,
-                label: sectionDisplayLabel(row.sectionCode),
-                compact: true,
-              ),
-            ),
-          ),
-          cell(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                row.purchasePan.isEmpty ? 'Not available' : row.purchasePan,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  height: 1.35,
-                  color: SellerMappingTheme.titleTextColor,
-                ),
-              ),
-            ),
-          ),
-          cell(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isExpanded)
-                  _buildPartyAutocomplete(
-                    row: row,
-                    selectedValue: selectedValue,
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      _summarySelectionLabel(row, selectedValue),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.purchasePartyDisplayName,
                       style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                         color: SellerMappingTheme.titleTextColor,
                       ),
                     ),
-                  ),
-                if (helperMessages.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Text(
-                      helperMessages.join('\n'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.2,
-                        fontWeight: FontWeight.w600,
-                        color: _helperTextColor(
-                          status: status,
-                          autoMapDetail: autoMapDetail,
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        SellerMappingPill(
+                          icon: Icons.grid_view_rounded,
+                          label: sectionLabel,
+                          compact: true,
                         ),
-                      ),
+                        if (row.purchasePan.isNotEmpty)
+                          SellerMappingPill(
+                            icon: Icons.badge_outlined,
+                            label: row.purchasePan,
+                            compact: true,
+                          ),
+                        if (row.purchaseGstNo.isNotEmpty)
+                          SellerMappingPill(
+                            icon: Icons.receipt_long_outlined,
+                            label: row.purchaseGstNo,
+                            compact: true,
+                          ),
+                        SellerMappingStatusChip(
+                          icon: _statusIconSafe(status),
+                          label: _statusChipLabel(status),
+                          tone: issueTone,
+                        ),
+                      ],
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildRoundActionIcon(
+                    icon: Icons.auto_awesome_rounded,
+                    tooltip: 'Accept suggested match',
+                    isActive:
+                        !row.is26QUnmatched &&
+                        selectedValue ==
+                            _normalizeToKnownTdsParty(
+                              row.resolvedSuggestion?.mappedName,
+                            ),
+                    onPressed: _canAcceptSuggestion(row)
+                        ? () => _acceptSuggestedMapping(row)
+                        : null,
+                  ),
+                  _buildRoundActionIcon(
+                    icon: Icons.account_tree_rounded,
+                    tooltip: 'Treat as separate seller',
+                    isActive: _isSeparateSelection(row, selectedValue),
+                    onPressed: row.is26QUnmatched || row.isReadOnly
+                        ? null
+                        : () => _markSeparate(row),
+                    activeColor: const Color(0xFF7C3AED),
+                  ),
+                  _buildRoundActionIcon(
+                    icon: Icons.task_alt_rounded,
+                    tooltip: 'Keep current mapping',
+                    isActive: _hasExplicitSelection(row, selectedValue),
+                    onPressed:
+                        (!row.is26QUnmatched &&
+                            selectedValue != null &&
+                            selectedValue.trim().isNotEmpty &&
+                            !_isSeparateSelection(row, selectedValue))
+                        ? () => _setMappedParty(row, selectedValue)
+                        : null,
+                    activeColor: SellerMappingTheme.successColor,
+                  ),
+                  _buildRoundActionIcon(
+                    icon: Icons.schedule_outlined,
+                    tooltip: 'Review later',
+                    isActive: false,
+                    onPressed: _canSkipSafely(row, status)
+                        ? () => _clearMapping(row)
+                        : null,
+                    activeColor: SellerMappingTheme.warningColor,
                   ),
                 ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              SellerMappingPill(
+                icon: Icons.format_list_numbered_rounded,
+                label: '26Q rows ${row.tdsRowCount}',
+                compact: true,
+              ),
+              SellerMappingPill(
+                icon: Icons.source_outlined,
+                label: 'Source rows ${row.sourceRowCount}',
+                compact: true,
+              ),
+              if (suggestion.isNotEmpty)
+                SellerMappingPill(
+                  icon: Icons.lightbulb_outline_rounded,
+                  label: 'Suggested: $suggestion',
+                  compact: true,
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildPartyAutocomplete(row: row, selectedValue: selectedValue),
+          if (row.is26QUnmatched) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildRoundActionIcon(
+                  icon: Icons.schedule_rounded,
+                  tooltip: 'Mark as Timing Difference',
+                  isActive: _isTimingDifferenceSelection(row, selectedValue),
+                  onPressed: () =>
+                      _setExceptionDecision(row, _timingDifferenceValue(row)),
+                  activeColor: SellerMappingTheme.warningColor,
+                ),
+                _buildRoundActionIcon(
+                  icon: Icons.bookmark_remove_rounded,
+                  tooltip: 'Mark as Missing in Books',
+                  isActive: _isMissingInBooksSelection(row, selectedValue),
+                  onPressed: () =>
+                      _setExceptionDecision(row, _missingInBooksValue(row)),
+                  activeColor: SellerMappingTheme.dangerColor,
+                ),
+                _buildRoundActionIcon(
+                  icon: Icons.restart_alt_rounded,
+                  tooltip: 'Clear exception decision',
+                  isActive: false,
+                  onPressed: () => _clearMapping(row),
+                  activeColor: SellerMappingTheme.mutedTextColor,
+                ),
               ],
             ),
-          ),
-          cell(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                selectedPan.isEmpty ? 'Not available' : selectedPan,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  height: 1.35,
-                  color: SellerMappingTheme.titleTextColor,
+          ],
+          if (rowView.helperMessages.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              rowView.helperMessages.join(' '),
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: _helperTextColor(
+                  status: status,
+                  autoMapDetail: rowView.autoMapDetail,
                 ),
               ),
             ),
-          ),
-          cell(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: SellerMappingStatusChip(
-                icon: _statusIconSafe(status),
-                label: _statusChipLabel(status),
-                tone: _statusTone(status),
-              ),
-            ),
-          ),
-          cell(
-            flex: _isPreflightMode ? 2 : 1,
-            alignment: Alignment.topCenter,
-            child: actionChild,
-          ),
+          ],
         ],
       ),
     );
@@ -2619,47 +2741,20 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         color: SellerMappingTheme.surfaceColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: SellerMappingTheme.borderColor),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F0F172A),
-            blurRadius: 20,
-            offset: Offset(0, 6),
-          ),
-        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: visibleRows.isEmpty
             ? _buildEmptyState()
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final tableWidth = math.max(constraints.maxWidth, 1180.0);
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: tableWidth,
-                      child: Column(
-                        children: [
-                          _buildTableHeader(),
-                          Expanded(
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero,
-                              itemCount: visibleRows.length,
-                              itemBuilder: (context, index) {
-                                final rowView = _buildDisplayRowView(
-                                  row: visibleRows[index],
-                                  index: index,
-                                  isLast: index == visibleRows.length - 1,
-                                );
-                                return _buildTableRow(
-                                  rowView: rowView,
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+            : ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                itemCount: visibleRows.length,
+                separatorBuilder: (_, separatorIndex) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  return _buildSellerCard(
+                    row: visibleRows[index],
+                    index: index,
                   );
                 },
               ),
@@ -2668,34 +2763,15 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   Widget _buildBottomBar(List<SellerMappingRowVm> visibleRows) {
-    final visibleCount = visibleRows.length;
-    final totalCount = _rowsForCurrentViewScope().length;
-    final conflictCount = visibleRows.where((row) {
-      return _rowStateByKey[row.rowKey]?.status == 'PAN Conflict';
-    }).length;
-    final missingPanCount = visibleRows.where((row) {
-      return _rowStateByKey[row.rowKey]?.status == 'Mapped (PAN missing)';
-    }).length;
-
-    final summaryText = visibleCount == totalCount
-        ? 'Showing all $totalCount seller rows.'
-        : 'Showing $visibleCount of $totalCount seller rows.';
-
-    final reviewText = conflictCount > 0
-        ? '$conflictCount conflict ${conflictCount == 1 ? 'needs' : 'need'} review before final reconciliation.'
-        : missingPanCount > 0
-        ? '$missingPanCount row ${missingPanCount == 1 ? 'has' : 'have'} mapped selections that still need PAN verification.'
-        : 'All visible mappings are ready for reconciliation review.';
-    final preflightReviewCount = visibleRows.where((row) {
-      return _rowStateByKey[row.rowKey]?.isUnresolvedDangerousPreflightRow ??
-          false;
-    }).length;
-
-    final reviewColor = conflictCount > 0
-        ? SellerMappingTheme.dangerColor
-        : missingPanCount > 0
-        ? SellerMappingTheme.warningColor
-        : SellerMappingTheme.successColor;
+    final dangerousCount = _dangerousUnresolvedCount();
+    final unreviewedExceptionCount = _unreviewedExceptionCount();
+    final canContinue = _canContinue();
+    final summaryText =
+        '${visibleRows.length} visible of ${_rowsForCurrentViewScope().length} sellers in ${sectionDisplayLabel(_activeSectionCode)}.';
+    final reviewText = canContinue
+        ? 'All blocking identities and unmatched 26Q exceptions are reviewed.'
+        : '$dangerousCount dangerous identity ${dangerousCount == 1 ? 'issue remains' : 'issues remain'} and '
+              '$unreviewedExceptionCount unmatched 26Q ${unreviewedExceptionCount == 1 ? 'exception is' : 'exceptions are'} still unreviewed.';
 
     return SafeArea(
       top: false,
@@ -2731,38 +2807,22 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _isPreflightMode
-                        ? (preflightReviewCount > 0
-                              ? '$preflightReviewCount 26Q seller ${preflightReviewCount == 1 ? 'still needs' : 'still need'} dangerous identity review before reconciliation.'
-                              : 'No dangerous 26Q seller identity issues remain in preflight review.')
-                        : reviewText,
+                    reviewText,
                     style: TextStyle(
                       fontSize: 12.5,
                       height: 1.35,
                       fontWeight: FontWeight.w600,
-                      color: reviewColor,
+                      color: canContinue
+                          ? SellerMappingTheme.successColor
+                          : SellerMappingTheme.dangerColor,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 16),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.maybePop(context),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 46),
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                side: const BorderSide(color: SellerMappingTheme.borderColor),
-              ),
-              icon: const Icon(Icons.arrow_back_rounded),
-              label: const Text('Back to Upload'),
-            ),
-            const SizedBox(width: 12),
             FilledButton.icon(
-              onPressed: _saveMappings,
+              onPressed: canContinue ? _saveMappings : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size(0, 46),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -2773,9 +2833,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 ),
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(
-                _isPreflightMode ? 'Save Review' : 'Proceed to Reconciliation',
-              ),
+              label: const Text('Save & Continue'),
             ),
           ],
         ),
@@ -2790,10 +2848,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     switch (view) {
       case SellerMappingListView.needsAction:
         return state.matchesNeedsAction;
-      case SellerMappingListView.aboveThreshold:
-        return state.matchesAboveThreshold;
-      case SellerMappingListView.unmatched26Q:
-        return state.matchesUnmatched26Q;
       case SellerMappingListView.allSellers:
         return true;
     }
@@ -2806,10 +2860,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       for (final view in SellerMappingListView.values) view: 0,
     };
     for (final view in SellerMappingListView.values) {
-      final rowsForView =
-          _isPreflightMode && view == SellerMappingListView.needsAction
-          ? _rowsForSection(_allSectionsAuditCode)
-          : _rowsForActiveSection();
+      final rowsForView = _rowsForActiveSection();
       for (final row in rowsForView) {
         final state = _rowStateByKey[row.rowKey];
         if (state != null && _matchesListViewFromState(state, view)) {
@@ -2837,6 +2888,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final visibleRows = allFiltered.isNotEmpty
         ? allFiltered.sublist(0, visibleCount)
         : <SellerMappingRowVm>[];
+    _logAuditViewSnapshot();
     debugPrint(
       'SELLER ROW BUILD PERF => visibleRows=$visibleCount totalFiltered=${allFiltered.length} mode=lazy',
     );
@@ -2847,19 +2899,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       backgroundColor: SellerMappingTheme.pageBackground,
       bottomNavigationBar: _buildBottomBar(allFiltered),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Column(
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 14),
-              _buildTopToolbar(),
-              const SizedBox(height: 16),
-              Expanded(child: _buildTableSection(visibleRows)),
-              if (visibleCount < allFiltered.length)
-                _buildLoadMore(allFiltered),
-            ],
-          ),
+        child: Column(
+          children: [
+            _buildHeader(),
+            _buildTopToolbar(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                child: Column(
+                  children: [
+                    Expanded(child: _buildTableSection(visibleRows)),
+                    if (visibleCount < allFiltered.length)
+                      _buildLoadMore(allFiltered),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -3022,7 +3078,6 @@ Map<String, dynamic> _buildSellerScreenViewModelsInIsolate(
 ) {
   final buyerPan = payload['buyerPan'] as String? ?? '';
   final selectedSectionLabel = payload['selectedSectionLabel'] as String? ?? '';
-  final isPreflightMode = payload['isPreflightMode'] as bool? ?? false;
   final uniqueTdsParties = List<String>.from(
     payload['uniqueTdsParties'] as List? ?? const <String>[],
   );
@@ -3074,10 +3129,20 @@ Map<String, dynamic> _buildSellerScreenViewModelsInIsolate(
   }
 
   for (final sectionCode in availableSectionCodes) {
-    if (sectionCode == _SellerMappingScreenState._allSectionsAuditCode) {
-      continue;
-    }
     for (final row in mappingRowsBySection[sectionCode] ?? const []) {
+      final exactMappedName = row.exactMapping?.mappedName.trim() ?? '';
+      if (exactMappedName.toUpperCase().startsWith(
+            _SellerMappingScreenState._separatePrefix,
+          ) ||
+          exactMappedName.toUpperCase().startsWith(
+            _SellerMappingScreenState._timingDifferencePrefix,
+          ) ||
+          exactMappedName.toUpperCase().startsWith(
+            _SellerMappingScreenState._missingInBooksPrefix,
+          )) {
+        selectedMappings[row.rowKey] = exactMappedName;
+        continue;
+      }
       final hydratedValue =
           _normalizeToKnownTdsPartyForIsolate(
             uniqueTdsParties,
@@ -3096,22 +3161,13 @@ Map<String, dynamic> _buildSellerScreenViewModelsInIsolate(
     selectedSectionLabel.trim(),
   );
   final fallbackSection = availableSectionCodes.firstWhere(
-    (sectionCode) =>
-        sectionCode != _SellerMappingScreenState._allSectionsAuditCode,
+    (sectionCode) => sectionCode != 'ALL',
     orElse: () =>
         availableSectionCodes.isNotEmpty ? availableSectionCodes.first : '194Q',
   );
   final canUsePreferredSection =
       availableSectionCodes.contains(preferredSection) &&
-      (!isPreflightMode ||
-          preferredSection != _SellerMappingScreenState._allSectionsAuditCode ||
-          _hasNeedsActionRowsForSectionInIsolate(
-            rows:
-                mappingRowsBySection[_SellerMappingScreenState
-                    ._allSectionsAuditCode] ??
-                const [],
-            selectedMappings: selectedMappings,
-          ));
+      preferredSection != 'ALL';
 
   return {
     'mappingRowsBySection': {
@@ -3131,12 +3187,6 @@ List<String> _availableSectionCodesForIsolate({
   final presentSections = _SellerMappingScreenState._sectionTabOrder
       .where((section) => (rowDataBySection[section] ?? const []).isNotEmpty)
       .toList();
-  if (presentSections.length > 1) {
-    return <String>[
-      ...presentSections,
-      _SellerMappingScreenState._allSectionsAuditCode,
-    ];
-  }
   return presentSections;
 }
 
@@ -3147,14 +3197,9 @@ List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
   required Map<String, SellerMapping> exactMappingsByKey,
   required Map<String, SellerMapping> fallbackMappingsByAlias,
 }) {
-  final sourceRows =
-      sectionCode == _SellerMappingScreenState._allSectionsAuditCode
-      ? _SellerMappingScreenState._sectionTabOrder
-            .expand((section) => rowDataBySection[section] ?? const [])
-            .toList()
-      : List<SellerMappingScreenRowData>.from(
-          rowDataBySection[sectionCode] ?? const [],
-        );
+  final sourceRows = List<SellerMappingScreenRowData>.from(
+    rowDataBySection[sectionCode] ?? const [],
+  );
 
   final rowMap = <String, SellerMappingRowVm>{};
   for (final row in sourceRows) {
@@ -3182,6 +3227,11 @@ List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
       purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
           ? row.purchaseGstNo.trim()
           : (existing?.purchaseGstNo ?? ''),
+      sourceRowCount: math.max(
+        row.sourceRowCount,
+        existing?.sourceRowCount ?? 0,
+      ),
+      tdsRowCount: math.max(row.tdsRowCount, existing?.tdsRowCount ?? 0),
       exactMapping:
           exactMappingsByKey[exactMappingKey] ?? existing?.exactMapping,
       fallbackMapping:
@@ -3252,28 +3302,6 @@ String? _normalizeToKnownTdsPartyForIsolate(
   return null;
 }
 
-bool _hasNeedsActionRowsForSectionInIsolate({
-  required List<SellerMappingRowVm> rows,
-  required Map<String, String> selectedMappings,
-}) {
-  for (final row in rows) {
-    final selectedValue = selectedMappings[row.rowKey];
-    final hasPanIssue =
-        row.hasMissingOrUncertainPan || row.hasNameOrPanConflict;
-    final needsAction =
-        row.is26QUnmatched ||
-        row.requiresDangerousReview ||
-        row.hasReconciliationMismatch ||
-        hasPanIssue ||
-        ((row.isAboveThreshold || row.hasApplicableTdsImpact) &&
-            (selectedValue == null || selectedValue.trim().isEmpty));
-    if (needsAction) {
-      return true;
-    }
-  }
-  return false;
-}
-
 Map<String, dynamic> _serializeSellerMappingForIsolate(SellerMapping mapping) {
   return {
     'id': mapping.id,
@@ -3299,6 +3327,8 @@ Map<String, dynamic> _serializeScreenRowForIsolate(
     'sectionCode': row.sectionCode,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
+    'sourceRowCount': row.sourceRowCount,
+    'tdsRowCount': row.tdsRowCount,
     'resolvedSuggestion': row.resolvedSuggestion == null
         ? null
         : {
@@ -3332,6 +3362,8 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     sectionCode: row['sectionCode'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
+    sourceRowCount: row['sourceRowCount'] as int? ?? 0,
+    tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     resolvedSuggestion: suggestion == null
         ? null
         : SellerMappingResolvedSuggestion(
@@ -3363,6 +3395,8 @@ Map<String, dynamic> _serializeRowVmForIsolate(SellerMappingRowVm row) {
     'sectionCode': row.sectionCode,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
+    'sourceRowCount': row.sourceRowCount,
+    'tdsRowCount': row.tdsRowCount,
     'exactMapping': row.exactMapping == null
         ? null
         : _serializeSellerMappingForIsolate(row.exactMapping!),
@@ -3403,6 +3437,8 @@ SellerMappingRowVm _deserializeRowVmForIsolate(Map<String, dynamic> row) {
     sectionCode: row['sectionCode'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
+    sourceRowCount: row['sourceRowCount'] as int? ?? 0,
+    tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     exactMapping: exactMapping == null
         ? null
         : _deserializeSellerMappingForIsolate(

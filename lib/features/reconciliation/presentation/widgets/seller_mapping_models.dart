@@ -7,6 +7,8 @@ class SellerMappingRowVm {
   final String sectionCode;
   final String purchasePan;
   final String purchaseGstNo;
+  final int sourceRowCount;
+  final int tdsRowCount;
   final SellerMapping? exactMapping;
   final SellerMapping? fallbackMapping;
   final SellerMappingResolvedSuggestion? resolvedSuggestion;
@@ -29,6 +31,8 @@ class SellerMappingRowVm {
     required this.sectionCode,
     required this.purchasePan,
     required this.purchaseGstNo,
+    this.sourceRowCount = 0,
+    this.tdsRowCount = 0,
     this.exactMapping,
     this.fallbackMapping,
     this.resolvedSuggestion,
@@ -49,22 +53,13 @@ class SellerMappingRowVm {
   String get rowKey => '$normalizedAlias|$sectionCode';
 }
 
-enum SellerMappingListView {
-  needsAction,
-  aboveThreshold,
-  unmatched26Q,
-  allSellers,
-}
+enum SellerMappingListView { needsAction, allSellers }
 
 extension SellerMappingListViewX on SellerMappingListView {
   String get label {
     switch (this) {
       case SellerMappingListView.needsAction:
         return 'Needs Action';
-      case SellerMappingListView.aboveThreshold:
-        return 'Above Threshold';
-      case SellerMappingListView.unmatched26Q:
-        return '26Q Unmatched';
       case SellerMappingListView.allSellers:
         return 'All Sellers';
     }

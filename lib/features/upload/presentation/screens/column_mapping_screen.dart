@@ -405,7 +405,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                 ),
               ),
               items: _previewData.headerRowCandidates.map((candidate) {
@@ -453,7 +453,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF94A3B8),
+              color: Color(0xFF64748B),
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -499,7 +499,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 : _isGenericLedgerFile
                 ? 'Required: Date, Party Name, and Amount. PAN/GST is optional. Closing Balance is not allowed.'
                 : 'Required: Party Name, PAN, Section, Amount Paid, TDS Amount, and Date.',
-            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
           ),
           if (validationErrors.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -688,7 +688,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             const SizedBox(height: 4),
             Text(
               field.description,
-              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ],
           const SizedBox(height: 12),
@@ -698,7 +698,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
             ).copyWith(canvasColor: AppColorScheme.border),
             child: DropdownButtonFormField<String>(
               initialValue: mappedColumnKey,
-              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
+              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
               isExpanded: true,
               decoration: InputDecoration(
                 filled: true,
@@ -709,11 +709,11 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
                 ),
               ),
               style: const TextStyle(
@@ -725,7 +725,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
                   value: null,
                   child: Text(
                     'Not Mapped',
-                    style: TextStyle(color: Color(0xFF94A3B8)),
+                    style: TextStyle(color: Color(0xFF64748B)),
                   ),
                 ),
                 ..._previewData.columnKeys.map((colKey) {
