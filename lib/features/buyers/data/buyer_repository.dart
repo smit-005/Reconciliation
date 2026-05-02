@@ -5,10 +5,7 @@ class BuyerRepository {
   Future<List<Buyer>> getAllBuyers() async {
     final db = await DBHelper.database;
 
-    final rows = await db.query(
-      'buyers',
-      orderBy: 'name COLLATE NOCASE ASC',
-    );
+    final rows = await db.query('buyers', orderBy: 'name COLLATE NOCASE ASC');
 
     return rows.map((e) => Buyer.fromMap(e)).toList();
   }
@@ -44,7 +41,10 @@ class BuyerRepository {
       }
 
       final buyerId = (rows.first['id'] ?? id).toString();
-      final buyerPan = (rows.first['pan'] ?? '').toString().trim().toUpperCase();
+      final buyerPan = (rows.first['pan'] ?? '')
+          .toString()
+          .trim()
+          .toUpperCase();
 
       if (buyerPan.isNotEmpty) {
         await txn.delete(
@@ -60,11 +60,7 @@ class BuyerRepository {
         whereArgs: [buyerId],
       );
 
-      await txn.delete(
-        'buyers',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      await txn.delete('buyers', where: 'id = ?', whereArgs: [id]);
     });
   }
 

@@ -12,8 +12,8 @@ class SectionRuleRegistry {
         ),
       ],
       thresholdMatchMode: SectionThresholdMatchMode.any,
-      applicabilityMode:
-          SectionApplicabilityMode.excessOnlyOnCrossingThenFullAmountAfterThreshold,
+      applicabilityMode: SectionApplicabilityMode
+          .excessOnlyOnCrossingThenFullAmountAfterThreshold,
       rateConfig: SectionRateConfig.fixed(0.001),
     ),
     '194C': SectionRuleConfig(

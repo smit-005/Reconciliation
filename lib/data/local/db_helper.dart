@@ -27,6 +27,7 @@ class DBHelper {
       ),
     );
   }
+
   static Future<void> _onUpgrade(
     Database db,
     int oldVersion,
@@ -253,7 +254,10 @@ ON staged_26q_rows(created_at)
       final batch = txn.batch();
 
       for (final row in rows) {
-        final buyerPan = (row['buyer_pan'] ?? '').toString().trim().toUpperCase();
+        final buyerPan = (row['buyer_pan'] ?? '')
+            .toString()
+            .trim()
+            .toUpperCase();
         final aliasName = normalizeName((row['alias_name'] ?? '').toString());
         final sectionCode = _normalizeSellerMappingSectionCode(
           (row['section_code'] ?? 'ALL').toString(),
@@ -263,19 +267,18 @@ ON staged_26q_rows(created_at)
           continue;
         }
 
-        batch.insert(
-          'seller_mappings',
-          {
-            'buyer_name': (row['buyer_name'] ?? '').toString().trim(),
-            'buyer_pan': buyerPan,
-            'alias_name': aliasName,
-            'section_code': sectionCode,
-            'mapped_pan': (row['mapped_pan'] ?? '').toString().trim().toUpperCase(),
-            'mapped_name': (row['mapped_name'] ?? '').toString().trim(),
-            'created_at': (row['created_at'] ?? '').toString(),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        batch.insert('seller_mappings', {
+          'buyer_name': (row['buyer_name'] ?? '').toString().trim(),
+          'buyer_pan': buyerPan,
+          'alias_name': aliasName,
+          'section_code': sectionCode,
+          'mapped_pan': (row['mapped_pan'] ?? '')
+              .toString()
+              .trim()
+              .toUpperCase(),
+          'mapped_name': (row['mapped_name'] ?? '').toString().trim(),
+          'created_at': (row['created_at'] ?? '').toString(),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
       await batch.commit(noResult: true);
@@ -317,20 +320,16 @@ ON staged_26q_rows(created_at)
           continue;
         }
 
-        batch.insert(
-          'import_format_profiles',
-          {
-            'buyer_id': buyerId,
-            'file_type': fileType,
-            'sheet_name_pattern': sheetNamePattern,
-            'header_row_index': row['header_row_index'] ?? 0,
-            'headers_trusted': row['headers_trusted'] ?? 0,
-            'column_mapping_json': (row['column_mapping_json'] ?? '').toString(),
-            'sample_signature': sampleSignature,
-            'last_used_at': (row['last_used_at'] ?? '').toString(),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        batch.insert('import_format_profiles', {
+          'buyer_id': buyerId,
+          'file_type': fileType,
+          'sheet_name_pattern': sheetNamePattern,
+          'header_row_index': row['header_row_index'] ?? 0,
+          'headers_trusted': row['headers_trusted'] ?? 0,
+          'column_mapping_json': (row['column_mapping_json'] ?? '').toString(),
+          'sample_signature': sampleSignature,
+          'last_used_at': (row['last_used_at'] ?? '').toString(),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
       await batch.commit(noResult: true);

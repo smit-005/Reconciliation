@@ -38,11 +38,7 @@ class ExcelExportService {
         gstNo: gstNo,
       );
 
-      _writeDetailTable(
-        detailSheet,
-        rows: rows,
-        startRow: 8,
-      );
+      _writeDetailTable(detailSheet, rows: rows, startRow: 8);
 
       final summarySheet = workbook.worksheets.addWithName('Summary');
       _writeCompactSummarySheet(
@@ -54,15 +50,13 @@ class ExcelExportService {
       );
 
       final pivotSheet = workbook.worksheets.addWithName('Pivot Summary');
-      _writePivotSummarySheet(
-        pivotSheet,
-        rows: rows,
-      );
+      _writePivotSummarySheet(pivotSheet, rows: rows);
 
       final sectionGrouped = _groupBySection(rows);
 
-      final sectionSummarySheet =
-      workbook.worksheets.addWithName('Section Summary');
+      final sectionSummarySheet = workbook.worksheets.addWithName(
+        'Section Summary',
+      );
       _writeSectionSummarySheet(
         sectionSummarySheet,
         grouped: sectionGrouped,
@@ -90,11 +84,7 @@ class ExcelExportService {
           buyerPan: buyerPan,
           gstNo: gstNo,
         );
-        _writeDetailTable(
-          sheet,
-          rows: sectionRows,
-          startRow: 8,
-        );
+        _writeDetailTable(sheet, rows: sectionRows, startRow: 8);
       }
 
       final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
@@ -162,8 +152,9 @@ class ExcelExportService {
         );
       }
 
-      final sectionSummarySheet =
-      workbook.worksheets.addWithName('Section Summary');
+      final sectionSummarySheet = workbook.worksheets.addWithName(
+        'Section Summary',
+      );
 
       _writeSectionSummarySheet(
         sectionSummarySheet,
@@ -197,8 +188,8 @@ class ExcelExportService {
   }
 
   static Map<String, List<ReconciliationRow>> _groupBySection(
-      List<ReconciliationRow> rows,
-      ) {
+    List<ReconciliationRow> rows,
+  ) {
     final grouped = <String, List<ReconciliationRow>>{};
 
     for (final row in rows) {
@@ -220,12 +211,12 @@ class ExcelExportService {
   }
 
   static void _writeSummarySection(
-      xlsio.Worksheet sheet, {
-        required List<ReconciliationRow> rows,
-        required String buyerName,
-        required String buyerPan,
-        required String gstNo,
-      }) {
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
     final totalBasic = _round2(
       rows.fold(0.0, (sum, row) => sum + row.basicAmount),
     );
@@ -302,10 +293,10 @@ class ExcelExportService {
   }
 
   static void _writeDetailTable(
-      xlsio.Worksheet sheet, {
-        required List<ReconciliationRow> rows,
-        required int startRow,
-      }) {
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    required int startRow,
+  }) {
     final headers = [
       'Buyer Name',
       'Buyer PAN',
@@ -336,8 +327,12 @@ class ExcelExportService {
       cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
     }
 
-    sheet.autoFilters.filterRange =
-        sheet.getRangeByIndex(startRow, 1, startRow, headers.length);
+    sheet.autoFilters.filterRange = sheet.getRangeByIndex(
+      startRow,
+      1,
+      startRow,
+      headers.length,
+    );
 
     int rowIndex = startRow + 1;
 
@@ -346,24 +341,27 @@ class ExcelExportService {
       sheet.getRangeByIndex(rowIndex, 2).setText(row.buyerPan);
       sheet.getRangeByIndex(rowIndex, 3).setText(row.financialYear);
       sheet.getRangeByIndex(rowIndex, 4).setText(row.month);
-      sheet.getRangeByIndex(
-        rowIndex,
-        5,
-      ).setText(row.section.trim().isEmpty ? 'No Section' : row.section);
+      sheet
+          .getRangeByIndex(rowIndex, 5)
+          .setText(row.section.trim().isEmpty ? 'No Section' : row.section);
       sheet.getRangeByIndex(rowIndex, 6).setText(row.sellerName);
       sheet.getRangeByIndex(rowIndex, 7).setText(row.sellerPan);
       sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(row.basicAmount));
-      sheet.getRangeByIndex(rowIndex, 9).setNumber(_round2(row.applicableAmount));
+      sheet
+          .getRangeByIndex(rowIndex, 9)
+          .setNumber(_round2(row.applicableAmount));
       sheet.getRangeByIndex(rowIndex, 10).setNumber(_round2(row.tds26QAmount));
       sheet.getRangeByIndex(rowIndex, 11).setNumber(_round2(row.expectedTds));
       sheet.getRangeByIndex(rowIndex, 12).setNumber(_round2(row.actualTds));
       sheet.getRangeByIndex(rowIndex, 13).setNumber(_round2(row.tdsDifference));
-      sheet.getRangeByIndex(rowIndex, 14).setNumber(_round2(row.amountDifference));
+      sheet
+          .getRangeByIndex(rowIndex, 14)
+          .setNumber(_round2(row.amountDifference));
       sheet.getRangeByIndex(rowIndex, 15).setText(row.status);
       sheet.getRangeByIndex(rowIndex, 16).setText(getRiskLevel(row.status));
-      sheet.getRangeByIndex(rowIndex, 17).setText(
-        row.remarks.trim().isEmpty ? '-' : row.remarks,
-      );
+      sheet
+          .getRangeByIndex(rowIndex, 17)
+          .setText(row.remarks.trim().isEmpty ? '-' : row.remarks);
 
       final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 17);
       rowRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
@@ -390,49 +388,64 @@ class ExcelExportService {
     sheet.getRangeByIndex(rowIndex, 1).setText('TOTAL');
     sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
 
-    sheet.getRangeByIndex(rowIndex, 8).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.basicAmount)),
-    );
-    sheet.getRangeByIndex(rowIndex, 9).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.applicableAmount)),
-    );
-    sheet.getRangeByIndex(rowIndex, 10).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
-    );
-    sheet.getRangeByIndex(rowIndex, 11).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.expectedTds)),
-    );
-    sheet.getRangeByIndex(rowIndex, 12).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.actualTds)),
-    );
-    sheet.getRangeByIndex(rowIndex, 13).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.tdsDifference)),
-    );
-    sheet.getRangeByIndex(rowIndex, 14).setNumber(
-      _round2(rows.fold(0.0, (sum, row) => sum + row.amountDifference)),
-    );
+    sheet
+        .getRangeByIndex(rowIndex, 8)
+        .setNumber(
+          _round2(rows.fold(0.0, (sum, row) => sum + row.basicAmount)),
+        );
+    sheet
+        .getRangeByIndex(rowIndex, 9)
+        .setNumber(
+          _round2(rows.fold(0.0, (sum, row) => sum + row.applicableAmount)),
+        );
+    sheet
+        .getRangeByIndex(rowIndex, 10)
+        .setNumber(
+          _round2(rows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
+        );
+    sheet
+        .getRangeByIndex(rowIndex, 11)
+        .setNumber(
+          _round2(rows.fold(0.0, (sum, row) => sum + row.expectedTds)),
+        );
+    sheet
+        .getRangeByIndex(rowIndex, 12)
+        .setNumber(_round2(rows.fold(0.0, (sum, row) => sum + row.actualTds)));
+    sheet
+        .getRangeByIndex(rowIndex, 13)
+        .setNumber(
+          _round2(rows.fold(0.0, (sum, row) => sum + row.tdsDifference)),
+        );
+    sheet
+        .getRangeByIndex(rowIndex, 14)
+        .setNumber(
+          _round2(rows.fold(0.0, (sum, row) => sum + row.amountDifference)),
+        );
 
     final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 17);
     totalRange.cellStyle.bold = true;
     totalRange.cellStyle.backColor = '#FFF3CD';
     totalRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
 
-    _applyNumberFormat(
-      sheet,
-      startRow + 1,
-      rowIndex,
-      [8, 9, 10, 11, 12, 13, 14],
-    );
+    _applyNumberFormat(sheet, startRow + 1, rowIndex, [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+    ]);
     _autoFitUsefulColumns(sheet, 17);
   }
 
   static void _writeCompactSummarySheet(
-      xlsio.Worksheet sheet, {
-        required List<ReconciliationRow> rows,
-        required String buyerName,
-        required String buyerPan,
-        required String gstNo,
-      }) {
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
     sheet.getRangeByName('A1:H1').merge();
     sheet.getRangeByName('A1').setText('Reconciliation Summary');
     sheet.getRangeByName('A1').cellStyle.bold = true;
@@ -495,7 +508,10 @@ class ExcelExportService {
       totalActualTds.toStringAsFixed(2),
       totalTdsDifference.toStringAsFixed(2),
       totalAmountDifference.toStringAsFixed(2),
-      rows.where((e) => e.status == ReconciliationStatus.matched).length.toString(),
+      rows
+          .where((e) => e.status == ReconciliationStatus.matched)
+          .length
+          .toString(),
       rows
           .where((e) => e.status == ReconciliationStatus.timingDifference)
           .length
@@ -519,10 +535,10 @@ class ExcelExportService {
       rows
           .where(
             (e) =>
-        e.applicableAmount > 0 &&
-            e.tds26QAmount == 0 &&
-            e.actualTds == 0,
-      )
+                e.applicableAmount > 0 &&
+                e.tds26QAmount == 0 &&
+                e.actualTds == 0,
+          )
           .length
           .toString(),
     ];
@@ -539,12 +555,12 @@ class ExcelExportService {
   }
 
   static void _writeSectionSummarySheet(
-      xlsio.Worksheet sheet, {
-        required Map<String, List<ReconciliationRow>> grouped,
-        required String buyerName,
-        required String buyerPan,
-        required String gstNo,
-      }) {
+    xlsio.Worksheet sheet, {
+    required Map<String, List<ReconciliationRow>> grouped,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
     sheet.getRangeByName('A1:J1').merge();
     sheet.getRangeByName('A1').setText('Section-wise Summary');
     sheet.getRangeByName('A1').cellStyle.bold = true;
@@ -598,23 +614,35 @@ class ExcelExportService {
 
       sheet.getRangeByIndex(rowIndex, 1).setText(section);
       sheet.getRangeByIndex(rowIndex, 2).setNumber(rows.length.toDouble());
-      sheet.getRangeByIndex(rowIndex, 3)
+      sheet
+          .getRangeByIndex(rowIndex, 3)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.basicAmount)));
-      sheet.getRangeByIndex(rowIndex, 4)
+      sheet
+          .getRangeByIndex(rowIndex, 4)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.applicableAmount)));
-      sheet.getRangeByIndex(rowIndex, 5)
+      sheet
+          .getRangeByIndex(rowIndex, 5)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tds26QAmount)));
-      sheet.getRangeByIndex(rowIndex, 6)
+      sheet
+          .getRangeByIndex(rowIndex, 6)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.expectedTds)));
-      sheet.getRangeByIndex(rowIndex, 7)
+      sheet
+          .getRangeByIndex(rowIndex, 7)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.actualTds)));
-      sheet.getRangeByIndex(rowIndex, 8)
+      sheet
+          .getRangeByIndex(rowIndex, 8)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tdsDifference)));
-      sheet.getRangeByIndex(rowIndex, 9)
+      sheet
+          .getRangeByIndex(rowIndex, 9)
           .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.amountDifference)));
-      sheet.getRangeByIndex(rowIndex, 10).setNumber(
-        rows.where((e) => e.status != ReconciliationStatus.matched).length.toDouble(),
-      );
+      sheet
+          .getRangeByIndex(rowIndex, 10)
+          .setNumber(
+            rows
+                .where((e) => e.status != ReconciliationStatus.matched)
+                .length
+                .toDouble(),
+          );
 
       final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
       rowRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
@@ -622,7 +650,15 @@ class ExcelExportService {
       rowIndex++;
     }
 
-    _applyNumberFormat(sheet, startRow + 1, rowIndex - 1, [3, 4, 5, 6, 7, 8, 9]);
+    _applyNumberFormat(sheet, startRow + 1, rowIndex - 1, [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+    ]);
     _autoFitUsefulColumns(sheet, 10);
   }
 
@@ -678,13 +714,7 @@ class ExcelExportService {
         '10%',
         'Any payer',
       ],
-      [
-        '194H',
-        'Commission/Brokerage',
-        'Exceeding ₹15,000',
-        '5%',
-        'Any payer',
-      ],
+      ['194H', 'Commission/Brokerage', 'Exceeding ₹15,000', '5%', 'Any payer'],
     ];
 
     sheet.getRangeByName('A1:E1').merge();
@@ -715,10 +745,10 @@ class ExcelExportService {
   }
 
   static void _writePivotSummarySheet(
-      xlsio.Worksheet sheet, {
-        required List<ReconciliationRow> rows,
-        String? title,
-      }) {
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    String? title,
+  }) {
     final sortedRows = List<ReconciliationRow>.from(rows)
       ..sort((a, b) {
         final sellerCompare = a.sellerName.compareTo(b.sellerName);
@@ -733,12 +763,14 @@ class ExcelExportService {
     final grouped = _groupRowsForPivot(sortedRows);
 
     sheet.getRangeByName('A1:J1').merge();
-    sheet.getRangeByName('A1').setText(
-      title ??
-          (rows.isNotEmpty
-              ? rows.first.buyerName.toUpperCase()
-              : 'PIVOT SUMMARY'),
-    );
+    sheet
+        .getRangeByName('A1')
+        .setText(
+          title ??
+              (rows.isNotEmpty
+                  ? rows.first.buyerName.toUpperCase()
+                  : 'PIVOT SUMMARY'),
+        );
     sheet.getRangeByName('A1').cellStyle.bold = true;
     sheet.getRangeByName('A1').cellStyle.fontSize = 20;
     sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
@@ -746,11 +778,13 @@ class ExcelExportService {
     sheet.getRangeByName('A1').cellStyle.backColor = '#D9E1F2';
 
     sheet.getRangeByName('A2:J2').merge();
-    sheet.getRangeByName('A2').setText(
-      'Generated on ${DateTime.now().day.toString().padLeft(2, '0')}-'
+    sheet
+        .getRangeByName('A2')
+        .setText(
+          'Generated on ${DateTime.now().day.toString().padLeft(2, '0')}-'
           '${DateTime.now().month.toString().padLeft(2, '0')}-'
           '${DateTime.now().year}',
-    );
+        );
     sheet.getRangeByName('A2').cellStyle.hAlign = xlsio.HAlignType.center;
     sheet.getRangeByName('A2').cellStyle.backColor = '#F3F4F6';
     sheet.getRangeByName('A2').cellStyle.bold = true;
@@ -772,8 +806,10 @@ class ExcelExportService {
       sheet.getRangeByIndex(rowIndex, 1).setText(seller.toUpperCase());
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 15;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign = xlsio.HAlignType.left;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.vAlign = xlsio.VAlignType.center;
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
+          xlsio.HAlignType.left;
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.vAlign =
+          xlsio.VAlignType.center;
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#E2EFDA';
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
           xlsio.LineStyle.thin;
@@ -803,7 +839,8 @@ class ExcelExportService {
         sheet.getRangeByIndex(rowIndex, 1).setText('FY $fy');
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 12;
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign = xlsio.HAlignType.left;
+        sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
+            xlsio.HAlignType.left;
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#EDEDED';
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
             xlsio.LineStyle.thin;
@@ -815,14 +852,21 @@ class ExcelExportService {
         for (final r in fyRows) {
           sheet.getRangeByIndex(rowIndex, 1).setText(r.month);
           sheet.getRangeByIndex(rowIndex, 2).setNumber(_round2(r.basicAmount));
-          sheet.getRangeByIndex(rowIndex, 3).setNumber(_round2(r.applicableAmount));
+          sheet
+              .getRangeByIndex(rowIndex, 3)
+              .setNumber(_round2(r.applicableAmount));
           sheet.getRangeByIndex(rowIndex, 4).setNumber(_round2(r.tds26QAmount));
-          sheet.getRangeByIndex(rowIndex, 5).setNumber(_round2(r.amountDifference));
+          sheet
+              .getRangeByIndex(rowIndex, 5)
+              .setNumber(_round2(r.amountDifference));
           sheet.getRangeByIndex(rowIndex, 6).setNumber(_round2(r.expectedTds));
           sheet.getRangeByIndex(rowIndex, 7).setNumber(_round2(r.actualTds));
-          sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(r.tdsDifference));
+          sheet
+              .getRangeByIndex(rowIndex, 8)
+              .setNumber(_round2(r.tdsDifference));
           sheet.getRangeByIndex(rowIndex, 9).setText(r.status);
-          sheet.getRangeByIndex(rowIndex, 10)
+          sheet
+              .getRangeByIndex(rowIndex, 10)
               .setText(r.remarks.trim().isEmpty ? '-' : r.remarks);
 
           final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
@@ -920,12 +964,11 @@ class ExcelExportService {
 
     _applyNumberFormat(sheet, 1, rowIndex, [2, 3, 4, 5, 6, 7, 8]);
     _autoFitPivot(sheet);
-
   }
 
   static Map<String, Map<String, List<ReconciliationRow>>> _groupRowsForPivot(
-      List<ReconciliationRow> rows,
-      ) {
+    List<ReconciliationRow> rows,
+  ) {
     final map = <String, Map<String, List<ReconciliationRow>>>{};
 
     for (final r in rows) {
@@ -966,15 +1009,15 @@ class ExcelExportService {
   }
 
   static void _autoFitPivot(xlsio.Worksheet sheet) {
-    sheet.setColumnWidthInPixels(1, 100);  // Month
-    sheet.setColumnWidthInPixels(2, 105);  // Basic
-    sheet.setColumnWidthInPixels(3, 115);  // Applicable
-    sheet.setColumnWidthInPixels(4, 100);  // 26Q
-    sheet.setColumnWidthInPixels(5, 95);   // Amt Diff
-    sheet.setColumnWidthInPixels(6, 100);  // Exp TDS
-    sheet.setColumnWidthInPixels(7, 95);   // Actual TDS
-    sheet.setColumnWidthInPixels(8, 90);   // TDS Diff
-    sheet.setColumnWidthInPixels(9, 130);  // Status
+    sheet.setColumnWidthInPixels(1, 100); // Month
+    sheet.setColumnWidthInPixels(2, 105); // Basic
+    sheet.setColumnWidthInPixels(3, 115); // Applicable
+    sheet.setColumnWidthInPixels(4, 100); // 26Q
+    sheet.setColumnWidthInPixels(5, 95); // Amt Diff
+    sheet.setColumnWidthInPixels(6, 100); // Exp TDS
+    sheet.setColumnWidthInPixels(7, 95); // Actual TDS
+    sheet.setColumnWidthInPixels(8, 90); // TDS Diff
+    sheet.setColumnWidthInPixels(9, 130); // Status
     sheet.setColumnWidthInPixels(10, 280); // Remarks
   }
 
@@ -997,21 +1040,22 @@ class ExcelExportService {
   }
 
   static List<String> getUniqueSections(List<ReconciliationRow> rows) {
-    final sections = rows
-        .map((e) => e.section.trim().isEmpty ? 'No Section' : e.section)
-        .where((e) => e.isNotEmpty && e.toUpperCase() != 'NO SECTION')
-        .toSet()
-        .toList()
-      ..sort();
+    final sections =
+        rows
+            .map((e) => e.section.trim().isEmpty ? 'No Section' : e.section)
+            .where((e) => e.isNotEmpty && e.toUpperCase() != 'NO SECTION')
+            .toSet()
+            .toList()
+          ..sort();
     return sections;
   }
 
   static void _applyNumberFormat(
-      xlsio.Worksheet sheet,
-      int fromRow,
-      int toRow,
-      List<int> columns,
-      ) {
+    xlsio.Worksheet sheet,
+    int fromRow,
+    int toRow,
+    List<int> columns,
+  ) {
     for (final col in columns) {
       sheet.getRangeByIndex(fromRow, col, toRow, col).numberFormat = '#,##0.00';
     }
@@ -1053,10 +1097,12 @@ class ExcelExportService {
     final sellerNameValue = sellerName ?? '';
     final financialYearValue = financialYear ?? '';
 
-    final hasSeller = sellerNameValue.trim().isNotEmpty &&
+    final hasSeller =
+        sellerNameValue.trim().isNotEmpty &&
         sellerNameValue.trim() != 'All Sellers';
 
-    final hasFy = financialYearValue.trim().isNotEmpty &&
+    final hasFy =
+        financialYearValue.trim().isNotEmpty &&
         financialYearValue.trim() != 'All FY';
 
     String fileName;
@@ -1064,26 +1110,26 @@ class ExcelExportService {
     if (isPivot) {
       if (hasSeller && hasFy) {
         fileName =
-        '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
+            '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasFy) {
         fileName =
-        '${safeBuyerName}_pivot_${_safeFileName(financialYearValue.trim())}.xlsx';
+            '${safeBuyerName}_pivot_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasSeller) {
         fileName =
-        '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}.xlsx';
+            '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}.xlsx';
       } else {
         fileName = '${safeBuyerName}_pivot_summary.xlsx';
       }
     } else {
       if (hasSeller && hasFy) {
         fileName =
-        '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
+            '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasFy) {
         fileName =
-        '${safeBuyerName}_${_safeFileName(financialYearValue.trim())}.xlsx';
+            '${safeBuyerName}_${_safeFileName(financialYearValue.trim())}.xlsx';
       } else if (hasSeller) {
         fileName =
-        '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}.xlsx';
+            '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}.xlsx';
       } else {
         fileName = '${safeBuyerName}_reconciliation.xlsx';
       }

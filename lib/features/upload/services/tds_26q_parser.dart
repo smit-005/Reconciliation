@@ -63,10 +63,7 @@ class Tds26QParserResult {
   final List<Parsed26QRow> rows;
   final List<String> warnings;
 
-  Tds26QParserResult({
-    required this.rows,
-    required this.warnings,
-  });
+  Tds26QParserResult({required this.rows, required this.warnings});
 }
 
 class Tds26QParser {
@@ -119,7 +116,9 @@ class Tds26QParser {
     }
 
     if (columnIndexes.totalTaxIndex == null) {
-      warnings.add('Could not confidently detect TDS/total tax deducted column.');
+      warnings.add(
+        'Could not confidently detect TDS/total tax deducted column.',
+      );
     }
 
     if (columnIndexes.sectionIndex == null &&
@@ -148,16 +147,23 @@ class Tds26QParser {
       final monthLabel = _formatMonthLabel(txnDate);
       final fyLabel = _formatFinancialYear(txnDate);
 
-      final amountPaidCredited =
-      _parseDouble(_cellValue(row, columnIndexes.amountPaidIndex));
-      final totalTaxDeducted =
-      _parseDouble(_cellValue(row, columnIndexes.totalTaxIndex));
-      final deductionRate =
-      _parseDouble(_cellValue(row, columnIndexes.rateIndex));
-      final deductionReason =
-      _cellString(row, columnIndexes.reasonIndex).trim();
-      final certificateNumber =
-      _cellString(row, columnIndexes.certificateNumberIndex).trim();
+      final amountPaidCredited = _parseDouble(
+        _cellValue(row, columnIndexes.amountPaidIndex),
+      );
+      final totalTaxDeducted = _parseDouble(
+        _cellValue(row, columnIndexes.totalTaxIndex),
+      );
+      final deductionRate = _parseDouble(
+        _cellValue(row, columnIndexes.rateIndex),
+      );
+      final deductionReason = _cellString(
+        row,
+        columnIndexes.reasonIndex,
+      ).trim();
+      final certificateNumber = _cellString(
+        row,
+        columnIndexes.certificateNumberIndex,
+      ).trim();
 
       final rawMap = <String, dynamic>{};
       for (int c = 0; c < headers.length; c++) {
@@ -166,10 +172,10 @@ class Tds26QParser {
 
       final hasMeaningfulData =
           partyName.isNotEmpty ||
-              pan.isNotEmpty ||
-              amountPaidCredited > 0 ||
-              totalTaxDeducted > 0 ||
-              normalizedSectionText.isNotEmpty;
+          pan.isNotEmpty ||
+          amountPaidCredited > 0 ||
+          totalTaxDeducted > 0 ||
+          normalizedSectionText.isNotEmpty;
 
       if (!hasMeaningfulData) continue;
 
@@ -194,10 +200,7 @@ class Tds26QParser {
       );
     }
 
-    return Tds26QParserResult(
-      rows: parsedRows,
-      warnings: warnings,
-    );
+    return Tds26QParserResult(rows: parsedRows, warnings: warnings);
   }
 
   static String? _findDeductionSheetName(Excel excel) {
@@ -226,16 +229,16 @@ class Tds26QParser {
 
       final looksLikeHeader =
           rowJoined.contains('amount paid') ||
-              rowJoined.contains('paid / credited') ||
-              rowJoined.contains('amount paid / credited') ||
-              rowJoined.contains('pan status') ||
-              rowJoined.contains('deduction rate') ||
-              rowJoined.contains('nature of payment') ||
-              rowJoined.contains('deduction reason') ||
-              rowJoined.contains('certificate number') ||
-              rowJoined.contains('total tax deducted') ||
-              rowJoined.contains('tax deducted') ||
-              rowJoined.contains('tds amount');
+          rowJoined.contains('paid / credited') ||
+          rowJoined.contains('amount paid / credited') ||
+          rowJoined.contains('pan status') ||
+          rowJoined.contains('deduction rate') ||
+          rowJoined.contains('nature of payment') ||
+          rowJoined.contains('deduction reason') ||
+          rowJoined.contains('certificate number') ||
+          rowJoined.contains('total tax deducted') ||
+          rowJoined.contains('tax deducted') ||
+          rowJoined.contains('tds amount');
 
       if (looksLikeHeader) return i;
     }
@@ -331,9 +334,7 @@ class Tds26QParser {
         'pan',
         'permanent account number',
       ]),
-      panStatusIndex: find([
-        'pan status',
-      ]),
+      panStatusIndex: find(['pan status']),
       amountPaidIndex: find([
         'amount paid / credited',
         'amount paid/credited',
@@ -360,11 +361,7 @@ class Tds26QParser {
         'tds',
         'total tds',
       ]),
-      rateIndex: find([
-        'deduction rate',
-        'rate',
-        'rate of deduction',
-      ]),
+      rateIndex: find(['deduction rate', 'rate', 'rate of deduction']),
       reasonIndex: find([
         'deduction reason for lower/ no deduction',
         'deduction reason',
@@ -375,18 +372,15 @@ class Tds26QParser {
         'certificate number u/s197',
         'certificate no',
       ]),
-      natureOfPaymentIndex: find([
-        'nature of payment',
-        'nature payment',
-      ]),
+      natureOfPaymentIndex: find(['nature of payment', 'nature payment']),
       sectionIndex: findSectionColumn(),
     );
   }
 
   static String _pickBestSectionText(
-      List<Data?> row,
-      _ResolvedIndexes indexes,
-      ) {
+    List<Data?> row,
+    _ResolvedIndexes indexes,
+  ) {
     final nature = _cellString(row, indexes.natureOfPaymentIndex).trim();
     final section = _cellString(row, indexes.sectionIndex).trim();
 

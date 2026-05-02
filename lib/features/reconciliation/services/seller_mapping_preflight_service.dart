@@ -312,8 +312,8 @@ class SellerMappingPreflightService {
           matches.reviewedSeparateSkippedBlockers;
 
       if (matches.rows.isEmpty) {
-        final reviewedExceptionDisposition =
-            savedMappingLookup.reviewedExceptionDisposition(
+        final reviewedExceptionDisposition = savedMappingLookup
+            .reviewedExceptionDisposition(
               alias: tdsGroup.normalizedName,
               sectionCode: tdsGroup.sectionCode,
             );
@@ -346,8 +346,7 @@ class SellerMappingPreflightService {
                 : reviewedExceptionDisposition == 'missing_in_books'
                 ? 'Missing in Books'
                 : matches.reasonLabel,
-            preflightReasonDetail:
-                reviewedExceptionDisposition == null
+            preflightReasonDetail: reviewedExceptionDisposition == null
                 ? matches.reasonDetail
                 : 'Reviewed unmatched 26Q seller classification is already saved.',
             requiresDangerousReview:
@@ -569,9 +568,9 @@ class SellerMappingPreflightService {
           'Saved fallback alias currently points to this 26Q seller.',
         if (panExact) 'PAN matches this 26Q seller.',
         if (!panExact && nameExact)
-          'Source alias name exactly matches this 26Q seller.',
+          'Source alias name exactly matches this 26Q seller, but PAN is not confirmed on both sides. Review before accepting.',
         if (!panExact && !nameExact && suggestedNameMatch)
-          'Identity resolver already suggests this 26Q seller.',
+          'Identity resolver suggests this 26Q seller. Review before accepting.',
       ].join(' ');
 
       final matched = _MatchedSourceAlias(
@@ -596,8 +595,11 @@ class SellerMappingPreflightService {
         safePanMatches.add(matched);
         continue;
       }
-      if (nameExact) {
-        safeNameMatches.add(matched);
+      // Name-only matches are suggestions, not auto-resolved matches.
+      // This keeps ledger files without PAN/GST from silently merging into
+      // 26Q sellers until the user accepts and saves an alias mapping.
+      if (nameExact || suggestedNameMatch) {
+        riskyMatches.add(matched);
         continue;
       }
       riskyMatches.add(matched);
@@ -661,8 +663,8 @@ class SellerMappingPreflightService {
       );
     }
 
-    // Identity is considered "resolved" for preflight if all matched rows are "safe"
-    // (saved, PAN, or exact name) and there are no conflicts or risky suggestions.
+    // Identity is considered "resolved" for preflight only if all matched rows are "safe"
+    // (saved mapping or both-side PAN match) and there are no conflicts or risky name-only suggestions.
     // Exception: statutory PAN conflicts (multiple PANs in the 26Q file) must always
     // be reviewed even if matches exist.
     final matchesAreSafeAndResolved =

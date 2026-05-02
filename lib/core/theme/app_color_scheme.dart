@@ -22,7 +22,8 @@ class AppColorScheme {
   static const Color info = Color(0xFF1D4ED8);
   static const Color infoSoft = Color(0xFFDBEAFE);
 
-  static ColorScheme get light => ColorScheme.fromSeed(
+  static ColorScheme get light =>
+      ColorScheme.fromSeed(
         seedColor: primary,
         brightness: Brightness.light,
         surface: surface,

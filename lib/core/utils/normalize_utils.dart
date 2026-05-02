@@ -30,7 +30,8 @@ String normalizeSection(String value) {
 
   if (compact.isEmpty) return '';
 
-  final is194IA = upper.contains('194I(A)') ||
+  final is194IA =
+      upper.contains('194I(A)') ||
       upper.contains('194I A') ||
       upper.contains('194I_A') ||
       (upper.contains('194I') &&
@@ -39,7 +40,8 @@ String normalizeSection(String value) {
               upper.contains('EQUIPMENT')));
   if (is194IA) return '194I_A';
 
-  final is194IB = upper.contains('194I(B)') ||
+  final is194IB =
+      upper.contains('194I(B)') ||
       upper.contains('194I B') ||
       upper.contains('194I_B') ||
       (upper.contains('194I') &&
@@ -48,13 +50,15 @@ String normalizeSection(String value) {
               upper.contains('FURNITURE')));
   if (is194IB) return '194I_B';
 
-  final is194JA = upper.contains('194J(A)') ||
+  final is194JA =
+      upper.contains('194J(A)') ||
       upper.contains('194J A') ||
       upper.contains('194J_A') ||
       (upper.contains('194J') && upper.contains('TECHNICAL'));
   if (is194JA) return '194J_A';
 
-  final is194JB = upper.contains('194J(B)') ||
+  final is194JB =
+      upper.contains('194J(B)') ||
       upper.contains('194J B') ||
       upper.contains('194J_B') ||
       (upper.contains('194J') && upper.contains('PROFESSIONAL'));
@@ -70,10 +74,10 @@ String normalizeSection(String value) {
 }
 
 bool isLegacyUnsupportedSection(String value) {
-  final compact = value
-      .trim()
-      .toUpperCase()
-      .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  final compact = value.trim().toUpperCase().replaceAll(
+    RegExp(r'[^A-Z0-9]'),
+    '',
+  );
   return compact.contains('194IB');
 }
 

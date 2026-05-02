@@ -23,11 +23,7 @@ class ImportStagingRepository {
     final normalizedChunkSize = chunkSize <= 0 ? defaultChunkSize : chunkSize;
 
     await db.transaction((txn) async {
-      for (
-        int start = 0;
-        start < rows.length;
-        start += normalizedChunkSize
-      ) {
+      for (int start = 0; start < rows.length; start += normalizedChunkSize) {
         final end = (start + normalizedChunkSize) > rows.length
             ? rows.length
             : (start + normalizedChunkSize);
@@ -78,11 +74,7 @@ class ImportStagingRepository {
     final normalizedChunkSize = chunkSize <= 0 ? defaultChunkSize : chunkSize;
 
     await db.transaction((txn) async {
-      for (
-        int start = 0;
-        start < rows.length;
-        start += normalizedChunkSize
-      ) {
+      for (int start = 0; start < rows.length; start += normalizedChunkSize) {
         final end = (start + normalizedChunkSize) > rows.length
             ? rows.length
             : (start + normalizedChunkSize);

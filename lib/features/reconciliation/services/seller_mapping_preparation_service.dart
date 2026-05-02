@@ -113,7 +113,8 @@ class SellerMappingPreparationService {
     for (final entry in sourceRowsBySection.entries) {
       for (final row in entry.value) {
         final aliasKey = _buildAliasKey(row.partyName, row.section);
-        sourceCountsByAlias[aliasKey] = (sourceCountsByAlias[aliasKey] ?? 0) + 1;
+        sourceCountsByAlias[aliasKey] =
+            (sourceCountsByAlias[aliasKey] ?? 0) + 1;
       }
     }
 

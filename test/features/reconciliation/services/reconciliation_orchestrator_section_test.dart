@@ -22,34 +22,18 @@ void main() {
           buyerName: 'Test Buyer',
           buyerPan: 'ZZZZZ9999Z',
           sourceRows: [
-            _sourceRow(
-              section: '194Q',
-              amount: 6000000,
-            ),
-            _sourceRow(
-              section: '194C',
-              amount: 50000,
-            ),
+            _sourceRow(section: '194Q', amount: 6000000),
+            _sourceRow(section: '194C', amount: 50000),
           ],
           tdsRows: [
-            _tdsRow(
-              section: '194Q',
-              deductedAmount: 1000000,
-              tds: 1000,
-            ),
-            _tdsRow(
-              section: '194C',
-              deductedAmount: 50000,
-              tds: 500,
-            ),
+            _tdsRow(section: '194Q', deductedAmount: 1000000, tds: 1000),
+            _tdsRow(section: '194C', deductedAmount: 50000, tds: 500),
           ],
         );
 
         expect(rows.rows, hasLength(2));
 
-        final bySection = {
-          for (final row in rows.rows) row.section: row,
-        };
+        final bySection = {for (final row in rows.rows) row.section: row};
 
         expect(bySection.keys, containsAll(<String>['194Q', '194C']));
         expect(bySection['194Q']!.tds26QAmount, 1000000);
@@ -68,28 +52,12 @@ void main() {
           buyerName: 'Test Buyer',
           buyerPan: 'YYYYY8888Y',
           sourceRows: [
-            _sourceRow(
-              section: '194C',
-              amount: 50000,
-              documentNo: 'BILL-1',
-            ),
-            _sourceRow(
-              section: '194C',
-              amount: 50000,
-              documentNo: 'BILL-2',
-            ),
+            _sourceRow(section: '194C', amount: 50000, documentNo: 'BILL-1'),
+            _sourceRow(section: '194C', amount: 50000, documentNo: 'BILL-2'),
           ],
           tdsRows: [
-            _tdsRow(
-              section: '194C',
-              deductedAmount: 50000,
-              tds: 500,
-            ),
-            _tdsRow(
-              section: '194C',
-              deductedAmount: 50000,
-              tds: 500,
-            ),
+            _tdsRow(section: '194C', deductedAmount: 50000, tds: 500),
+            _tdsRow(section: '194C', deductedAmount: 50000, tds: 500),
           ],
         );
 
@@ -111,26 +79,15 @@ void main() {
         final rows = await CalculationService.reconcileSectionWise(
           buyerName: 'Test Buyer',
           buyerPan: 'XXXXX7777X',
-          sourceRows: [
-            _sourceRow(
-              section: '194C',
-              amount: 50000,
-            ),
-          ],
+          sourceRows: [_sourceRow(section: '194C', amount: 50000)],
           tdsRows: [
-            _tdsRow(
-              section: '194Q',
-              deductedAmount: 1000000,
-              tds: 1000,
-            ),
+            _tdsRow(section: '194Q', deductedAmount: 1000000, tds: 1000),
           ],
         );
 
         expect(rows.rows, hasLength(2));
 
-        final bySection = {
-          for (final row in rows.rows) row.section: row,
-        };
+        final bySection = {for (final row in rows.rows) row.section: row};
 
         expect(
           bySection['194C']!.status,

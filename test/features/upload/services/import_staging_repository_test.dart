@@ -132,10 +132,7 @@ void main() {
       expect(loadedTdsRows, hasLength(tdsRows.length));
       expect(loadedPurchaseRows.first.billNo, purchaseRows.first.billNo);
       expect(loadedPurchaseRows.last.billNo, purchaseRows.last.billNo);
-      expect(
-        loadedTdsRows.first.deductedAmount,
-        tdsRows.first.deductedAmount,
-      );
+      expect(loadedTdsRows.first.deductedAmount, tdsRows.first.deductedAmount);
       expect(loadedTdsRows.last.tds, tdsRows.last.tds);
 
       await repository.deleteImport(purchaseImportId);

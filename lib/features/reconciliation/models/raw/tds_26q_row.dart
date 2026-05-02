@@ -33,7 +33,8 @@ class Tds26QRow {
 
   factory Tds26QRow.fromMap(Map<String, dynamic> map) {
     String rawSection = (map['section'] ?? '').toString();
-    String nature = (map['nature_of_payment'] ?? map['section'] ?? '').toString();
+    String nature = (map['nature_of_payment'] ?? map['section'] ?? '')
+        .toString();
     final amountPaid = _toDouble(map['amount_paid'] ?? map['deducted_amount']);
     final tdsAmount = _toDouble(map['tds_amount'] ?? map['tds']);
     final explicitSection =
@@ -55,19 +56,22 @@ class Tds26QRow {
     final resolvedSection = normalizeSection(
       explicitSection.isNotEmpty ? explicitSection : inferredSection,
     );
-    final fallbackSection =
-        explicitSection.isNotEmpty ? explicitSection : inferredSection;
+    final fallbackSection = explicitSection.isNotEmpty
+        ? explicitSection
+        : inferredSection;
     final storedSection = resolvedSection.isNotEmpty
         ? resolvedSection
         : (isLegacyUnsupportedSection(fallbackSection)
-            ? '194IB'
-            : fallbackSection.trim().toUpperCase());
+              ? '194IB'
+              : fallbackSection.trim().toUpperCase());
 
     return Tds26QRow(
       month: map['date_month']?.toString() ?? map['month']?.toString() ?? '',
       financialYear: map['financial_year']?.toString() ?? '',
       deducteeName:
-          map['party_name']?.toString() ?? map['deductee_name']?.toString() ?? '',
+          map['party_name']?.toString() ??
+          map['deductee_name']?.toString() ??
+          '',
       panNumber: map['pan_number']?.toString() ?? map['pan']?.toString() ?? '',
       deductedAmount: amountPaid,
       tds: tdsAmount,

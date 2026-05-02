@@ -103,9 +103,7 @@ class AppTheme {
           return Colors.transparent;
         }),
         side: const BorderSide(color: AppColorScheme.border),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColorScheme.primary,

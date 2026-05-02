@@ -5,7 +5,9 @@ import 'package:reconciliation_app/features/reconciliation/models/result/reconci
 class TimingService {
   static const double tolerance = 1.0;
 
-  static List<ReconciliationRow> applyTimingLogic(List<ReconciliationRow> rows) {
+  static List<ReconciliationRow> applyTimingLogic(
+    List<ReconciliationRow> rows,
+  ) {
     if (rows.isEmpty) return rows;
 
     final sortedRows = [...rows]

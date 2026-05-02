@@ -1,0 +1,1107 @@
+import 'package:flutter/material.dart';
+
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
+
+typedef SellerMappingRowValueGetter = String? Function(SellerMappingRowVm row);
+typedef SellerMappingRowStringGetter = String Function(SellerMappingRowVm row);
+typedef SellerMappingRowBoolGetter = bool Function(SellerMappingRowVm row);
+typedef SellerMappingRowListGetter =
+    List<String> Function(SellerMappingRowVm row);
+typedef SellerMappingRowAction = void Function(SellerMappingRowVm row);
+typedef SellerMappingTdsLinkAction =
+    void Function(SellerMappingRowVm row, String? tdsParty);
+typedef SellerMappingLedgerLinkAction =
+    void Function(SellerMappingRowVm row, SellerMappingRowVm ledgerRow);
+
+class SellerMappingTwoPanelBody extends StatefulWidget {
+  final List<SellerMappingRowVm> visibleRows;
+  final List<SellerMappingRowVm> ledgerCandidateRows;
+  final bool showAllSellersMode;
+  final List<String> tdsParties;
+  final Map<String, List<String>> tdsPartyPans;
+  final SellerMappingRowValueGetter selectedValueForRow;
+  final SellerMappingRowStringGetter selectedPanForRow;
+  final SellerMappingRowStringGetter statusForRow;
+  final SellerMappingRowListGetter helperMessagesForRow;
+  final SellerMappingRowBoolGetter canAcceptSuggestion;
+  final SellerMappingRowAction onAcceptSuggestion;
+  final SellerMappingTdsLinkAction onLinkToTds;
+  final SellerMappingLedgerLinkAction onLinkToLedgerRow;
+  final SellerMappingRowAction onKeepSeparate;
+  final SellerMappingRowAction onClear;
+  final SellerMappingRowAction onMarkTimingDifference;
+  final SellerMappingRowAction onMarkMissingInBooks;
+
+  const SellerMappingTwoPanelBody({
+    super.key,
+    required this.visibleRows,
+    required this.ledgerCandidateRows,
+    this.showAllSellersMode = false,
+    required this.tdsParties,
+    required this.tdsPartyPans,
+    required this.selectedValueForRow,
+    required this.selectedPanForRow,
+    required this.statusForRow,
+    required this.helperMessagesForRow,
+    required this.canAcceptSuggestion,
+    required this.onAcceptSuggestion,
+    required this.onLinkToTds,
+    required this.onLinkToLedgerRow,
+    required this.onKeepSeparate,
+    required this.onClear,
+    required this.onMarkTimingDifference,
+    required this.onMarkMissingInBooks,
+  });
+
+  @override
+  State<SellerMappingTwoPanelBody> createState() =>
+      _SellerMappingTwoPanelBodyState();
+}
+
+class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
+  String? _selectedLeftKey;
+  String? _selectedTdsParty;
+  String? _selectedLedgerRowKey;
+  String _searchQuery = '';
+  String? _reverseHighlightText;
+
+  List<SellerMappingRowVm> get _leftReviewRows {
+    if (widget.showAllSellersMode) {
+      return widget.visibleRows;
+    }
+    return widget.visibleRows
+        .where((row) => row.is26QUnmatched)
+        .toList(growable: false);
+  }
+
+  List<SellerMappingRowVm> get _filteredLeftRows {
+    final rows = _leftReviewRows;
+    final query = _normalize(_searchQuery);
+    if (query.isEmpty) return rows;
+    return rows
+        .where((row) => _rowMatchesSearch(row, query))
+        .toList(growable: false);
+  }
+
+  SellerMappingRowVm? get _selectedLeftRow {
+    if (_selectedLeftKey == null) return null;
+    for (final row in _filteredLeftRows) {
+      if (row.rowKey == _selectedLeftKey) return row;
+    }
+    return null;
+  }
+
+  @override
+  void didUpdateWidget(covariant SellerMappingTwoPanelBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selectedLeftKey != null &&
+        !_leftReviewRows.any((row) => row.rowKey == _selectedLeftKey)) {
+      _clearLocalSelection();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredLeftRows = _filteredLeftRows;
+    final selectedRow = _selectedLeftRow;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: SellerMappingTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: SellerMappingTheme.borderColor),
+      ),
+      child: _leftReviewRows.isEmpty
+          ? _buildEmptyState()
+          : Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: _SellerPanel(
+                            title: 'Review Sellers',
+                            subtitle: widget.showAllSellersMode
+                                ? 'Inspect all visible sellers for this section.'
+                                : 'Select the seller that needs mapping or exception review.',
+                            child: _buildLeftList(
+                              filteredLeftRows,
+                              selectedRow,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 220,
+                          child: _buildActionColumn(selectedRow),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 5,
+                          child: _SellerPanel(
+                            title: 'Matching Candidates',
+                            subtitle: widget.showAllSellersMode
+                                ? 'All section ledger sellers are visible; related sellers are shown first.'
+                                : selectedRow == null
+                                ? 'Select a seller, or search to find candidates.'
+                                : selectedRow.is26QUnmatched
+                                ? 'Same-section ledger candidates for the selected 26Q seller.'
+                                : 'Suggested and matching 26Q candidates for the selected ledger seller.',
+                            child: _buildRightList(selectedRow),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerMappingTheme.borderColor),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.search_rounded,
+            color: SellerMappingTheme.mutedTextColor,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              decoration: const InputDecoration(
+                isDense: true,
+                hintText: 'Search seller, PAN, GST, or section...',
+                border: InputBorder.none,
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                  _reverseHighlightText = null;
+                  if (_selectedLeftKey != null &&
+                      !_filteredLeftRows.any(
+                        (row) => row.rowKey == _selectedLeftKey,
+                      )) {
+                    _selectedLeftKey = null;
+                    _selectedTdsParty = null;
+                    _selectedLedgerRowKey = null;
+                  }
+                });
+              },
+            ),
+          ),
+          if (_searchQuery.trim().isNotEmpty)
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _searchQuery = '';
+                  _reverseHighlightText = null;
+                });
+              },
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: const Text('Clear'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: SellerMappingTheme.primarySoft,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.manage_search_rounded,
+                size: 34,
+                color: SellerMappingTheme.primaryColor,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'No 26Q sellers match the current filters',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: SellerMappingTheme.titleTextColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Try changing the view, search, or status filter.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: SellerMappingTheme.mutedTextColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeftList(
+    List<SellerMappingRowVm> rows,
+    SellerMappingRowVm? selectedRow,
+  ) {
+    if (rows.isEmpty) {
+      return const _PanelEmptyHint(
+        icon: Icons.search_off_rounded,
+        title: 'No review sellers found',
+        message: 'Try another search term or filter.',
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: rows.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        final selected = row.rowKey == selectedRow?.rowKey;
+        final status = widget.statusForRow(row);
+        final selectedValue = widget.selectedValueForRow(row);
+        final selectedPan = widget.selectedPanForRow(row);
+        final highlighted =
+            _reverseHighlightText != null &&
+            _rowMatchesSearch(row, _normalize(_reverseHighlightText!));
+        return _SellerCard(
+          selected: selected,
+          highlighted: highlighted,
+          title: row.purchasePartyDisplayName,
+          badge: _friendlyStatusLabel(row, status),
+          badgeColor: _statusColor(row, status),
+          details: [
+            'Section ${row.sectionCode}',
+            if (row.purchasePan.isNotEmpty) 'Ledger PAN ${row.purchasePan}',
+            if (row.purchasePan.isEmpty) 'Ledger PAN not available',
+            if (row.purchaseGstNo.isNotEmpty) 'GST ${row.purchaseGstNo}',
+            'Ledger rows ${row.sourceRowCount}',
+            '26Q rows ${row.tdsRowCount}',
+            if (selectedValue != null && selectedValue.trim().isNotEmpty)
+              row.is26QUnmatched
+                  ? 'Linked ledger selected'
+                  : '26Q selected: $selectedValue',
+            if (selectedPan.isNotEmpty) '26Q PAN $selectedPan',
+          ],
+          footer: row.resolvedSuggestion?.mappedName.trim().isNotEmpty == true
+              ? 'Suggestion: ${row.resolvedSuggestion!.mappedName}'
+              : null,
+          onTap: () {
+            setState(() {
+              _selectedLeftKey = row.rowKey;
+              _selectedTdsParty = widget.selectedValueForRow(row);
+              _selectedLedgerRowKey = null;
+              _reverseHighlightText = null;
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRightList(SellerMappingRowVm? row) {
+    final hasSearch = _searchQuery.trim().isNotEmpty;
+
+    if (widget.showAllSellersMode) {
+      return _buildAllSellerLedgerList(row);
+    }
+
+    if (row == null) {
+      if (!hasSearch) {
+        return const _PanelEmptyHint(
+          icon: Icons.touch_app_rounded,
+          title: 'Select a seller',
+          message:
+              'Select a 26Q seller from Review Sellers to see possible matches.',
+        );
+      }
+      return _buildSearchOnlyLedgerCandidateList();
+    }
+
+    if (row.is26QUnmatched) return _buildLedgerCandidateList(row);
+    return _buildTdsCandidateList(row);
+  }
+
+  Widget _buildAllSellerLedgerList(SellerMappingRowVm? selectedRow) {
+    final candidates = _allSellerLedgerRows(selectedRow);
+
+    if (candidates.isEmpty) {
+      return const _PanelEmptyHint(
+        icon: Icons.search_off_rounded,
+        title: 'No section sellers found',
+        message: 'Try clearing search or changing the status filter.',
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: candidates.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) =>
+          _ledgerCandidateCard(selectedRow, candidates[index]),
+    );
+  }
+
+  Widget _buildSearchOnlyLedgerCandidateList() {
+    final query = _normalize(_searchQuery);
+    final ledgerMatches = widget.ledgerCandidateRows
+        .where((row) => _rowMatchesSearch(row, query))
+        .take(30)
+        .toList(growable: false);
+
+    if (ledgerMatches.isEmpty) {
+      return const _PanelEmptyHint(
+        icon: Icons.search_off_rounded,
+        title: 'No ledger candidates found',
+        message:
+            'Try searching another ledger seller name, PAN, GST, or section.',
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: ledgerMatches.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) =>
+          _ledgerCandidateCard(null, ledgerMatches[index]),
+    );
+  }
+
+  Widget _buildTdsCandidateList(SellerMappingRowVm row) {
+    final parties = _contextualTdsParties(row);
+
+    if (parties.isEmpty) {
+      return const _PanelEmptyHint(
+        icon: Icons.search_off_rounded,
+        title: 'No 26Q candidates found',
+        message: 'Use search to find a 26Q seller manually.',
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: parties.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) => _tdsCandidateCard(row, parties[index]),
+    );
+  }
+
+  Widget _buildLedgerCandidateList(SellerMappingRowVm row) {
+    final candidates = _contextualLedgerRows(row);
+
+    if (candidates.isEmpty) {
+      return const _PanelEmptyHint(
+        icon: Icons.search_off_rounded,
+        title: 'No ledger candidates found',
+        message: 'Use search or mark this 26Q seller as Missing in Books.',
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: candidates.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) =>
+          _ledgerCandidateCard(row, candidates[index]),
+    );
+  }
+
+  Widget _tdsCandidateCard(SellerMappingRowVm? row, String party) {
+    final currentSelection = row == null
+        ? null
+        : (_selectedTdsParty ?? widget.selectedValueForRow(row));
+    final suggestion = row?.resolvedSuggestion?.mappedName.trim() ?? '';
+    final pans = widget.tdsPartyPans[party] ?? const <String>[];
+    final selected = party == currentSelection;
+    final suggested = suggestion.isNotEmpty && party == suggestion;
+
+    return _SellerCard(
+      selected: selected,
+      highlighted: row == null,
+      title: party,
+      badge: suggested ? 'Suggested' : '26Q Seller',
+      badgeColor: suggested
+          ? SellerMappingTheme.primaryColor
+          : SellerMappingTheme.mutedTextColor,
+      details: [
+        if (row != null) 'Section ${row.sectionCode}',
+        if (pans.isNotEmpty) '26Q PAN ${pans.join(', ')}',
+        if (pans.isEmpty) '26Q PAN not available',
+      ],
+      onTap: () {
+        setState(() {
+          if (row != null) _selectedTdsParty = party;
+          _reverseHighlightText = party;
+        });
+      },
+    );
+  }
+
+  Widget _ledgerCandidateCard(
+    SellerMappingRowVm? row,
+    SellerMappingRowVm candidate,
+  ) {
+    final selected = candidate.rowKey == _selectedLedgerRowKey;
+    final possibleNameMatch =
+        row != null &&
+        _looksRelated(
+          row.purchasePartyDisplayName,
+          candidate.purchasePartyDisplayName,
+        );
+
+    return _SellerCard(
+      selected: selected,
+      highlighted: possibleNameMatch || row == null,
+      title: candidate.purchasePartyDisplayName,
+      badge: possibleNameMatch ? 'Possible Match' : 'Ledger Seller',
+      badgeColor: possibleNameMatch
+          ? SellerMappingTheme.primaryColor
+          : SellerMappingTheme.mutedTextColor,
+      details: [
+        'Section ${candidate.sectionCode}',
+        if (candidate.purchasePan.isNotEmpty)
+          'Ledger PAN ${candidate.purchasePan}',
+        if (candidate.purchasePan.isEmpty) 'Ledger PAN not available',
+        if (candidate.purchaseGstNo.isNotEmpty)
+          'GST ${candidate.purchaseGstNo}',
+        'Ledger rows ${candidate.sourceRowCount}',
+      ],
+      onTap: () {
+        setState(() {
+          if (row != null) _selectedLedgerRowKey = candidate.rowKey;
+          _reverseHighlightText = candidate.purchasePartyDisplayName;
+        });
+      },
+    );
+  }
+
+  Widget _buildActionColumn(SellerMappingRowVm? row) {
+    if (row == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: SellerMappingTheme.borderColor),
+        ),
+        child: const Center(
+          child: Text(
+            'Select a seller to enable actions.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+              color: SellerMappingTheme.mutedTextColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final helperMessages = widget.helperMessagesForRow(row);
+    final selectedLedger = _selectedLedgerFor(row);
+    final canLink = row.is26QUnmatched
+        ? selectedLedger != null
+        : (_selectedTdsParty ?? widget.selectedValueForRow(row)) != null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerMappingTheme.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Actions',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: SellerMappingTheme.titleTextColor,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: canLink
+                ? () {
+                    if (row.is26QUnmatched) {
+                      widget.onLinkToLedgerRow(row, selectedLedger!);
+                    } else {
+                      widget.onLinkToTds(
+                        row,
+                        _selectedTdsParty ?? widget.selectedValueForRow(row),
+                      );
+                    }
+                  }
+                : null,
+            icon: const Icon(Icons.link_rounded, size: 18),
+            label: const Text('Link Seller'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: widget.canAcceptSuggestion(row)
+                ? () => widget.onAcceptSuggestion(row)
+                : null,
+            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: const Text('Accept Suggestion'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: row.is26QUnmatched
+                ? null
+                : () => widget.onKeepSeparate(row),
+            icon: const Icon(Icons.call_split_rounded, size: 18),
+            label: const Text('Keep Separate'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => widget.onClear(row),
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: const Text('Clear'),
+          ),
+          if (row.is26QUnmatched) ...[
+            const Divider(height: 24),
+            OutlinedButton.icon(
+              onPressed: () => widget.onMarkTimingDifference(row),
+              icon: const Icon(Icons.schedule_rounded, size: 18),
+              label: const Text('Timing Difference'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => widget.onMarkMissingInBooks(row),
+              icon: const Icon(Icons.bookmark_remove_rounded, size: 18),
+              label: const Text('Missing in Books'),
+            ),
+          ],
+          const Spacer(),
+          if (helperMessages.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: SellerMappingTheme.borderColor),
+              ),
+              child: Text(
+                helperMessages.join(' '),
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                  color: SellerMappingTheme.mutedTextColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _contextualTdsParties(SellerMappingRowVm row) {
+    final query = _normalize(_searchQuery);
+    final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
+    final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
+    final rowName = row.purchasePartyDisplayName;
+    final ordered = <String>[];
+
+    void addParty(String party) {
+      final cleaned = party.trim();
+      if (cleaned.isEmpty || ordered.contains(cleaned)) return;
+      ordered.add(cleaned);
+    }
+
+    addParty(selectedValue);
+    addParty(suggestion);
+
+    for (final party in widget.tdsParties) {
+      final normalizedParty = _normalize(party);
+      final include = query.isNotEmpty
+          ? normalizedParty.contains(query)
+          : _looksRelated(rowName, party);
+      if (include) addParty(party);
+      if (ordered.length >= 40) break;
+    }
+
+    return ordered;
+  }
+
+  List<SellerMappingRowVm> _allSellerLedgerRows(
+    SellerMappingRowVm? selectedRow,
+  ) {
+    final query = _normalize(_searchQuery);
+    final ordered = <SellerMappingRowVm>[];
+
+    void addCandidate(SellerMappingRowVm candidate) {
+      if (ordered.any((item) => item.rowKey == candidate.rowKey)) return;
+      if (query.isNotEmpty && !_rowMatchesSearch(candidate, query)) return;
+      ordered.add(candidate);
+    }
+
+    if (selectedRow != null) {
+      for (final candidate in _contextualLedgerRows(selectedRow)) {
+        addCandidate(candidate);
+      }
+
+      for (final candidate in widget.ledgerCandidateRows) {
+        if (candidate.sectionCode == selectedRow.sectionCode &&
+            _looksRelated(
+              selectedRow.purchasePartyDisplayName,
+              candidate.purchasePartyDisplayName,
+            )) {
+          addCandidate(candidate);
+        }
+      }
+    }
+
+    for (final candidate in widget.ledgerCandidateRows) {
+      addCandidate(candidate);
+    }
+
+    return ordered;
+  }
+
+  List<SellerMappingRowVm> _contextualLedgerRows(SellerMappingRowVm row) {
+    final query = _normalize(_searchQuery);
+    final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
+    final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
+    final selected26QName = _normalize(row.purchasePartyDisplayName);
+    final candidates = widget.ledgerCandidateRows
+        .where((candidate) => candidate.sectionCode == row.sectionCode)
+        .toList(growable: false);
+    final ordered = <SellerMappingRowVm>[];
+
+    void addCandidate(SellerMappingRowVm candidate) {
+      if (ordered.any((item) => item.rowKey == candidate.rowKey)) return;
+      ordered.add(candidate);
+    }
+
+    // If this 26Q seller already has a linked ledger row, show only that
+    // mapped ledger seller on the right. This keeps mapped 26Q review focused.
+    if (selectedValue.isNotEmpty) {
+      for (final candidate in candidates) {
+        if (selectedValue.contains(candidate.rowKey)) {
+          addCandidate(candidate);
+        }
+      }
+      if (ordered.isNotEmpty) return ordered;
+    }
+
+    // Also support the normal ledger -> 26Q mapping case: if a ledger row is
+    // already mapped to the selected 26Q party name, show that matching row.
+    for (final candidate in candidates) {
+      final candidateMappedParty =
+          widget.selectedValueForRow(candidate)?.trim() ?? '';
+      if (candidateMappedParty.isEmpty) continue;
+      if (_normalize(candidateMappedParty) == selected26QName) {
+        addCandidate(candidate);
+      }
+    }
+    if (ordered.isNotEmpty) return ordered;
+
+    // Show the explicit suggestion first when it matches a ledger seller name.
+    if (suggestion.isNotEmpty) {
+      final normalizedSuggestion = _normalize(suggestion);
+      for (final candidate in candidates) {
+        if (_normalize(candidate.purchasePartyDisplayName) ==
+            normalizedSuggestion) {
+          addCandidate(candidate);
+        }
+      }
+    }
+
+    // For an unmapped 26Q seller, show only search/name-related ledger
+    // candidates. Do not fall back to every section seller after selection.
+    for (final candidate in candidates) {
+      final include = query.isNotEmpty
+          ? _rowMatchesSearch(candidate, query)
+          : _looksRelated(
+              row.purchasePartyDisplayName,
+              candidate.purchasePartyDisplayName,
+            );
+      if (include) addCandidate(candidate);
+      if (ordered.length >= 40) break;
+    }
+
+    return ordered;
+  }
+
+  SellerMappingRowVm? _selectedLedgerFor(SellerMappingRowVm row) {
+    if (!row.is26QUnmatched || _selectedLedgerRowKey == null) return null;
+    for (final candidate in widget.ledgerCandidateRows) {
+      if (candidate.rowKey == _selectedLedgerRowKey &&
+          candidate.sectionCode == row.sectionCode) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  void _clearLocalSelection() {
+    _selectedLeftKey = null;
+    _selectedTdsParty = null;
+    _selectedLedgerRowKey = null;
+    _reverseHighlightText = null;
+  }
+
+  bool _rowMatchesSearch(SellerMappingRowVm row, String normalizedQuery) {
+    if (normalizedQuery.isEmpty) return true;
+    final selected = widget.selectedValueForRow(row) ?? '';
+    final suggestion = row.resolvedSuggestion?.mappedName ?? '';
+    final status = widget.statusForRow(row);
+    final haystack = _normalize(
+      [
+        row.purchasePartyDisplayName,
+        row.purchasePan,
+        row.purchaseGstNo,
+        row.sectionCode,
+        selected,
+        suggestion,
+        status,
+      ].join(' '),
+    );
+    return haystack.contains(normalizedQuery);
+  }
+
+  bool _looksRelated(String left, String right) {
+    final leftNorm = _normalize(left);
+    final rightNorm = _normalize(right);
+    if (leftNorm.isEmpty || rightNorm.isEmpty) return false;
+    if (leftNorm.contains(rightNorm) || rightNorm.contains(leftNorm)) {
+      return true;
+    }
+
+    final leftTokens = _importantTokens(leftNorm);
+    final rightTokens = _importantTokens(rightNorm);
+    if (leftTokens.isEmpty || rightTokens.isEmpty) return false;
+
+    var shared = 0;
+    for (final token in leftTokens) {
+      if (rightTokens.contains(token)) shared++;
+    }
+    return shared >= 2 || (shared == 1 && leftTokens.length == 1);
+  }
+
+  Set<String> _importantTokens(String value) {
+    const stopWords = {
+      'and',
+      'the',
+      'ltd',
+      'limited',
+      'pvt',
+      'private',
+      'co',
+      'company',
+      'corp',
+      'corporation',
+      'llp',
+      'inc',
+      'india',
+    };
+    return value
+        .split(' ')
+        .where((token) => token.length >= 3 && !stopWords.contains(token))
+        .toSet();
+  }
+
+  String _normalize(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String _friendlyStatusLabel(SellerMappingRowVm row, String status) {
+    if (row.is26QUnmatched) return 'Only in 26Q';
+    if (status == 'No 26Q') return 'Only in Ledger';
+    if (status == 'Review') return 'Needs Action';
+    return status;
+  }
+
+  Color _statusColor(SellerMappingRowVm row, String status) {
+    if (row.is26QUnmatched) return SellerMappingTheme.warningColor;
+    if (status.contains('Conflict') || status.contains('Unresolved')) {
+      return SellerMappingTheme.dangerColor;
+    }
+    if (status.contains('Mapped') || status.contains('Accepted')) {
+      return SellerMappingTheme.successColor;
+    }
+    if (status == 'No 26Q' || status == 'Review') {
+      return SellerMappingTheme.warningColor;
+    }
+    return SellerMappingTheme.primaryColor;
+  }
+}
+
+class _SellerPanel extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  const _SellerPanel({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerMappingTheme.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: SellerMappingTheme.titleTextColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    color: SellerMappingTheme.mutedTextColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: SellerMappingTheme.borderColor),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelEmptyHint extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+
+  const _PanelEmptyHint({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 36, color: SellerMappingTheme.mutedTextColor),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: SellerMappingTheme.titleTextColor,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12.5,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                color: SellerMappingTheme.mutedTextColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SellerCard extends StatelessWidget {
+  final bool selected;
+  final bool highlighted;
+  final String title;
+  final String badge;
+  final Color badgeColor;
+  final List<String> details;
+  final String? footer;
+  final VoidCallback onTap;
+
+  const _SellerCard({
+    required this.selected,
+    required this.title,
+    required this.badge,
+    required this.badgeColor,
+    required this.details,
+    required this.onTap,
+    this.highlighted = false,
+    this.footer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected
+        ? SellerMappingTheme.primaryColor
+        : highlighted
+        ? SellerMappingTheme.warningColor
+        : SellerMappingTheme.borderColor;
+    final bgColor = selected
+        ? SellerMappingTheme.primarySoft
+        : highlighted
+        ? const Color(0xFFFFFBEB)
+        : const Color(0xFFF8FAFC);
+
+    return Material(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: borderColor,
+              width: selected || highlighted ? 1.4 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title.isEmpty ? 'Unnamed seller' : title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        color: SellerMappingTheme.titleTextColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: badgeColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: details
+                    .where((detail) => detail.trim().isNotEmpty)
+                    .map(
+                      (detail) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: SellerMappingTheme.borderColor,
+                          ),
+                        ),
+                        child: Text(
+                          detail,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: SellerMappingTheme.mutedTextColor,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              if (footer != null && footer!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  footer!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: SellerMappingTheme.primaryColor,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

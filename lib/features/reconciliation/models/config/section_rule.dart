@@ -4,24 +4,16 @@ enum SectionThresholdMetric {
   cumulativePurchase,
 }
 
-enum SectionComparisonOperator {
-  greaterThan,
-}
+enum SectionComparisonOperator { greaterThan }
 
-enum SectionThresholdMatchMode {
-  any,
-  all,
-}
+enum SectionThresholdMatchMode { any, all }
 
 enum SectionApplicabilityMode {
   fullAmountWhenApplicable,
   excessOnlyOnCrossingThenFullAmountAfterThreshold,
 }
 
-enum SectionRateResolverType {
-  fixed,
-  sellerPanEntityType,
-}
+enum SectionRateResolverType { fixed, sellerPanEntityType }
 
 class SectionThresholdRule {
   final SectionThresholdMetric metric;
@@ -42,10 +34,10 @@ class SectionRateConfig {
   final double? otherEntityRate;
 
   const SectionRateConfig.fixed(double rate)
-      : resolverType = SectionRateResolverType.fixed,
-        fixedRate = rate,
-        individualOrHufRate = null,
-        otherEntityRate = null;
+    : resolverType = SectionRateResolverType.fixed,
+      fixedRate = rate,
+      individualOrHufRate = null,
+      otherEntityRate = null;
 
   const SectionRateConfig.bySellerPanEntityType({
     required double individualOrHufRate,

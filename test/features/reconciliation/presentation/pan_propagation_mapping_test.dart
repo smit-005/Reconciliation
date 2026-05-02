@@ -6,7 +6,10 @@ void main() {
     test('keeps manual mappings for PAN propagation', () {
       final mapping = buildPanPropagationMapping(
         manualMappings: const [
-          MapEntry('Dev Cotton & Oil Industries', 'Dev Cotton & Oil Industries'),
+          MapEntry(
+            'Dev Cotton & Oil Industries',
+            'Dev Cotton & Oil Industries',
+          ),
         ],
         autoMappings: const [],
       );

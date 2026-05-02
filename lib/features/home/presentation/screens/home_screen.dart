@@ -57,8 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return b.name.toLowerCase().contains(query) ||
           b.pan.toLowerCase().contains(query);
     }).toList();
-    final buyersWithGst =
-        buyers.where((b) => b.gstNumber.trim().isNotEmpty).length;
+    final buyersWithGst = buyers
+        .where((b) => b.gstNumber.trim().isNotEmpty)
+        .length;
 
     Buyer? selectedBuyer;
     if (selectedBuyerId != null) {
@@ -168,9 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         sidebar,
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
-                          child: SingleChildScrollView(
-                            child: dashboard,
-                          ),
+                          child: SingleChildScrollView(child: dashboard),
                         ),
                       ],
                     );
@@ -210,8 +209,8 @@ class _HomeBuyerSidebar extends StatelessWidget {
                   ? 'No buyers available'
                   : 'No buyers match the current search',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColorScheme.textSecondary,
-                  ),
+                color: AppColorScheme.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
           )
@@ -238,8 +237,9 @@ class _HomeBuyerSidebar extends StatelessWidget {
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize:
-                hasBoundedHeight ? MainAxisSize.max : MainAxisSize.min,
+            mainAxisSize: hasBoundedHeight
+                ? MainAxisSize.max
+                : MainAxisSize.min,
             children: [
               Row(
                 children: [
@@ -262,10 +262,8 @@ class _HomeBuyerSidebar extends StatelessWidget {
                       children: [
                         Text(
                           'LedgerMatch',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -289,9 +287,9 @@ class _HomeBuyerSidebar extends StatelessWidget {
                   Text(
                     '${filteredBuyers.length} buyers',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColorScheme.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: AppColorScheme.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (selectedBuyerId != null) ...[
                     const SizedBox(width: AppSpacing.sm),
@@ -311,8 +309,8 @@ class _HomeBuyerSidebar extends StatelessWidget {
                   Text(
                     'Buyers',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   AppSecondaryButton(
                     label: 'Manage',
@@ -325,10 +323,7 @@ class _HomeBuyerSidebar extends StatelessWidget {
               if (hasBoundedHeight)
                 Expanded(child: buyerList)
               else
-                SizedBox(
-                  height: 240,
-                  child: buyerList,
-                ),
+                SizedBox(height: 240, child: buyerList),
             ],
           );
         },
@@ -358,8 +353,8 @@ class _HomeDashboardContent extends StatelessWidget {
     final metricCardWidth = dashboardWidth >= 1500
         ? 208.0
         : dashboardWidth >= 1280
-            ? 188.0
-            : 176.0;
+        ? 188.0
+        : 176.0;
     final gstCoverage = buyers.isEmpty
         ? 0
         : ((buyersWithGst / buyers.length) * 100).round();
@@ -398,9 +393,7 @@ class _HomeDashboardContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _BuyerOverviewCard(
-          selectedBuyer: selectedBuyer,
-        ),
+        _BuyerOverviewCard(selectedBuyer: selectedBuyer),
         const SizedBox(height: AppSpacing.md),
         _CtaBanner(
           selectedBuyer: selectedBuyer,
@@ -416,9 +409,7 @@ class _HomeDashboardContent extends StatelessWidget {
 class _HomeHeader extends StatelessWidget {
   final Buyer? selectedBuyer;
 
-  const _HomeHeader({
-    required this.selectedBuyer,
-  });
+  const _HomeHeader({required this.selectedBuyer});
 
   @override
   Widget build(BuildContext context) {
@@ -432,9 +423,9 @@ class _HomeHeader extends StatelessWidget {
             Text(
               'Reconciliation dashboard',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -442,9 +433,9 @@ class _HomeHeader extends StatelessWidget {
                   ? 'Select a buyer from the sidebar to begin a reconciliation workspace.'
                   : 'Workspace ready for ${selectedBuyer!.name}. Review the buyer overview and launch a new reconciliation.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColorScheme.textSecondary,
-                    height: 1.35,
-                  ),
+                color: AppColorScheme.textSecondary,
+                height: 1.35,
+              ),
             ),
           ],
         ),
@@ -456,9 +447,7 @@ class _HomeHeader extends StatelessWidget {
 class _BuyerOverviewCard extends StatelessWidget {
   final Buyer? selectedBuyer;
 
-  const _BuyerOverviewCard({
-    required this.selectedBuyer,
-  });
+  const _BuyerOverviewCard({required this.selectedBuyer});
 
   @override
   Widget build(BuildContext context) {
@@ -466,8 +455,9 @@ class _BuyerOverviewCard extends StatelessWidget {
 
     return AppSectionCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      backgroundColor:
-          hasBuyer ? const Color(0xFFF5F9FF) : AppColorScheme.surface,
+      backgroundColor: hasBuyer
+          ? const Color(0xFFF5F9FF)
+          : AppColorScheme.surface,
       borderColor: hasBuyer
           ? AppColorScheme.info.withValues(alpha: 0.28)
           : AppColorScheme.border,
@@ -499,8 +489,8 @@ class _BuyerOverviewCard extends StatelessWidget {
                     Text(
                       hasBuyer ? selectedBuyer!.name : 'Selected Buyer',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
@@ -508,9 +498,9 @@ class _BuyerOverviewCard extends StatelessWidget {
                           ? 'Buyer workspace is ready for upload and mapping review.'
                           : 'Choose a buyer from the left panel to unlock reconciliation actions.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColorScheme.textSecondary,
-                            height: 1.35,
-                          ),
+                        color: AppColorScheme.textSecondary,
+                        height: 1.35,
+                      ),
                     ),
                   ],
                 ),
@@ -559,8 +549,8 @@ class _BuyerOverviewCard extends StatelessWidget {
               child: Text(
                 'Buyer status and profile details will appear here once a buyer is selected.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColorScheme.textSecondary,
-                    ),
+                  color: AppColorScheme.textSecondary,
+                ),
               ),
             ),
         ],
@@ -600,8 +590,8 @@ class _CtaBanner extends StatelessWidget {
                 Text(
                   'Ready to start?',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -670,9 +660,9 @@ class _WorkflowSection extends StatelessWidget {
         children: [
           Text(
             'Workflow',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppSpacing.md),
           SingleChildScrollView(
@@ -733,8 +723,8 @@ class _WorkflowSection extends StatelessWidget {
                   child: Text(
                     "Select a buyer, then 'Start New Reconciliation' to begin the workflow.",
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColorScheme.textSecondary,
-                        ),
+                      color: AppColorScheme.textSecondary,
+                    ),
                   ),
                 ),
               ],
@@ -814,18 +804,18 @@ class _HomeBuyerTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColorScheme.textPrimary,
-                          ),
+                        fontWeight: FontWeight.w700,
+                        color: AppColorScheme.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       buyer.pan,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColorScheme.textSecondary,
-                            letterSpacing: 0.2,
-                          ),
+                        fontWeight: FontWeight.w700,
+                        color: AppColorScheme.textSecondary,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                     if (buyer.gstNumber.trim().isNotEmpty) ...[
                       const SizedBox(height: 2),
@@ -834,8 +824,8 @@ class _HomeBuyerTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColorScheme.textSecondary,
-                            ),
+                          color: AppColorScheme.textSecondary,
+                        ),
                       ),
                     ],
                   ],
@@ -893,20 +883,17 @@ class _BuyerDetailPill extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 4),
           Text(
             value,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: emphasizeValue
-                      ? AppColorScheme.textPrimary
-                      : AppColorScheme.textSecondary,
-                  letterSpacing: emphasizeValue ? 0.2 : 0,
-                ),
+              fontWeight: FontWeight.w800,
+              color: emphasizeValue
+                  ? AppColorScheme.textPrimary
+                  : AppColorScheme.textSecondary,
+              letterSpacing: emphasizeValue ? 0.2 : 0,
+            ),
           ),
         ],
       ),
@@ -945,9 +932,7 @@ class _WorkflowStepTile extends StatelessWidget {
                     : AppColorScheme.surfaceVariant,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isActive
-                      ? AppColorScheme.info
-                      : AppColorScheme.border,
+                  color: isActive ? AppColorScheme.info : AppColorScheme.border,
                 ),
               ),
               alignment: Alignment.center,
@@ -961,11 +946,11 @@ class _WorkflowStepTile extends StatelessWidget {
             Text(
               'Step $stepNumber',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: isActive
-                        ? AppColorScheme.info
-                        : AppColorScheme.textMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: isActive
+                    ? AppColorScheme.info
+                    : AppColorScheme.textMuted,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -973,19 +958,19 @@ class _WorkflowStepTile extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: isActive
-                    ? AppColorScheme.textPrimary
-                    : AppColorScheme.textSecondary,
-              ),
+            fontWeight: FontWeight.w800,
+            color: isActive
+                ? AppColorScheme.textPrimary
+                : AppColorScheme.textSecondary,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           detail,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColorScheme.textMuted,
-                height: 1.25,
-              ),
+            color: AppColorScheme.textMuted,
+            height: 1.25,
+          ),
         ),
       ],
     );

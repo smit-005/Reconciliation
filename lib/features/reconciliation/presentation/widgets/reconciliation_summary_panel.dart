@@ -127,7 +127,10 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           summaryTile('Total Sellers', totalSellers.toString()),
           summaryTile('Sections Found', totalSections.toString()),
           summaryTile('Matched %', '${matchedPercentage.toStringAsFixed(1)}%'),
-          summaryTile('Mismatch %', '${mismatchPercentage.toStringAsFixed(1)}%'),
+          summaryTile(
+            'Mismatch %',
+            '${mismatchPercentage.toStringAsFixed(1)}%',
+          ),
           summaryTile('Top Mismatch Section', topMismatchSection),
           summaryTile('Basic Amount', _fmt(basicAmount)),
           summaryTile('Applicable Amount', _fmt(applicableAmount)),
@@ -153,10 +156,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
             ReconciliationStatus.purchaseOnly,
             purchaseOnlyCount.toString(),
           ),
-          summaryTile(
-            ReconciliationStatus.onlyIn26Q,
-            only26QCount.toString(),
-          ),
+          summaryTile(ReconciliationStatus.onlyIn26Q, only26QCount.toString()),
           summaryTile(
             ReconciliationStatus.applicableButNo26Q,
             applicableButNo26QCount.toString(),
@@ -165,7 +165,10 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           summaryTile('Excess Deduction Amt', _fmt(excessDeductionAmount)),
           summaryTile('Timing Difference Amt', _fmt(timingDifferenceAmount)),
           summaryTile('Purchase Only Amt', _fmt(purchaseOnlyAmount)),
-          summaryTile('${ReconciliationStatus.onlyIn26Q} Amt', _fmt(only26QAmount)),
+          summaryTile(
+            '${ReconciliationStatus.onlyIn26Q} Amt',
+            _fmt(only26QAmount),
+          ),
           summaryTile('Net Mismatch', _fmt(netMismatchAmount)),
           summaryTile('Seller Mappings', manualMappingsCount.toString()),
         ],

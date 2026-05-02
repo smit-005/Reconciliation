@@ -1,7 +1,4 @@
-enum ReconciliationViewMode {
-  summary,
-  audit,
-}
+enum ReconciliationViewMode { summary, audit }
 
 extension ReconciliationViewModeX on ReconciliationViewMode {
   String get label {

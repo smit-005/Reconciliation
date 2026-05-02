@@ -171,10 +171,7 @@ void main() {
 
       expect(find.text('Showing 100 of 130 seller rows.'), findsOneWidget);
 
-      await tester.enterText(
-        find.byType(TextField),
-        'Seller 129',
-      );
+      await tester.enterText(find.byType(TextField), 'Seller 129');
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Showing 1 of 130 seller rows.'), findsOneWidget);

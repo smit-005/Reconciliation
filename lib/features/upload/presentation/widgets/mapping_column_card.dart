@@ -30,7 +30,9 @@ class MappingColumnCard extends StatelessWidget {
         color: const Color(0xFF131D2B),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: hasDuplicate ? const Color(0xFFEF4444) : const Color(0xFF273247),
+          color: hasDuplicate
+              ? const Color(0xFFEF4444)
+              : const Color(0xFF273247),
         ),
       ),
       child: Column(
@@ -51,15 +53,13 @@ class MappingColumnCard extends StatelessWidget {
                 : 'No sample value',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF94A3B8),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue:
-                selectedValue?.isNotEmpty == true ? selectedValue : null,
+            initialValue: selectedValue?.isNotEmpty == true
+                ? selectedValue
+                : null,
             dropdownColor: const Color(0xFF182235),
             decoration: InputDecoration(
               labelText: 'Map field',
@@ -97,10 +97,7 @@ class MappingColumnCard extends StatelessWidget {
             const SizedBox(height: 8),
             const Text(
               'This business field is mapped more than once.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFFFCA5A5),
-              ),
+              style: TextStyle(fontSize: 12, color: Color(0xFFFCA5A5)),
             ),
           ],
         ],

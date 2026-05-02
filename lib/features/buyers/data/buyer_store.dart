@@ -35,7 +35,9 @@ class BuyerStore {
 
     await _repository.addBuyer(buyer);
     _buyers.add(buyer);
-    _buyers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _buyers.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
     return null;
   }
 
@@ -66,7 +68,9 @@ class BuyerStore {
     final index = _buyers.indexWhere((b) => b.id == id);
     if (index != -1) {
       _buyers[index] = updatedBuyer;
-      _buyers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      _buyers.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
     }
 
     return null;

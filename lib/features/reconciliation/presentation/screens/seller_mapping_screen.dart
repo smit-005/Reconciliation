@@ -10,6 +10,8 @@ import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
 import 'package:reconciliation_app/core/widgets/app_search_autocomplete_field.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_summary_cards.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_review_view.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_two_panel_body.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
@@ -127,6 +129,8 @@ class SellerMappingScreen extends StatefulWidget {
 
 enum SellerMappingScreenMode { standard, preflight }
 
+enum SellerMappingWorkspaceView { working, review }
+
 class _SellerMappingDisplayRow {
   final SellerMappingRowVm row;
   final String? selectedValue;
@@ -239,6 +243,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   String _searchQuery = '';
   String _statusFilter = 'All';
   SellerMappingListView _activeListView = SellerMappingListView.needsAction;
+  SellerMappingWorkspaceView _activeWorkspaceView =
+      SellerMappingWorkspaceView.working;
   int _visibleRowLimit = _initialVisibleRowLimit;
   List<SellerMappingRowVm>? _cachedFilteredRows;
   Map<SellerMappingListView, int>? _cachedListViewCounts;
@@ -1115,12 +1121,19 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return false;
       }
 
-      if (!_matchesListViewFromState(state, _activeListView)) {
+      // ✅ FIX: LEFT panel = only 26Q sellers
+      if (row.isPurchaseOnly) {
         return false;
       }
 
-      final matchesStatus =
-          _statusFilter == 'All' || state.status == _statusFilter;
+      // existing logic
+      if (_statusFilter != 'Only in Ledger') {
+        if (!_matchesListViewFromState(state, _activeListView)) {
+          return false;
+        }
+      }
+
+      final matchesStatus = _matchesStatusFilter(state);
       if (!matchesStatus) return false;
 
       if (query.isEmpty) return true;
@@ -1135,6 +1148,68 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       'view=${_activeListView.name} status=$_statusFilter',
     );
     return _cachedFilteredRows!;
+  }
+
+  bool _matchesStatusFilter(_SellerFilterRowState state) {
+    switch (_statusFilter) {
+      case 'All':
+        return true;
+      case 'Only in Ledger':
+        return true; // ✅ DO NOT filter LEFT panel
+      default:
+        return state.status == _statusFilter;
+    }
+  }
+
+  bool _matchesReviewStatusFilter(_SellerFilterRowState state) {
+    switch (_statusFilter) {
+      case 'All':
+        return true;
+      case 'Mapped':
+        // Review View uses the audit buckets, not only the raw Working View status.
+        // These are the rows counted under the Review View "Mapped" chip.
+        return state.status == 'Mapped' ||
+            state.status == 'Mapped (PAN missing)' ||
+            state.status == 'Linked to Ledger';
+      case 'Unmapped':
+        // In Review View, "Unmapped" means a 26Q seller still pending review.
+        // Exceptions like Missing in Books / Timing Difference are not unmapped.
+        return state.status == '26Q Unmatched' ||
+            state.status == 'Unmapped' ||
+            state.status == 'PAN Conflict' ||
+            _isDangerousPreflightStatus(state.status);
+      case 'Only in Ledger':
+        return state.status == 'Purchase Only';
+      default:
+        return state.status == _statusFilter;
+    }
+  }
+
+  List<SellerMappingRowVm> _reviewFilteredRows() {
+    final query = _searchQuery.trim().toUpperCase();
+    final activeRows = _rowsForActiveSection();
+
+    return activeRows
+        .where((row) {
+          // Review View must be a 26Q audit list only.
+          // Mapped 26Q sellers usually have tdsRowCount > 0, while unmatched
+          // / exception rows use is26QUnmatched. Do not limit this list to
+          // is26QUnmatched only, otherwise Mapped/All filters show only the
+          // exception row.
+          final is26QSeller = row.tdsRowCount > 0 || row.is26QUnmatched;
+          if (!is26QSeller) return false;
+
+          final state = _rowStateByKey[row.rowKey];
+          if (state == null) return false;
+
+          if (!_matchesReviewStatusFilter(state)) {
+            return false;
+          }
+
+          if (query.isEmpty) return true;
+          return state.searchHaystack.contains(query);
+        })
+        .toList(growable: false);
   }
 
   _SellerMappingDisplayRow _buildDisplayRowView({
@@ -2077,6 +2152,32 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           ),
           const SizedBox(width: 12),
           SizedBox(
+            width: 270,
+            child: SegmentedButton<SellerMappingWorkspaceView>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: SellerMappingWorkspaceView.working,
+                  label: Text('Working View'),
+                  icon: Icon(Icons.compare_arrows_rounded, size: 18),
+                ),
+                ButtonSegment(
+                  value: SellerMappingWorkspaceView.review,
+                  label: Text('Review View'),
+                  icon: Icon(Icons.fact_check_outlined, size: 18),
+                ),
+              ],
+              selected: <SellerMappingWorkspaceView>{_activeWorkspaceView},
+              onSelectionChanged: (selection) {
+                setState(() {
+                  _activeWorkspaceView = selection.first;
+                  _invalidateViewCaches(resetPage: true);
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
             width: 210,
             child: AppCompactSelectField(
               value: _statusFilter,
@@ -2085,8 +2186,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 'All',
                 'Mapped',
                 'Unmapped',
+                'Only in Ledger',
                 'PAN Conflict',
-                '26Q Unmatched',
                 'Timing Difference',
                 'Missing in Books',
               ],
@@ -2223,6 +2324,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = _linkLedgerValue(option.linkedRowKey);
       }
+      _rebuildDerivedRowStateCache();
+      _invalidateViewCaches();
+    });
+  }
+
+  void _linkToLedgerRow(SellerMappingRowVm row, SellerMappingRowVm ledgerRow) {
+    if (!row.is26QUnmatched) return;
+    setState(() {
+      autoMapDetails.remove(row.rowKey);
+      _clearedRowKeys.remove(row.rowKey);
+      selectedMappings[row.rowKey] = _linkLedgerValue(ledgerRow.rowKey);
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
     });
@@ -2736,29 +2848,41 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   Widget _buildTableSection(List<SellerMappingRowVm> visibleRows) {
-    return Container(
-      decoration: BoxDecoration(
-        color: SellerMappingTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: SellerMappingTheme.borderColor),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: visibleRows.isEmpty
-            ? _buildEmptyState()
-            : ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                itemCount: visibleRows.length,
-                separatorBuilder: (_, separatorIndex) =>
-                    const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  return _buildSellerCard(
-                    row: visibleRows[index],
-                    index: index,
-                  );
-                },
-              ),
-      ),
+    final activeSectionRows = _rowsForActiveSection();
+    final ledgerCandidateRows = activeSectionRows
+        .where((row) => !row.is26QUnmatched)
+        .toList(growable: false);
+
+    return SellerMappingTwoPanelBody(
+      visibleRows: visibleRows,
+      ledgerCandidateRows: ledgerCandidateRows,
+      showAllSellersMode: _activeListView == SellerMappingListView.allSellers,
+      tdsParties: uniqueTdsParties,
+      tdsPartyPans: widget.tdsPartyPans,
+      selectedValueForRow: _getSelectedValue,
+      selectedPanForRow: (row) =>
+          _getPanForSelection(row, _getSelectedValue(row)),
+      statusForRow: (row) =>
+          _getStatus(row: row, selectedValue: _getSelectedValue(row)),
+      helperMessagesForRow: (row) {
+        final selectedValue = _getSelectedValue(row);
+        final status = _getStatus(row: row, selectedValue: selectedValue);
+        return _helperMessages(
+          row: row,
+          status: status,
+          selectedValue: selectedValue,
+        );
+      },
+      canAcceptSuggestion: _canAcceptSuggestion,
+      onAcceptSuggestion: _acceptSuggestedMapping,
+      onLinkToTds: _setMappedParty,
+      onLinkToLedgerRow: _linkToLedgerRow,
+      onKeepSeparate: _markSeparate,
+      onClear: _clearMapping,
+      onMarkTimingDifference: (row) =>
+          _setExceptionDecision(row, _timingDifferenceValue(row)),
+      onMarkMissingInBooks: (row) =>
+          _setExceptionDecision(row, _missingInBooksValue(row)),
     );
   }
 
@@ -2883,7 +3007,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       return _buildLoadingScaffold();
     }
 
-    final allFiltered = _filteredRows();
+    final allFiltered =
+        _activeWorkspaceView == SellerMappingWorkspaceView.review
+        ? _reviewFilteredRows()
+        : _filteredRows();
     final visibleCount = math.min(_visibleRowLimit, allFiltered.length);
     final visibleRows = allFiltered.isNotEmpty
         ? allFiltered.sublist(0, visibleCount)
@@ -2908,8 +3035,35 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                 child: Column(
                   children: [
-                    Expanded(child: _buildTableSection(visibleRows)),
-                    if (visibleCount < allFiltered.length)
+                    Expanded(
+                      child:
+                          _activeWorkspaceView ==
+                              SellerMappingWorkspaceView.review
+                          ? SellerMappingReviewView(
+                              rows: allFiltered,
+                              allRowsForSection: _rowsForActiveSection(),
+                              activeSectionLabel: sectionDisplayLabel(
+                                _activeSectionCode,
+                              ),
+                              statusForRow: (row) {
+                                final state = _rowStateByKey[row.rowKey];
+                                return state?.status ??
+                                    _getStatus(
+                                      row: row,
+                                      selectedValue: _getSelectedValue(row),
+                                    );
+                              },
+                              selectedValueForRow: _getSelectedValue,
+                              selectedPanForRow: (row) => _getPanForSelection(
+                                row,
+                                _getSelectedValue(row),
+                              ),
+                            )
+                          : _buildTableSection(visibleRows),
+                    ),
+                    if (_activeWorkspaceView ==
+                            SellerMappingWorkspaceView.working &&
+                        visibleCount < allFiltered.length)
                       _buildLoadMore(allFiltered),
                   ],
                 ),

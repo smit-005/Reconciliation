@@ -5,10 +5,7 @@ import 'package:reconciliation_app/features/upload/models/excel_preview_data.dar
 class FileInfoCard extends StatelessWidget {
   final ExcelPreviewData previewData;
 
-  const FileInfoCard({
-    super.key,
-    required this.previewData,
-  });
+  const FileInfoCard({super.key, required this.previewData});
 
   @override
   Widget build(BuildContext context) {
@@ -37,25 +34,18 @@ class FileInfoCard extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
-              _chip(
-                label: 'Type',
-                value: previewData.fileType.toUpperCase(),
-              ),
-              _chip(
-                label: 'Sheet',
-                value: previewData.sheetName,
-              ),
+              _chip(label: 'Type', value: previewData.fileType.toUpperCase()),
+              _chip(label: 'Sheet', value: previewData.sheetName),
               _chip(
                 label: 'Header Row',
                 value: (previewData.headerRowIndex + 1).toString(),
               ),
-              _chip(
-                label: 'Confidence',
-                value: '$confidencePct%',
-              ),
+              _chip(label: 'Confidence', value: '$confidencePct%'),
               _chip(
                 label: 'Mode',
-                value: previewData.headersTrusted ? 'Header-based' : 'Pattern-based',
+                value: previewData.headersTrusted
+                    ? 'Header-based'
+                    : 'Pattern-based',
               ),
             ],
           ),
@@ -64,10 +54,7 @@ class FileInfoCard extends StatelessWidget {
     );
   }
 
-  Widget _chip({
-    required String label,
-    required String value,
-  }) {
+  Widget _chip({required String label, required String value}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(

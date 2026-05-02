@@ -118,11 +118,7 @@ class SectionRuleService {
         return _apply194I(currentAmount, sectionCumulative);
 
       default:
-        return SectionRuleResult(
-          applicableAmount: 0,
-          expectedTds: 0,
-          rate: 0,
-        );
+        return SectionRuleResult(applicableAmount: 0, expectedTds: 0, rate: 0);
     }
   }
 
@@ -158,25 +154,24 @@ class SectionRuleService {
       );
     }
 
-    final resolvedRate = _resolveRate(
-      config: config,
-      sellerPan: sellerPan,
-    );
+    final resolvedRate = _resolveRate(config: config, sellerPan: sellerPan);
     if (resolvedRate == null) {
       return SectionRuleResult(
         applicableAmount: applicableAmount,
         expectedTds: 0.0,
         rate: 0.0,
         manualReviewRequired: true,
-        reviewReason:
-            ReconciliationRemarkTemplates.manualReview(manualReviewSectionCode),
+        reviewReason: ReconciliationRemarkTemplates.manualReview(
+          manualReviewSectionCode,
+        ),
       );
     }
 
     return SectionRuleResult(
       applicableAmount: applicableAmount,
-      expectedTds:
-          double.parse((applicableAmount * resolvedRate).toStringAsFixed(2)),
+      expectedTds: double.parse(
+        (applicableAmount * resolvedRate).toStringAsFixed(2),
+      ),
       rate: resolvedRate,
     );
   }
@@ -247,7 +242,7 @@ class SectionRuleService {
       case SectionApplicabilityMode.fullAmountWhenApplicable:
         return currentAmount;
       case SectionApplicabilityMode
-            .excessOnlyOnCrossingThenFullAmountAfterThreshold:
+          .excessOnlyOnCrossingThenFullAmountAfterThreshold:
         final thresholdValue = config.thresholds.first.value;
         if (previousCumulative >= thresholdValue) {
           return currentAmount;
@@ -277,10 +272,7 @@ class SectionRuleService {
   }
 
   // -------------------- 194J --------------------
-  static SectionRuleResult _apply194J(
-      double amount,
-      double sectionTotal,
-      ) {
+  static SectionRuleResult _apply194J(double amount, double sectionTotal) {
     final isApplicable =
         amount > _threshold194J || sectionTotal > _threshold194J;
     final applicable = isApplicable ? amount : 0.0;
@@ -302,10 +294,7 @@ class SectionRuleService {
   }
 
   // -------------------- 194I --------------------
-  static SectionRuleResult _apply194I(
-      double amount,
-      double sectionTotal,
-      ) {
+  static SectionRuleResult _apply194I(double amount, double sectionTotal) {
     final isApplicable = sectionTotal > _threshold194I;
     final applicable = isApplicable ? amount : 0.0;
     if (!isApplicable) {
@@ -362,16 +351,7 @@ class SectionRuleService {
       return individualOrHufRate;
     }
 
-    const businessEntityCodes = {
-      'A',
-      'B',
-      'C',
-      'F',
-      'G',
-      'J',
-      'L',
-      'T',
-    };
+    const businessEntityCodes = {'A', 'B', 'C', 'F', 'G', 'J', 'L', 'T'};
 
     if (businessEntityCodes.contains(entityCode)) {
       return otherEntityRate;

@@ -45,10 +45,10 @@ class TdsGroup {
 
 class GroupingService {
   static Map<String, Map<String, PurchaseGroup>> groupPurchaseRows(
-      List<PurchaseRow> rows,
-      Map<String, String> nameMapping,
-      Map<String, String> sellerKeyResolver,
-      ) {
+    List<PurchaseRow> rows,
+    Map<String, String> nameMapping,
+    Map<String, String> sellerKeyResolver,
+  ) {
     final grouped = <String, Map<String, PurchaseGroup>>{};
 
     for (final row in rows) {
@@ -115,8 +115,9 @@ class GroupingService {
       }
 
       final resolvedPan = extractPanFromSellerKey(sellerKey);
-      final effectiveSellerPan =
-      resolvedPan.isNotEmpty ? resolvedPan : sellerPan;
+      final effectiveSellerPan = resolvedPan.isNotEmpty
+          ? resolvedPan
+          : sellerPan;
 
       final fyMonthKey = '$financialYear|$month';
 
@@ -150,8 +151,7 @@ class GroupingService {
         monthMap[fyMonthKey] = PurchaseGroup(
           financialYear: financialYear,
           month: month,
-          sellerName:
-          sellerName.isNotEmpty ? sellerName : existing.sellerName,
+          sellerName: sellerName.isNotEmpty ? sellerName : existing.sellerName,
           sellerPan: existing.sellerPan.isNotEmpty
               ? existing.sellerPan
               : effectiveSellerPan,
@@ -165,10 +165,10 @@ class GroupingService {
   }
 
   static Map<String, Map<String, TdsGroup>> groupTdsRows(
-      List<Tds26QRow> rows,
-      Map<String, String> nameMapping,
-      Map<String, String> sellerKeyResolver,
-      ) {
+    List<Tds26QRow> rows,
+    Map<String, String> nameMapping,
+    Map<String, String> sellerKeyResolver,
+  ) {
     final grouped = <String, Map<String, TdsGroup>>{};
 
     for (final row in rows) {
@@ -216,10 +216,10 @@ class GroupingService {
         monthMap[fyMonthSectionKey] = TdsGroup(
           financialYear: financialYear,
           month: month,
-          sellerName:
-          sellerName.isNotEmpty ? sellerName : existing.sellerName,
-          sellerPan:
-          existing.sellerPan.isNotEmpty ? existing.sellerPan : sellerPan,
+          sellerName: sellerName.isNotEmpty ? sellerName : existing.sellerName,
+          sellerPan: existing.sellerPan.isNotEmpty
+              ? existing.sellerPan
+              : sellerPan,
           deductedAmount: existing.deductedAmount + row.deductedAmount,
           actualTds: existing.actualTds + row.tds,
           section: existing.section,
@@ -251,7 +251,9 @@ class GroupingService {
             (fyTotals[group.financialYear] ?? 0.0) + group.basicAmount;
       }
 
-      final crossedThreshold = fyTotals.values.any((total) => total > threshold);
+      final crossedThreshold = fyTotals.values.any(
+        (total) => total > threshold,
+      );
       if (crossedThreshold) {
         relevant.add(sellerKey);
       }
@@ -267,7 +269,8 @@ bool _shouldDebugPurchaseRow(String sellerName) {
   if (!_enableVerboseGroupingLogs) {
     return false;
   }
-  return normalizeName(sellerName.trim()) == normalizeName('Ganesh Cattle Feed');
+  return normalizeName(sellerName.trim()) ==
+      normalizeName('Ganesh Cattle Feed');
 }
 
 String resolveSellerKey({

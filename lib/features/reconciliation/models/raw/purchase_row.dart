@@ -1,6 +1,7 @@
 import 'package:reconciliation_app/core/utils/date_utils.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/parse_utils.dart';
+
 class PurchaseRow {
   final String date;
   final String month;

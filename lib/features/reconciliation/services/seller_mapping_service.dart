@@ -9,8 +9,8 @@ class SellerMappingService {
     final normalizedMap = mapping.toMap();
     final normalizedBuyerPan = (normalizedMap['buyer_pan'] ?? '').toString();
     final normalizedAlias = (normalizedMap['alias_name'] ?? '').toString();
-    final normalizedSection =
-        (normalizedMap['section_code'] ?? 'ALL').toString();
+    final normalizedSection = (normalizedMap['section_code'] ?? 'ALL')
+        .toString();
 
     final existing = await db.query(
       'seller_mappings',
@@ -25,7 +25,8 @@ class SellerMappingService {
       final updateMap = Map<String, dynamic>.from(normalizedMap)
         ..remove('id')
         ..['created_at'] =
-            (existingRow['created_at'] ?? normalizedMap['created_at']).toString();
+            (existingRow['created_at'] ?? normalizedMap['created_at'])
+                .toString();
 
       await db.update(
         'seller_mappings',
@@ -53,8 +54,7 @@ class SellerMappingService {
 
     final result = await db.query(
       'seller_mappings',
-      where:
-          'buyer_pan = ? AND alias_name = ? AND section_code IN (?, ?)',
+      where: 'buyer_pan = ? AND alias_name = ? AND section_code IN (?, ?)',
       whereArgs: [
         normalizedBuyerPan,
         normalizedAlias,

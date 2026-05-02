@@ -37,7 +37,8 @@ class ReconciliationTableSection extends StatefulWidget {
       _ReconciliationTableSectionState();
 }
 
-class _ReconciliationTableSectionState extends State<ReconciliationTableSection> {
+class _ReconciliationTableSectionState
+    extends State<ReconciliationTableSection> {
   static int _tableBuildCounter = 0;
   static const List<int> _pageSizeOptions = <int>[100, 250];
 
@@ -179,10 +180,7 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
                   padding: const EdgeInsets.all(AppSpacing.sm),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFFFBFCFD),
-                        Color(0xFFF6F9FC),
-                      ],
+                      colors: [Color(0xFFFBFCFD), Color(0xFFF6F9FC)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -213,7 +211,10 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
                       ),
                       _inlineMeta('PAN', group.sellerPan),
                       _inlineMeta('Rows', group.rowCount.toString()),
-                      _inlineMeta('Basic', widget.formatAmount(group.totalBasic)),
+                      _inlineMeta(
+                        'Basic',
+                        widget.formatAmount(group.totalBasic),
+                      ),
                       _inlineMeta(
                         'Applicable',
                         widget.formatAmount(group.totalApplicable),
@@ -223,7 +224,10 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
                         'Expected',
                         widget.formatAmount(group.totalExpected),
                       ),
-                      _inlineMeta('Actual', widget.formatAmount(group.totalActual)),
+                      _inlineMeta(
+                        'Actual',
+                        widget.formatAmount(group.totalActual),
+                      ),
                     ],
                   ),
                 ),
@@ -290,7 +294,9 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
 
       final fyGroups = <String, List<ReconciliationRow>>{};
       for (final row in sellerRows) {
-        fyGroups.putIfAbsent(row.financialYear, () => <ReconciliationRow>[]).add(row);
+        fyGroups
+            .putIfAbsent(row.financialYear, () => <ReconciliationRow>[])
+            .add(row);
       }
 
       final fyKeys = fyGroups.keys.toList()..sort();
@@ -301,14 +307,20 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
             ? '-'
             : displayRow.resolvedSellerName.trim(),
         sellerPan: _resolveDisplayPan(sellerRows),
-        finalStatus: CalculationService.buildSellerLevelStatus(sellerRows).status,
+        finalStatus: CalculationService.buildSellerLevelStatus(
+          sellerRows,
+        ).status,
         rowCount: sellerRows.length,
         totalBasic: sellerRows.fold(0.0, (sum, row) => sum + row.basicAmount),
-        totalApplicable:
-            sellerRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
+        totalApplicable: sellerRows.fold(
+          0.0,
+          (sum, row) => sum + row.applicableAmount,
+        ),
         total26Q: sellerRows.fold(0.0, (sum, row) => sum + row.tds26QAmount),
-        totalExpected:
-            sellerRows.fold(0.0, (sum, row) => sum + row.expectedTds),
+        totalExpected: sellerRows.fold(
+          0.0,
+          (sum, row) => sum + row.expectedTds,
+        ),
         totalActual: sellerRows.fold(0.0, (sum, row) => sum + row.actualTds),
         skippedRowImpact: skippedImpact,
         financialYearGroups: fyKeys
@@ -333,10 +345,7 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
     groupingWatch.stop();
 
     final pagingWatch = Stopwatch()..start();
-    final nextPages = _buildPages(
-      groups: nextGroups,
-      pageSize: _pageSize,
-    );
+    final nextPages = _buildPages(groups: nextGroups, pageSize: _pageSize);
     pagingWatch.stop();
 
     debugPrint(
@@ -509,10 +518,12 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
     }
 
     final candidateNames = sellerRows
-        .expand((row) => <String>[
-              normalizeName(row.resolvedSellerName),
-              normalizeName(row.sellerName),
-            ])
+        .expand(
+          (row) => <String>[
+            normalizeName(row.resolvedSellerName),
+            normalizeName(row.sellerName),
+          ],
+        )
         .where((name) => name.isNotEmpty)
         .toSet();
 
@@ -576,9 +587,7 @@ class _ReconciliationTableSectionState extends State<ReconciliationTableSection>
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.78),
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(
-                      color: const Color(0xFFFCD34D),
-                    ),
+                    border: Border.all(color: const Color(0xFFFCD34D)),
                   ),
                   child: Text(
                     '${entry.key}: ${entry.value}',

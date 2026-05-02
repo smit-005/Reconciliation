@@ -42,10 +42,7 @@ class ReconciliationTopToolbar extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFFFDFEFF),
-            Color(0xFFF6F9FC),
-          ],
+          colors: [Color(0xFFFDFEFF), Color(0xFFF6F9FC)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -101,9 +98,9 @@ class ReconciliationTopToolbar extends StatelessWidget {
             Text(
               _displayBuyerTitle(),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AppColorScheme.textPrimary,
-                  ),
+                fontWeight: FontWeight.w800,
+                color: AppColorScheme.textPrimary,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             _buildBuyerLine(),

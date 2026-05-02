@@ -65,10 +65,7 @@ class ReconciliationBottomActionBar extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             ...actions.expand(
-              (slot) => [
-                slot,
-                const SizedBox(height: AppSpacing.xs),
-              ],
+              (slot) => [slot, const SizedBox(height: AppSpacing.xs)],
             ),
           ]..removeLast();
 

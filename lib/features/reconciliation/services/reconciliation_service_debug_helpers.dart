@@ -13,20 +13,19 @@ String _debugSectionCounts(
   return parts.join(', ');
 }
 
-String _debugSummaryMap(
-  Map<String, ReconciliationSummary> summaries,
-) {
+String _debugSummaryMap(Map<String, ReconciliationSummary> summaries) {
   if (summaries.isEmpty) return 'none';
 
-  final parts = summaries.entries
-      .map(
-        (entry) =>
-            '${entry.key}(rows:${entry.value.totalRows}, mismatch:${entry.value.mismatchRows}, '
-            'source:${entry.value.sourceAmount.toStringAsFixed(2)}, '
-            'tds:${entry.value.actualTds.toStringAsFixed(2)})',
-      )
-      .toList()
-    ..sort();
+  final parts =
+      summaries.entries
+          .map(
+            (entry) =>
+                '${entry.key}(rows:${entry.value.totalRows}, mismatch:${entry.value.mismatchRows}, '
+                'source:${entry.value.sourceAmount.toStringAsFixed(2)}, '
+                'tds:${entry.value.actualTds.toStringAsFixed(2)})',
+          )
+          .toList()
+        ..sort();
 
   return parts.join(', ');
 }
@@ -41,9 +40,7 @@ Map<String, List<dynamic>> _debugResolvedSectionCounts(
   return map;
 }
 
-void _debugDuplicateSourceSectionLeakage(
-  List<_ResolvedSourceRow> rows,
-) {
+void _debugDuplicateSourceSectionLeakage(List<_ResolvedSourceRow> rows) {
   final sectionsByFingerprint = <String, Set<String>>{};
 
   for (final row in rows) {
@@ -59,13 +56,16 @@ void _debugDuplicateSourceSectionLeakage(
     sectionsByFingerprint[fingerprint]!.add(row.section.trim());
   }
 
-  final leaked = sectionsByFingerprint.entries
-      .where((entry) => entry.value.length > 1)
-      .toList()
-    ..sort((a, b) => a.key.compareTo(b.key));
+  final leaked =
+      sectionsByFingerprint.entries
+          .where((entry) => entry.value.length > 1)
+          .toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
 
   if (leaked.isEmpty) {
-    debugPrint('DUPLICATE SOURCE CHECK => no cross-section source duplication detected');
+    debugPrint(
+      'DUPLICATE SOURCE CHECK => no cross-section source duplication detected',
+    );
     return;
   }
 

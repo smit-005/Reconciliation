@@ -127,8 +127,7 @@ void main() {
       expect(
         validation.mappedColumns.entries.any(
           (entry) =>
-              entry.key == 'L. A. CREATIONS - MORBI' &&
-              entry.value == 'amount',
+              entry.key == 'L. A. CREATIONS - MORBI' && entry.value == 'amount',
         ),
         isFalse,
       );

@@ -23,10 +23,7 @@ Widget summaryTile(String label, String value) {
         const SizedBox(height: 6),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ],
     ),
@@ -72,11 +69,7 @@ Widget mismatchTile({
   );
 }
 
-Widget miniInfoChip(
-    BuildContext context,
-    String label,
-    String value,
-    ) {
+Widget miniInfoChip(BuildContext context, String label, String value) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
     decoration: BoxDecoration(
@@ -95,9 +88,7 @@ Widget miniInfoChip(
               fontWeight: FontWeight.w600,
             ),
           ),
-          const TextSpan(
-            text: '',
-          ),
+          const TextSpan(text: ''),
           TextSpan(
             text: value,
             style: const TextStyle(

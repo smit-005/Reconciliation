@@ -42,10 +42,7 @@ class ReconciliationViewModeToggle extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: isSelected
                       ? const LinearGradient(
-                          colors: [
-                            Color(0xFF1E3A5F),
-                            Color(0xFF0F172A),
-                          ],
+                          colors: [Color(0xFF1E3A5F), Color(0xFF0F172A)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         )

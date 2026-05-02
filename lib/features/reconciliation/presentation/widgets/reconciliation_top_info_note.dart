@@ -20,4 +20,3 @@ class ReconciliationTopInfoNote extends StatelessWidget {
     );
   }
 }
-

@@ -52,10 +52,7 @@ class ReconciliationEngine {
       ),
     );
     final tdsDifference = round2(
-      computeTdsDifference(
-        expectedTds: expectedTds,
-        actualTds: actualTds,
-      ),
+      computeTdsDifference(expectedTds: expectedTds, actualTds: actualTds),
     );
 
     return ReconciliationComputedAmounts(
@@ -193,7 +190,9 @@ class ReconciliationEngine {
       if (sellerPan.trim().isEmpty) {
         remarks.add(ReconciliationRemarkTemplates.panMissingHighRisk);
       }
-      remarks.add(ReconciliationRemarkTemplates.manualReview(normalizedSection));
+      remarks.add(
+        ReconciliationRemarkTemplates.manualReview(normalizedSection),
+      );
       if (manualReviewReason.trim().isNotEmpty) {
         remarks.add(manualReviewReason.trim());
       }
@@ -203,7 +202,8 @@ class ReconciliationEngine {
       return remarks.join(', ');
     }
 
-    final isBelowThresholdPurchase = !purchaseMissing &&
+    final isBelowThresholdPurchase =
+        !purchaseMissing &&
         tdsMissing &&
         applicableAmount.abs() <= amountTolerance &&
         expectedTds.abs() <= tdsTolerance &&
@@ -318,10 +318,7 @@ class ReconciliationEngine {
           ].where((e) => e.trim().isNotEmpty).join(', ')
         : lowConfidenceRemarks;
 
-    return ReconciliationStatusRemarks(
-      status: status,
-      remarks: finalRemarks,
-    );
+    return ReconciliationStatusRemarks(status: status, remarks: finalRemarks);
   }
 
   static String chooseSellerName({
@@ -354,7 +351,8 @@ class ReconciliationEngine {
       return row;
     }
 
-    final isBelowThreshold = row.applicableAmount.abs() <= amountTolerance &&
+    final isBelowThreshold =
+        row.applicableAmount.abs() <= amountTolerance &&
         row.expectedTds.abs() <= tdsTolerance &&
         row.actualTds.abs() <= tdsTolerance &&
         row.tds26QAmount.abs() <= amountTolerance &&

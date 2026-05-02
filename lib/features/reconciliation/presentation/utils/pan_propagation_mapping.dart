@@ -2,7 +2,8 @@ import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 
 Map<String, String> buildPanPropagationMapping({
   required Iterable<MapEntry<String, String>> manualMappings,
-  required Iterable<({String purchaseParty, String mappedTdsParty})> autoMappings,
+  required Iterable<({String purchaseParty, String mappedTdsParty})>
+  autoMappings,
 }) {
   final propagation = <String, String>{};
 

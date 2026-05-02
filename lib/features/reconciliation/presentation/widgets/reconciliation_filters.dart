@@ -85,7 +85,7 @@ class ReconciliationFilters extends StatelessWidget {
                   labelText: 'Section',
                   onChanged: onSectionChanged,
                 ),
-            ),
+              ),
             _buildField(
               width: statusFieldWidth,
               child: AppCompactSelectField(

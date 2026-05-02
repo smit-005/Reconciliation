@@ -26,6 +26,7 @@ class SellerIdentityResolver {
   final Map<String, SellerMapping> _sectionMappings;
   final Map<String, Set<String>> _nameToPans;
   final Map<String, Set<String>> _panToNames;
+  final Map<String, Set<String>> _legalNameToPans;
   final Map<String, int> _namePanObservationCounts;
   final Map<String, String> _nameDisplay;
   final Map<String, String> _panDisplay;
@@ -35,6 +36,7 @@ class SellerIdentityResolver {
     required Map<String, SellerMapping> sectionMappings,
     required Map<String, Set<String>> nameToPans,
     required Map<String, Set<String>> panToNames,
+    required Map<String, Set<String>> legalNameToPans,
     required Map<String, int> namePanObservationCounts,
     required Map<String, String> nameDisplay,
     required Map<String, String> panDisplay,
@@ -42,6 +44,7 @@ class SellerIdentityResolver {
        _sectionMappings = sectionMappings,
        _nameToPans = nameToPans,
        _panToNames = panToNames,
+       _legalNameToPans = legalNameToPans,
        _namePanObservationCounts = namePanObservationCounts,
        _nameDisplay = nameDisplay,
        _panDisplay = panDisplay;
@@ -55,6 +58,7 @@ class SellerIdentityResolver {
     final sectionMappings = <String, SellerMapping>{};
     final nameToPans = <String, Set<String>>{};
     final panToNames = <String, Set<String>>{};
+    final legalNameToPans = <String, Set<String>>{};
     final namePanObservationCounts = <String, int>{};
     final nameDisplay = <String, String>{};
     final panDisplay = <String, String>{};
@@ -113,6 +117,12 @@ class SellerIdentityResolver {
         panToNames
             .putIfAbsent(normalizedPan, () => <String>{})
             .add(normalizedName);
+        final legalNameKey = _sellerLegalNameKey(normalizedName);
+        if (legalNameKey.isNotEmpty) {
+          legalNameToPans
+              .putIfAbsent(legalNameKey, () => <String>{})
+              .add(normalizedPan);
+        }
         final observationKey = '$normalizedName|$normalizedPan';
         namePanObservationCounts[observationKey] =
             (namePanObservationCounts[observationKey] ?? 0) + observationCount;
@@ -124,6 +134,7 @@ class SellerIdentityResolver {
       sectionMappings: sectionMappings,
       nameToPans: nameToPans,
       panToNames: panToNames,
+      legalNameToPans: legalNameToPans,
       namePanObservationCounts: namePanObservationCounts,
       nameDisplay: nameDisplay,
       panDisplay: panDisplay,
@@ -254,7 +265,13 @@ class SellerIdentityResolver {
     if (looksLikePan(normalizedPan)) {
       flags.add('pan_verified');
       final conflictingNames = _panToNames[normalizedPan] ?? const <String>{};
-      if (conflictingNames.length > 1) {
+      final legalKeysForSamePan = conflictingNames
+          .map(_sellerLegalNameKey)
+          .where((value) => value.isNotEmpty)
+          .toSet();
+      final onlyLegalNameVariants =
+          conflictingNames.length > 1 && legalKeysForSamePan.length == 1;
+      if (conflictingNames.length > 1 && !onlyLegalNameVariants) {
         flags.add('ambiguous_identity');
         flags.add('conflicting_pan');
       }
@@ -268,9 +285,10 @@ class SellerIdentityResolver {
         ),
         resolvedPan: normalizedPan,
         identitySource: 'pan',
-        identityConfidence: conflictingNames.length > 1 ? 0.70 : 1.0,
+        identityConfidence:
+            conflictingNames.length > 1 && !onlyLegalNameVariants ? 0.70 : 1.0,
         identityNotes: [
-          conflictingNames.length > 1
+          conflictingNames.length > 1 && !onlyLegalNameVariants
               ? ReconciliationRemarkTemplates.panNameMismatch
               : ReconciliationRemarkTemplates.panMatched,
           extraNotes,
@@ -312,35 +330,14 @@ class SellerIdentityResolver {
       );
     }
 
-    final candidatePans = _nameToPans[normalizedName] ?? const <String>{};
-    if (normalizedName.isNotEmpty && candidatePans.length == 1) {
-      flags.add('name_only_match');
-      final matchedPan = candidatePans.first;
-      final observationCount =
-          _namePanObservationCounts['$normalizedName|$matchedPan'] ?? 0;
-
-      if (observationCount < 2) {
-        flags.add('unresolved_identity');
-        return ResolvedSellerIdentity(
-          resolvedSellerId: 'NAME:$normalizedName',
-          resolvedSellerName: _displayNameForName(normalizedName, originalName),
-          resolvedPan: '',
-          identitySource: 'normalized_name',
-          identityConfidence: 0.45,
-          identityNotes: [
-            ReconciliationRemarkTemplates.weakSellerMatch,
-            extraNotes,
-          ].where((value) => value.trim().isNotEmpty).join(', '),
-          mappingAttempted: mappingAttempted,
-          mappingSectionUsed: mappingSectionUsed,
-          mappingHit: mappingHit,
-          identityFlags: flags.toList()..sort(),
-          originalSellerName: originalName.trim(),
-          normalizedSellerName: normalizedName,
-          originalPan: '',
-        );
-      }
-
+    final legalNameKey = _sellerLegalNameKey(normalizedName);
+    final legalNamePans = legalNameKey.isEmpty
+        ? const <String>{}
+        : (_legalNameToPans[legalNameKey] ?? const <String>{});
+    if (!looksLikePan(normalizedPan) && legalNamePans.length == 1) {
+      final matchedPan = legalNamePans.first;
+      flags.add('legal_name_match');
+      flags.add('pan_inferred');
       return ResolvedSellerIdentity(
         resolvedSellerId: 'PAN:$matchedPan',
         resolvedSellerName: _displayNameForPan(
@@ -349,10 +346,47 @@ class SellerIdentityResolver {
           originalName,
         ),
         resolvedPan: matchedPan,
-        identitySource: 'normalized_name',
-        identityConfidence: 0.70,
+        identitySource: 'legal_name_pan',
+        identityConfidence: 0.86,
         identityNotes: [
-          ReconciliationRemarkTemplates.inferredSellerMatch,
+          'PAN inferred from matching legal seller name',
+          extraNotes,
+        ].where((value) => value.trim().isNotEmpty).join(', '),
+        mappingAttempted: mappingAttempted,
+        mappingSectionUsed: mappingSectionUsed,
+        mappingHit: mappingHit,
+        identityFlags: flags.toList()..sort(),
+        originalSellerName: originalName.trim(),
+        normalizedSellerName: normalizedName,
+        originalPan: '',
+      );
+    }
+
+    final candidatePans = _nameToPans[normalizedName] ?? const <String>{};
+    if (normalizedName.isNotEmpty && candidatePans.length == 1) {
+      // IMPORTANT: do not auto-merge a ledger/source seller into a 26Q PAN
+      // when the ledger row itself has no PAN. Many purchase registers do not
+      // contain PAN/GST columns, so a name-only hit must remain a reviewable
+      // suggestion until the user saves an alias mapping.
+      flags.add('name_only_match');
+      flags.add('unresolved_identity');
+
+      final matchedPan = candidatePans.first;
+      final observationCount =
+          _namePanObservationCounts['$normalizedName|$matchedPan'] ?? 0;
+      final isRepeatedEvidence = observationCount >= 2;
+
+      return ResolvedSellerIdentity(
+        resolvedSellerId: 'NAME:$normalizedName',
+        resolvedSellerName: _displayNameForName(normalizedName, originalName),
+        resolvedPan: '',
+        identitySource: 'name_suggestion',
+        identityConfidence: isRepeatedEvidence ? 0.62 : 0.45,
+        identityNotes: [
+          isRepeatedEvidence
+              ? ReconciliationRemarkTemplates.inferredSellerMatch
+              : ReconciliationRemarkTemplates.weakSellerMatch,
+          'Name-only match found against PAN $matchedPan. Review and save mapping before using this PAN.',
           extraNotes,
         ].where((value) => value.trim().isNotEmpty).join(', '),
         mappingAttempted: mappingAttempted,
@@ -451,4 +485,37 @@ class SellerIdentityResolver {
               ? 'Unknown Seller'
               : originalName.trim());
   }
+
+  static String _sellerLegalNameKey(String value) {
+    var key = normalizeName(value);
+    if (key.isEmpty) return '';
+
+    final tokens = key
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .where((token) => !_companySuffixTokens.contains(token))
+        .map(
+          (token) => token.length > 3 && token.endsWith('S')
+              ? token.substring(0, token.length - 1)
+              : token,
+        )
+        .toList();
+
+    return tokens.join(' ').trim();
+  }
+
+  static const Set<String> _companySuffixTokens = <String>{
+    'LTD',
+    'LIMITED',
+    'PVT',
+    'PRIVATE',
+    'LLP',
+    'LLC',
+    'INC',
+    'CO',
+    'COMPANY',
+    'CORP',
+    'CORPORATION',
+    'INDIA',
+  };
 }
