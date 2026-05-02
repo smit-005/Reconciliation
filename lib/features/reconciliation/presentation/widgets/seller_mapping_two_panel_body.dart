@@ -67,7 +67,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   String? _selectedLeftKey;
   String? _selectedTdsParty;
   String? _selectedLedgerRowKey;
-  String? _reverseHighlightText;
 
   List<SellerMappingRowVm> get _leftReviewRows {
     // The parent screen already decides which rows belong in the current
@@ -119,7 +118,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           widget.selectedValueForRow(selectedRow)?.trim() ?? '';
       _selectedTdsParty = selectedValue.isEmpty ? null : selectedValue;
       _selectedLedgerRowKey = null;
-      _reverseHighlightText = null;
     }
   }
 
@@ -261,12 +259,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                   )
                   .length
             : row.sourceRowCount;
-        final highlighted =
-            _reverseHighlightText != null &&
-            _rowMatchesSearch(row, _normalize(_reverseHighlightText!));
         return _SellerCard(
           selected: selected,
-          highlighted: highlighted,
+          highlighted: false,
           title: row.purchasePartyDisplayName,
           badge: _friendlyStatusLabel(row, status),
           badgeColor: _statusColor(row, status),
@@ -291,7 +286,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
               _selectedLeftKey = row.rowKey;
               _selectedTdsParty = widget.selectedValueForRow(row);
               _selectedLedgerRowKey = null;
-              _reverseHighlightText = null;
             });
           },
         );
@@ -438,7 +432,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       onTap: () {
         setState(() {
           if (row != null) _selectedTdsParty = party;
-          _reverseHighlightText = party;
         });
       },
     );
@@ -494,27 +487,30 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         !showMappedState &&
         !mappedElsewhere &&
         similarityScore > 0.5;
+    final applyMatchStyling = row != null;
     final badge = showMappedState
         ? 'Mapped'
         : mappedElsewhere
         ? 'Already Mapped Elsewhere'
-        : strongNameMatch
+        : applyMatchStyling && strongNameMatch
         ? 'Strong Match'
-        : fuzzyPossibleMatch || possibleNameMatch
+        : applyMatchStyling && (fuzzyPossibleMatch || possibleNameMatch)
         ? 'Possible Match'
         : 'Ledger Seller';
     final badgeColor = showMappedState
         ? SellerMappingTheme.successColor
         : mappedElsewhere
         ? SellerMappingTheme.warningColor
-        : strongNameMatch || fuzzyPossibleMatch || possibleNameMatch
+        : applyMatchStyling &&
+              (strongNameMatch || fuzzyPossibleMatch || possibleNameMatch)
         ? SellerMappingTheme.primaryColor
         : SellerMappingTheme.mutedTextColor;
 
     return _SellerCard(
       selected: selected,
       highlighted:
-          strongNameMatch || fuzzyPossibleMatch || possibleNameMatch || row == null,
+          applyMatchStyling &&
+          (strongNameMatch || fuzzyPossibleMatch || possibleNameMatch),
       title: candidate.purchasePartyDisplayName,
       badge: badge,
       badgeColor: badgeColor,
@@ -534,7 +530,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           if (row != null && !_rowHasMapping(row)) {
             _selectedLedgerRowKey = candidate.rowKey;
           }
-          _reverseHighlightText = candidate.purchasePartyDisplayName;
         });
       },
     );
@@ -643,7 +638,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                       widget.onLinkToLedgerRow(row, selectedLedger!);
                       setState(() {
                         _selectedLeftKey = row.rowKey;
-                        _reverseHighlightText = null;
                       });
                     } else {
                       widget.onLinkToTds(row, _selectedTdsParty);
@@ -686,7 +680,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                 _selectedLeftKey = row.rowKey;
                 _selectedTdsParty = null;
                 _selectedLedgerRowKey = null;
-                _reverseHighlightText = null;
               });
             },
             icon: const Icon(Icons.close_rounded, size: 18),
@@ -998,7 +991,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   void _clearRightPanelSelection() {
     _selectedTdsParty = null;
     _selectedLedgerRowKey = null;
-    _reverseHighlightText = null;
   }
 
   void _clearLocalSelection() {
