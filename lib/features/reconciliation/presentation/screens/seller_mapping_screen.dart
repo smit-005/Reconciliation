@@ -82,12 +82,16 @@ class SellerMappingScreenResult {
   final List<Map<String, String>> deleted;
   final int dangerousRemaining;
   final int unreviewedExceptionCount;
+  final Map<String, String> selectedMappings;
+  final Set<String> clearedRowKeys;
 
   const SellerMappingScreenResult({
     this.upserts = const <Map<String, String>>[],
     this.deleted = const <Map<String, String>>[],
     this.dangerousRemaining = 0,
     this.unreviewedExceptionCount = 0,
+    this.selectedMappings = const <String, String>{},
+    this.clearedRowKeys = const <String>{},
   });
 }
 
@@ -105,6 +109,8 @@ class SellerMappingScreen extends StatefulWidget {
   final Map<String, List<String>> tdsPartyPans;
   final int rawSourceRowCount;
   final String buyerGstNo;
+  final Map<String, String> initialSelectedMappings;
+  final Set<String> initialClearedRowKeys;
 
   const SellerMappingScreen({
     super.key,
@@ -121,6 +127,8 @@ class SellerMappingScreen extends StatefulWidget {
     this.tdsPartyPans = const {},
     this.rawSourceRowCount = 0,
     this.buyerGstNo = '',
+    this.initialSelectedMappings = const <String, String>{},
+    this.initialClearedRowKeys = const <String>{},
   });
 
   @override
@@ -513,15 +521,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return null;
   }
 
-  bool _hasValidLinkedLedgerSelection(
+  bool _isReviewed26QDecision(
     SellerMappingRowVm row,
     String? selectedValue,
   ) {
-    return _linkedLedgerRowForSelection(
-          sectionCode: row.sectionCode,
-          selectedValue: selectedValue,
-        ) !=
-        null;
+    if (!row.is26QUnmatched || selectedValue == null) {
+      return false;
+    }
+    return _isLinkLedgerSelection(selectedValue) ||
+        _isTimingDifferenceSelection(row, selectedValue) ||
+        _isMissingInBooksSelection(row, selectedValue) ||
+        (_isPreflightMode && _isSeparateSelection(row, selectedValue));
   }
 
   String? _normalizeToKnownTdsParty(String? mappedName) {
@@ -874,7 +884,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required String? selectedValue,
   }) {
     if (row.is26QUnmatched) {
-      if (_hasValidLinkedLedgerSelection(row, selectedValue)) {
+      if (_isLinkLedgerSelection(selectedValue)) {
         return 'Linked to Ledger';
       }
       if (_isTimingDifferenceSelection(row, selectedValue)) {
@@ -882,6 +892,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
       if (_isMissingInBooksSelection(row, selectedValue)) {
         return 'Missing in Books';
+      }
+      if (_isPreflightMode && _isSeparateSelection(row, selectedValue)) {
+        return 'Marked Separate';
       }
       return '26Q Unmatched';
     }
@@ -1327,6 +1340,25 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final readyState = _SellerMappingScreenReadyState.fromIsolatePayload(
       Map<String, dynamic>.from(payload),
     );
+    final knownRowKeys = readyState.mappingRowsBySection.values
+        .expand((rows) => rows)
+        .map((row) => row.rowKey)
+        .toSet();
+    final hydratedSelectedMappings = Map<String, String>.from(
+      readyState.selectedMappings,
+    );
+    for (final entry in widget.initialSelectedMappings.entries) {
+      if (!knownRowKeys.contains(entry.key)) continue;
+      final value = entry.value.trim();
+      if (value.isEmpty) continue;
+      hydratedSelectedMappings[entry.key] = value;
+    }
+    final hydratedClearedRowKeys = widget.initialClearedRowKeys
+        .where(knownRowKeys.contains)
+        .toSet();
+    for (final rowKey in hydratedClearedRowKeys) {
+      hydratedSelectedMappings.remove(rowKey);
+    }
 
     setState(() {
       uniqueTdsParties = preparedState.uniqueTdsParties;
@@ -1336,8 +1368,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       _mappingRowsBySectionCache
         ..clear()
         ..addAll(readyState.mappingRowsBySection);
-      selectedMappings = readyState.selectedMappings;
+      selectedMappings = hydratedSelectedMappings;
       autoMapDetails = <String, AutoMapDecision>{};
+      _clearedRowKeys
+        ..clear()
+        ..addAll(hydratedClearedRowKeys);
       _activeSectionCode = readyState.activeSectionCode;
       _rebuildDerivedRowStateCache();
       _isInitializing = false;
@@ -1533,9 +1568,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             return false;
           }
           final selectedValue = selectedMappings[row.rowKey]?.trim() ?? '';
-          return !_hasValidLinkedLedgerSelection(row, selectedValue) &&
-              !_isTimingDifferenceSelection(row, selectedValue) &&
-              !_isMissingInBooksSelection(row, selectedValue);
+          return !_isReviewed26QDecision(row, selectedValue);
         })
         .length;
 
@@ -1554,6 +1587,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         deleted: deleted,
         dangerousRemaining: dangerousRemaining,
         unreviewedExceptionCount: unreviewedExceptionCount,
+        selectedMappings: Map<String, String>.from(selectedMappings),
+        clearedRowKeys: Set<String>.from(_clearedRowKeys),
       ),
     );
   }
@@ -1654,9 +1689,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return false;
       }
       final selectedValue = _rowStateByKey[row.rowKey]?.selectedValue;
-      return !_hasValidLinkedLedgerSelection(row, selectedValue) &&
-          !_isTimingDifferenceSelection(row, selectedValue) &&
-          !_isMissingInBooksSelection(row, selectedValue);
+      return !_isReviewed26QDecision(row, selectedValue);
     }).length;
   }
 
