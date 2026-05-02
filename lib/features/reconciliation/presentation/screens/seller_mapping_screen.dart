@@ -939,7 +939,19 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         status == 'Unresolved Identity';
   }
 
-  String _statusChipLabel(String status) {
+  bool _hasLedgerDataForSection(String sectionCode) {
+    final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
+    final sectionRows = _rowDataBySection[normalizedSection] ?? const [];
+    return sectionRows.any((row) => !row.is26QUnmatched);
+  }
+
+  String _statusChipLabel(String status, {SellerMappingRowVm? row}) {
+    if (row != null &&
+        row.is26QUnmatched &&
+        status == '26Q Unmatched' &&
+        !_hasLedgerDataForSection(row.sectionCode)) {
+      return 'Ledger Not Available';
+    }
     if (status == 'Conflicting PAN' ||
         status == 'Ambiguous Identity' ||
         status == 'Unresolved Identity') {
@@ -1036,6 +1048,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
 
     if (row.is26QUnmatched) {
+      if (!_hasLedgerDataForSection(row.sectionCode)) {
+        return false;
+      }
       return status == '26Q Unmatched';
     }
 
@@ -1686,6 +1701,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   int _unreviewedExceptionCount() {
     return _allSectionRows().where((row) {
       if (!row.is26QUnmatched) {
+        return false;
+      }
+      if (!_hasLedgerDataForSection(row.sectionCode)) {
         return false;
       }
       final selectedValue = _rowStateByKey[row.rowKey]?.selectedValue;
@@ -2684,7 +2702,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                           ),
                         SellerMappingStatusChip(
                           icon: _statusIconSafe(status),
-                          label: _statusChipLabel(status),
+                          label: _statusChipLabel(status, row: row),
                           tone: issueTone,
                         ),
                       ],

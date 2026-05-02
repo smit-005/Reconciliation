@@ -87,17 +87,11 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         .toList(growable: false);
   }
 
-  SellerMappingRowVm? get _selectedLeftRow {
-    if (_selectedLeftKey == null) return null;
-    for (final row in _leftReviewRows) {
-      if (row.rowKey == _selectedLeftKey) return row;
-    }
-    return null;
-  }
-
   String get _activeSearchQuery {
     return widget.searchQuery.trim();
   }
+
+  bool get _hasLedgerForSection => widget.ledgerCandidateRows.isNotEmpty;
 
   @override
   void didUpdateWidget(covariant SellerMappingTwoPanelBody oldWidget) {
@@ -124,7 +118,10 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   @override
   Widget build(BuildContext context) {
     final filteredLeftRows = _filteredLeftRows;
-    final selectedRow = _selectedLeftRow;
+    final selectedRow = _selectedLeftRowFrom(widget.visibleRows);
+    final rightPanelKey = ValueKey<String?>(
+      selectedRow == null ? null : 'right-panel:${selectedRow.rowKey}',
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -172,7 +169,10 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                                 : selectedRow.is26QUnmatched
                                 ? 'Same-section ledger candidates for the selected 26Q seller.'
                                 : 'Suggested and matching 26Q candidates for the selected ledger seller.',
-                            child: _buildRightList(selectedRow),
+                            child: KeyedSubtree(
+                              key: rightPanelKey,
+                              child: _buildRightList(selectedRow),
+                            ),
                           ),
                         ),
                       ],
@@ -295,6 +295,15 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 
   Widget _buildRightList(SellerMappingRowVm? row) {
     final hasSearch = _activeSearchQuery.trim().isNotEmpty;
+
+    if (!_hasLedgerForSection) {
+      return const _PanelEmptyHint(
+        icon: Icons.upload_file_outlined,
+        title: 'No ledger uploaded for this section',
+        message:
+            'Upload source ledger data for this section, or review each 26Q seller as an exception.',
+      );
+    }
 
     if (widget.showAllSellersMode) {
       if (row != null && !row.is26QUnmatched && !_rowHasMapping(row)) {
@@ -605,12 +614,18 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         status == 'Timing Difference' ||
         status == 'Missing in Books' ||
         status == 'Marked Separate';
+    final noLedgerForSection = !_hasLedgerForSection;
     final hasPendingCandidate = row.is26QUnmatched
         ? _selectedLedgerRowKey != null
         : _selectedTdsParty != null;
-    final canLink = !hasSavedDecision && hasPendingCandidate;
+    final canLink =
+        !hasSavedDecision && !noLedgerForSection && hasPendingCandidate;
     final canAcceptSuggestion =
-        !hasSavedDecision && widget.canAcceptSuggestion(row);
+        !hasSavedDecision &&
+        !noLedgerForSection &&
+        widget.canAcceptSuggestion(row);
+    final canKeepSeparate =
+        !hasSavedDecision && (!row.is26QUnmatched || noLedgerForSection);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -663,12 +678,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: row.is26QUnmatched
-                ? null
-                : () {
+            onPressed: canKeepSeparate
+                ? () {
                     widget.onKeepSeparate(row);
                     setState(_clearLocalSelection);
-                  },
+                  }
+                : null,
             icon: const Icon(Icons.call_split_rounded, size: 18),
             label: const Text('Keep Separate'),
           ),
@@ -676,11 +691,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           OutlinedButton.icon(
             onPressed: () {
               widget.onClear(row);
-              setState(() {
-                _selectedLeftKey = row.rowKey;
-                _selectedTdsParty = null;
-                _selectedLedgerRowKey = null;
-              });
+              setState(_clearLocalSelection);
             },
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Clear'),

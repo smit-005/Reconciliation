@@ -124,6 +124,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   bool _isLoadingSellerMapping = false;
   SellerMappingPreflightResult? _cachedPreflightResult;
   bool _isSellerPreflightDirty = true;
+  Map<String, String> _sellerSelectedMappings = <String, String>{};
+  Set<String> _sellerClearedRowKeys = <String>{};
 
   final Set<String> selectedSections = {'194Q'};
   final Map<String, bool> sectionLoading = {
@@ -317,9 +319,17 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     AppRectSnackBar.show(context, message);
   }
 
-  void _markSellerPreflightDirty() {
+  void _invalidateSellerPreflightCache({bool clearDraftState = false}) {
     _cachedPreflightResult = null;
     _isSellerPreflightDirty = true;
+    if (clearDraftState) {
+      _sellerSelectedMappings = <String, String>{};
+      _sellerClearedRowKeys = <String>{};
+    }
+  }
+
+  void _markSellerPreflightDirty() {
+    _invalidateSellerPreflightCache(clearDraftState: true);
     _isSellerMappingConfirmed = false;
   }
 
@@ -949,6 +959,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             tdsPartyPans: preflightResult.tdsPartyPans,
             rawSourceRowCount: totalSourceRows,
             buyerGstNo: detectedGstNo ?? '',
+            initialSelectedMappings: _sellerSelectedMappings,
+            initialClearedRowKeys: _sellerClearedRowKeys,
           ),
         ),
       );
@@ -962,11 +974,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           'UPLOAD POSTMAP PERF => refresh_preflight_skipped dangerousRemaining=0',
         );
 
+        await _persistSellerMappingResult(result);
+        _storeSellerMappingDraft(result);
+
         setState(() {
           _isSellerMappingConfirmed = true;
           _isLoadingSellerMapping = false;
-          _isSellerPreflightDirty = false;
         });
+        _invalidateSellerPreflightCache();
 
         _showUploadSnackBar('Seller mapping saved');
         return;
@@ -978,6 +993,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       await _persistSellerMappingResult(result);
+      _storeSellerMappingDraft(result);
+      _invalidateSellerPreflightCache();
 
       final canOpen =
           result.dangerousRemaining == 0 &&
@@ -1068,6 +1085,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         ),
       );
     }
+  }
+
+  void _storeSellerMappingDraft(SellerMappingScreenResult result) {
+    _sellerSelectedMappings = Map<String, String>.from(result.selectedMappings);
+    _sellerClearedRowKeys = Set<String>.from(result.clearedRowKeys);
   }
 
   Map<String, List<NormalizedTransactionRow>> _buildSourceRowsBySection() {
