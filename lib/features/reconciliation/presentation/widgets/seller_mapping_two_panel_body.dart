@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
@@ -301,6 +303,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final hasSearch = _activeSearchQuery.trim().isNotEmpty;
 
     if (widget.showAllSellersMode) {
+      if (row != null && !row.is26QUnmatched && !_rowHasMapping(row)) {
+        return _buildTdsCandidateList(row);
+      }
       return _buildAllSellerLedgerList(row);
     }
 
@@ -405,8 +410,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   Widget _tdsCandidateCard(SellerMappingRowVm? row, String party) {
+    final selectedRowUnmapped =
+        row != null && _rowIsCurrentlyUnmapped(row);
     final currentSelection = row == null
         ? null
+        : selectedRowUnmapped
+        ? _selectedTdsParty
         : (_selectedTdsParty ?? widget.selectedValueForRow(row));
     final suggestion = row?.resolvedSuggestion?.mappedName.trim() ?? '';
     final pans = widget.tdsPartyPans[party] ?? const <String>[];
@@ -439,20 +448,32 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     SellerMappingRowVm? row,
     SellerMappingRowVm candidate,
   ) {
-    final selectedRowMapped = row != null && _rowHasMapping(row);
+    final selectedRowUnmapped =
+        row != null && _rowIsCurrentlyUnmapped(row);
+    final similarityScore = row != null && row.is26QUnmatched
+        ? _ledgerSimilarityScore(
+            row.purchasePartyDisplayName,
+            candidate.purchasePartyDisplayName,
+          )
+        : 0.0;
+    final selectedRowMapped =
+        row != null && !selectedRowUnmapped && _rowHasMapping(row);
     final showMappedState =
         row != null &&
         selectedRowMapped &&
         _isMappedLedgerCandidate(row, candidate);
     final mappedElsewhere =
         row != null &&
+        !selectedRowUnmapped &&
         !selectedRowMapped &&
         row.rowKey != candidate.rowKey &&
         _rowHasMapping(candidate);
+    final explicitlySelected =
+        row != null && candidate.rowKey == _selectedLedgerRowKey;
     final selected =
-        (row != null && candidate.rowKey == _selectedLedgerRowKey) ||
+        explicitlySelected ||
         showMappedState ||
-        row == candidate;
+        (!selectedRowUnmapped && row == candidate);
     final possibleNameMatch =
         row != null &&
         !showMappedState &&
@@ -461,24 +482,39 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           row.purchasePartyDisplayName,
           candidate.purchasePartyDisplayName,
         );
+    final strongNameMatch =
+        row != null &&
+        row.is26QUnmatched &&
+        !showMappedState &&
+        !mappedElsewhere &&
+        similarityScore > 0.75;
+    final fuzzyPossibleMatch =
+        row != null &&
+        row.is26QUnmatched &&
+        !showMappedState &&
+        !mappedElsewhere &&
+        similarityScore > 0.5;
     final badge = showMappedState
         ? 'Mapped'
         : mappedElsewhere
         ? 'Already Mapped Elsewhere'
-        : possibleNameMatch
+        : strongNameMatch
+        ? 'Strong Match'
+        : fuzzyPossibleMatch || possibleNameMatch
         ? 'Possible Match'
         : 'Ledger Seller';
     final badgeColor = showMappedState
         ? SellerMappingTheme.successColor
         : mappedElsewhere
         ? SellerMappingTheme.warningColor
-        : possibleNameMatch
+        : strongNameMatch || fuzzyPossibleMatch || possibleNameMatch
         ? SellerMappingTheme.primaryColor
         : SellerMappingTheme.mutedTextColor;
 
     return _SellerCard(
       selected: selected,
-      highlighted: possibleNameMatch || row == null,
+      highlighted:
+          strongNameMatch || fuzzyPossibleMatch || possibleNameMatch || row == null,
       title: candidate.purchasePartyDisplayName,
       badge: badge,
       badgeColor: badgeColor,
@@ -796,16 +832,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       ordered.add(candidate);
     }
 
-    if (query.isNotEmpty && row.is26QUnmatched) {
-      for (final candidate in candidates) {
-        if (_rowMatchesSearch(candidate, query)) {
-          addCandidate(candidate);
-        }
-        if (ordered.length >= 40) break;
-      }
-      return ordered;
-    }
-
     // If this 26Q seller already has a linked ledger row, show only that
     // mapped ledger seller on the right. This keeps mapped 26Q review focused.
     if (selectedValue.isNotEmpty) {
@@ -845,8 +871,39 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       }
     }
 
-    // For an unmapped 26Q seller, show only search/name-related ledger
-    // candidates. Do not fall back to every section seller after selection.
+    if (row.is26QUnmatched) {
+      final remainingCandidates = candidates
+          .where(
+            (candidate) =>
+                !ordered.any((item) => item.rowKey == candidate.rowKey) &&
+                (query.isEmpty || _rowMatchesSearch(candidate, query)),
+          )
+          .toList(growable: false)
+        ..sort((a, b) {
+          final byScore = _ledgerSimilarityScore(
+            row.purchasePartyDisplayName,
+            b.purchasePartyDisplayName,
+          ).compareTo(
+            _ledgerSimilarityScore(
+              row.purchasePartyDisplayName,
+              a.purchasePartyDisplayName,
+            ),
+          );
+          if (byScore != 0) return byScore;
+          return a.purchasePartyDisplayName.compareTo(
+            b.purchasePartyDisplayName,
+          );
+        });
+
+      for (final candidate in remainingCandidates) {
+        addCandidate(candidate);
+        if (ordered.length >= 40) break;
+      }
+
+      return ordered;
+    }
+
+    // For a normal ledger row, show only search/name-related 26Q candidates.
     for (final candidate in candidates) {
       final include = query.isNotEmpty
           ? _rowMatchesSearch(candidate, query)
@@ -877,6 +934,10 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return status.contains('mapped') ||
         status.contains('accepted') ||
         status.contains('linked');
+  }
+
+  bool _rowIsCurrentlyUnmapped(SellerMappingRowVm row) {
+    return widget.statusForRow(row) == 'Unmapped';
   }
 
   List<SellerMappingRowVm> _mappedLedgerRowsFor(SellerMappingRowVm row) {
@@ -981,6 +1042,52 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       if (rightTokens.contains(token)) shared++;
     }
     return shared >= 2 || (shared == 1 && leftTokens.length == 1);
+  }
+
+  double _ledgerSimilarityScore(String a, String b) {
+    final na = _normalize(a);
+    final nb = _normalize(b);
+    if (na.isEmpty || nb.isEmpty) return 0.0;
+
+    final tokensA = _importantTokens(na);
+    final tokensB = _importantTokens(nb);
+
+    final overlap = tokensA.intersection(tokensB).length.toDouble();
+    final maxTokens = (tokensA.length + tokensB.length).clamp(1, 100);
+    final tokenScore = overlap / maxTokens;
+
+    final editScore = _levenshteinSimilarity(na, nb);
+
+    return (tokenScore * 0.6) + (editScore * 0.4);
+  }
+
+  double _levenshteinSimilarity(String a, String b) {
+    if (a.isEmpty || b.isEmpty) return 0.0;
+    if (a == b) return 1.0;
+
+    final m = a.length;
+    final n = b.length;
+    final dp = List.generate(m + 1, (_) => List<int>.filled(n + 1, 0));
+
+    for (var i = 0; i <= m; i++) {
+      dp[i][0] = i;
+    }
+    for (var j = 0; j <= n; j++) {
+      dp[0][j] = j;
+    }
+
+    for (var i = 1; i <= m; i++) {
+      for (var j = 1; j <= n; j++) {
+        final cost = a[i - 1] == b[j - 1] ? 0 : 1;
+        dp[i][j] = math.min(
+          math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
+          dp[i - 1][j - 1] + cost,
+        );
+      }
+    }
+
+    final maxLength = math.max(m, n);
+    return maxLength == 0 ? 1.0 : 1.0 - (dp[m][n] / maxLength);
   }
 
   Set<String> _importantTokens(String value) {
