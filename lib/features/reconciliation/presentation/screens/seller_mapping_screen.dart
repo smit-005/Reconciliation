@@ -1014,24 +1014,19 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required String? selectedValue,
     required String status,
   }) {
-    final hasUnreviewedException =
-        row.is26QUnmatched &&
-        !_hasValidLinkedLedgerSelection(row, selectedValue) &&
-        !_isTimingDifferenceSelection(row, selectedValue) &&
-        !_isMissingInBooksSelection(row, selectedValue);
-
-    if (hasUnreviewedException) {
-      return true;
+    if (row.isPurchaseOnly) {
+      return false;
     }
 
     if (_isUnresolvedDangerousPreflightRow(row)) {
       return true;
     }
 
-    return status == 'PAN Conflict' ||
-        status == 'Conflicting PAN' ||
-        status == 'Ambiguous Identity' ||
-        status == 'Unresolved Identity';
+    if (row.is26QUnmatched) {
+      return status == '26Q Unmatched';
+    }
+
+    return status == 'Unmapped' || status == 'PAN Conflict';
   }
 
   String _buildSearchHaystack({
@@ -1156,6 +1151,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return true;
       case 'Only in Ledger':
         return true; // ✅ DO NOT filter LEFT panel
+      case 'PAN Conflict':
+        return state.status == 'PAN Conflict' ||
+            state.status == 'Conflicting PAN';
       default:
         return state.status == _statusFilter;
     }
@@ -1180,6 +1178,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             _isDangerousPreflightStatus(state.status);
       case 'Only in Ledger':
         return state.status == 'Purchase Only';
+      case 'PAN Conflict':
+        return state.status == 'PAN Conflict' ||
+            state.status == 'Conflicting PAN';
       default:
         return state.status == _statusFilter;
     }
@@ -1572,7 +1573,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         mapped++;
       }
       if (state.status == 'Unmapped') unmapped++;
-      if (state.status == 'PAN Conflict') conflicts++;
+      if (state.status == 'PAN Conflict' || state.status == 'Conflicting PAN') {
+        conflicts++;
+      }
       if (state.status == 'Mapped (PAN missing)') verifyPan++;
     }
 
@@ -1621,7 +1624,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   int _needsActionCountForSection(String sectionCode) {
     return _rowsForSection(sectionCode).where((row) {
       final state = _rowStateByKey[row.rowKey];
-      return state != null && state.matchesNeedsAction;
+      if (state == null) return false;
+
+      // Match the Working View left panel behavior.
+      // Do not count ledger-only rows, but include normal 26Q seller rows that
+      // need review because of PAN conflict / dangerous identity preflight.
+      if (row.isPurchaseOnly) return false;
+
+      return state.matchesNeedsAction;
     }).length;
   }
 
@@ -2856,6 +2866,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return SellerMappingTwoPanelBody(
       visibleRows: visibleRows,
       ledgerCandidateRows: ledgerCandidateRows,
+      searchQuery: _searchQuery,
       showAllSellersMode: _activeListView == SellerMappingListView.allSellers,
       tdsParties: uniqueTdsParties,
       tdsPartyPans: widget.tdsPartyPans,
@@ -3058,6 +3069,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                                 row,
                                 _getSelectedValue(row),
                               ),
+                              linkedLedgerRowForRow: (row) =>
+                                  _linkedLedgerRowForSelection(
+                                    sectionCode: row.sectionCode,
+                                    selectedValue: _getSelectedValue(row),
+                                  ),
                             )
                           : _buildTableSection(visibleRows),
                     ),

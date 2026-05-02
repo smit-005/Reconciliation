@@ -6,6 +6,8 @@ import 'package:reconciliation_app/features/reconciliation/presentation/widgets/
 typedef SellerReviewStatusGetter = String Function(SellerMappingRowVm row);
 typedef SellerReviewValueGetter = String? Function(SellerMappingRowVm row);
 typedef SellerReviewStringGetter = String Function(SellerMappingRowVm row);
+typedef SellerReviewLinkedLedgerGetter =
+    SellerMappingRowVm? Function(SellerMappingRowVm row);
 
 class SellerMappingReviewView extends StatelessWidget {
   final List<SellerMappingRowVm> rows;
@@ -14,6 +16,7 @@ class SellerMappingReviewView extends StatelessWidget {
   final SellerReviewStatusGetter statusForRow;
   final SellerReviewValueGetter selectedValueForRow;
   final SellerReviewStringGetter selectedPanForRow;
+  final SellerReviewLinkedLedgerGetter linkedLedgerRowForRow;
 
   const SellerMappingReviewView({
     super.key,
@@ -23,6 +26,7 @@ class SellerMappingReviewView extends StatelessWidget {
     required this.statusForRow,
     required this.selectedValueForRow,
     required this.selectedPanForRow,
+    required this.linkedLedgerRowForRow,
   });
 
   @override
@@ -117,6 +121,7 @@ class SellerMappingReviewView extends StatelessWidget {
                         status: statusForRow(row),
                         selectedValue: selectedValueForRow(row),
                         selectedPan: selectedPanForRow(row),
+                        linkedLedgerRow: linkedLedgerRowForRow(row),
                       );
                     },
                   ),
@@ -312,12 +317,14 @@ class _ReviewSellerRow extends StatelessWidget {
   final String status;
   final String? selectedValue;
   final String selectedPan;
+  final SellerMappingRowVm? linkedLedgerRow;
 
   const _ReviewSellerRow({
     required this.row,
     required this.status,
     required this.selectedValue,
     required this.selectedPan,
+    required this.linkedLedgerRow,
   });
 
   @override
@@ -391,7 +398,10 @@ class _ReviewSellerRow extends StatelessWidget {
     if (selected.startsWith('__TIMING_DIFFERENCE__:'))
       return 'Timing Difference';
     if (selected.startsWith('__SEPARATE__:')) return 'Keep Separate';
-    if (selected.startsWith('__LINK_LEDGER__:')) return 'Linked ledger seller';
+    if (selected.startsWith('__LINK_LEDGER__:')) {
+      final linkedName = linkedLedgerRow?.purchasePartyDisplayName.trim() ?? '';
+      return linkedName.isEmpty ? 'Linked ledger seller' : linkedName;
+    }
     return selected;
   }
 
@@ -406,6 +416,13 @@ class _ReviewSellerRow extends StatelessWidget {
   }
 
   List<String> _targetChips() {
+    final linkedPan = linkedLedgerRow?.purchasePan.trim() ?? '';
+    if (linkedPan.isNotEmpty) {
+      return ['Ledger PAN ${linkedPan.toUpperCase()}'];
+    }
+    if (linkedLedgerRow != null) {
+      return ['Ledger PAN not available'];
+    }
     if (selectedPan.trim().isNotEmpty && selectedPan != '-') {
       return ['Target PAN ${selectedPan.trim().toUpperCase()}'];
     }
