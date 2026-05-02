@@ -17,6 +17,7 @@ typedef SellerMappingLedgerLinkAction =
 class SellerMappingTwoPanelBody extends StatefulWidget {
   final List<SellerMappingRowVm> visibleRows;
   final List<SellerMappingRowVm> ledgerCandidateRows;
+  final String searchQuery;
   final bool showAllSellersMode;
   final List<String> tdsParties;
   final Map<String, List<String>> tdsPartyPans;
@@ -37,6 +38,7 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
     super.key,
     required this.visibleRows,
     required this.ledgerCandidateRows,
+    this.searchQuery = '',
     this.showAllSellersMode = false,
     required this.tdsParties,
     required this.tdsPartyPans,
@@ -63,21 +65,21 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   String? _selectedLeftKey;
   String? _selectedTdsParty;
   String? _selectedLedgerRowKey;
-  String _searchQuery = '';
   String? _reverseHighlightText;
 
   List<SellerMappingRowVm> get _leftReviewRows {
-    if (widget.showAllSellersMode) {
-      return widget.visibleRows;
-    }
-    return widget.visibleRows
-        .where((row) => row.is26QUnmatched)
-        .toList(growable: false);
+    // The parent screen already decides which rows belong in the current
+    // list view. Do not filter this again by is26QUnmatched here.
+    // A normal mapped 26Q audit row becomes pending immediately after Clear,
+    // but it may not have is26QUnmatched=true. Filtering it here made the
+    // row appear in Review View as Unmapped while staying hidden in Working
+    // View / Needs Action.
+    return widget.visibleRows;
   }
 
   List<SellerMappingRowVm> get _filteredLeftRows {
     final rows = _leftReviewRows;
-    final query = _normalize(_searchQuery);
+    final query = _normalize(widget.searchQuery);
     if (query.isEmpty) return rows;
     return rows
         .where((row) => _rowMatchesSearch(row, query))
@@ -86,18 +88,36 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 
   SellerMappingRowVm? get _selectedLeftRow {
     if (_selectedLeftKey == null) return null;
-    for (final row in _filteredLeftRows) {
+    for (final row in _leftReviewRows) {
       if (row.rowKey == _selectedLeftKey) return row;
     }
     return null;
   }
 
+  String get _activeSearchQuery {
+    return widget.searchQuery.trim();
+  }
+
   @override
   void didUpdateWidget(covariant SellerMappingTwoPanelBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_selectedLeftKey != null &&
-        !_leftReviewRows.any((row) => row.rowKey == _selectedLeftKey)) {
+    final selectedLeftKey = _selectedLeftKey;
+    final selectedRow = _selectedLeftRowFrom(widget.visibleRows);
+    if (selectedLeftKey != null && selectedRow == null) {
       _clearLocalSelection();
+      return;
+    }
+
+    if (selectedRow == null) return;
+
+    final oldSelectedRow = _selectedLeftRowFrom(oldWidget.visibleRows);
+    final selectedRowChanged = oldSelectedRow?.rowKey != selectedRow.rowKey;
+    if (selectedRowChanged) {
+      final selectedValue =
+          widget.selectedValueForRow(selectedRow)?.trim() ?? '';
+      _selectedTdsParty = selectedValue.isEmpty ? null : selectedValue;
+      _selectedLedgerRowKey = null;
+      _reverseHighlightText = null;
     }
   }
 
@@ -161,61 +181,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: SellerMappingTheme.borderColor),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.search_rounded,
-            color: SellerMappingTheme.mutedTextColor,
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                isDense: true,
-                hintText: 'Search seller, PAN, GST, or section...',
-                border: InputBorder.none,
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                  _reverseHighlightText = null;
-                  if (_selectedLeftKey != null &&
-                      !_filteredLeftRows.any(
-                        (row) => row.rowKey == _selectedLeftKey,
-                      )) {
-                    _selectedLeftKey = null;
-                    _selectedTdsParty = null;
-                    _selectedLedgerRowKey = null;
-                  }
-                });
-              },
-            ),
-          ),
-          if (_searchQuery.trim().isNotEmpty)
-            TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _searchQuery = '';
-                  _reverseHighlightText = null;
-                });
-              },
-              icon: const Icon(Icons.close_rounded, size: 18),
-              label: const Text('Clear'),
-            ),
-        ],
-      ),
     );
   }
 
@@ -287,6 +252,13 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         final status = widget.statusForRow(row);
         final selectedValue = widget.selectedValueForRow(row);
         final selectedPan = widget.selectedPanForRow(row);
+        final ledgerRowsCount = row.is26QUnmatched
+            ? widget.ledgerCandidateRows
+                  .where(
+                    (candidate) => candidate.sectionCode == row.sectionCode,
+                  )
+                  .length
+            : row.sourceRowCount;
         final highlighted =
             _reverseHighlightText != null &&
             _rowMatchesSearch(row, _normalize(_reverseHighlightText!));
@@ -301,7 +273,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             if (row.purchasePan.isNotEmpty) 'Ledger PAN ${row.purchasePan}',
             if (row.purchasePan.isEmpty) 'Ledger PAN not available',
             if (row.purchaseGstNo.isNotEmpty) 'GST ${row.purchaseGstNo}',
-            'Ledger rows ${row.sourceRowCount}',
+            'Ledger rows $ledgerRowsCount',
             '26Q rows ${row.tdsRowCount}',
             if (selectedValue != null && selectedValue.trim().isNotEmpty)
               row.is26QUnmatched
@@ -326,7 +298,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   Widget _buildRightList(SellerMappingRowVm? row) {
-    final hasSearch = _searchQuery.trim().isNotEmpty;
+    final hasSearch = _activeSearchQuery.trim().isNotEmpty;
 
     if (widget.showAllSellersMode) {
       return _buildAllSellerLedgerList(row);
@@ -369,7 +341,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   Widget _buildSearchOnlyLedgerCandidateList() {
-    final query = _normalize(_searchQuery);
+    final query = _normalize(_activeSearchQuery);
     final ledgerMatches = widget.ledgerCandidateRows
         .where((row) => _rowMatchesSearch(row, query))
         .take(30)
@@ -467,22 +439,49 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     SellerMappingRowVm? row,
     SellerMappingRowVm candidate,
   ) {
-    final selected = candidate.rowKey == _selectedLedgerRowKey;
+    final selectedRowMapped = row != null && _rowHasMapping(row);
+    final showMappedState =
+        row != null &&
+        selectedRowMapped &&
+        _isMappedLedgerCandidate(row, candidate);
+    final mappedElsewhere =
+        row != null &&
+        !selectedRowMapped &&
+        row.rowKey != candidate.rowKey &&
+        _rowHasMapping(candidate);
+    final selected =
+        (row != null && candidate.rowKey == _selectedLedgerRowKey) ||
+        showMappedState ||
+        row == candidate;
     final possibleNameMatch =
         row != null &&
+        !showMappedState &&
+        !mappedElsewhere &&
         _looksRelated(
           row.purchasePartyDisplayName,
           candidate.purchasePartyDisplayName,
         );
+    final badge = showMappedState
+        ? 'Mapped'
+        : mappedElsewhere
+        ? 'Already Mapped Elsewhere'
+        : possibleNameMatch
+        ? 'Possible Match'
+        : 'Ledger Seller';
+    final badgeColor = showMappedState
+        ? SellerMappingTheme.successColor
+        : mappedElsewhere
+        ? SellerMappingTheme.warningColor
+        : possibleNameMatch
+        ? SellerMappingTheme.primaryColor
+        : SellerMappingTheme.mutedTextColor;
 
     return _SellerCard(
       selected: selected,
       highlighted: possibleNameMatch || row == null,
       title: candidate.purchasePartyDisplayName,
-      badge: possibleNameMatch ? 'Possible Match' : 'Ledger Seller',
-      badgeColor: possibleNameMatch
-          ? SellerMappingTheme.primaryColor
-          : SellerMappingTheme.mutedTextColor,
+      badge: badge,
+      badgeColor: badgeColor,
       details: [
         'Section ${candidate.sectionCode}',
         if (candidate.purchasePan.isNotEmpty)
@@ -491,10 +490,14 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         if (candidate.purchaseGstNo.isNotEmpty)
           'GST ${candidate.purchaseGstNo}',
         'Ledger rows ${candidate.sourceRowCount}',
+        if (showMappedState) 'Already linked',
+        if (mappedElsewhere) 'Already mapped elsewhere',
       ],
       onTap: () {
         setState(() {
-          if (row != null) _selectedLedgerRowKey = candidate.rowKey;
+          if (row != null && !_rowHasMapping(row)) {
+            _selectedLedgerRowKey = candidate.rowKey;
+          }
           _reverseHighlightText = candidate.purchasePartyDisplayName;
         });
       },
@@ -510,26 +513,63 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: SellerMappingTheme.borderColor),
         ),
-        child: const Center(
-          child: Text(
-            'Select a seller to enable actions.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-              color: SellerMappingTheme.mutedTextColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Actions',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: SellerMappingTheme.titleTextColor,
+              ),
             ),
-          ),
+            SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: null,
+              icon: Icon(Icons.link_rounded, size: 18),
+              label: Text('Link Seller'),
+            ),
+            SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: Icon(Icons.auto_awesome_rounded, size: 18),
+              label: Text('Accept Suggestion'),
+            ),
+            SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: Icon(Icons.call_split_rounded, size: 18),
+              label: Text('Keep Separate'),
+            ),
+            SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: null,
+              icon: Icon(Icons.close_rounded, size: 18),
+              label: Text('Clear'),
+            ),
+            Spacer(),
+            Text(
+              'Select a seller to enable actions.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+                color: SellerMappingTheme.mutedTextColor,
+              ),
+            ),
+          ],
         ),
       );
     }
 
     final helperMessages = widget.helperMessagesForRow(row);
     final selectedLedger = _selectedLedgerFor(row);
+    final alreadyMapped = _rowHasMapping(row);
     final canLink = row.is26QUnmatched
-        ? selectedLedger != null
-        : (_selectedTdsParty ?? widget.selectedValueForRow(row)) != null;
+        ? !alreadyMapped && selectedLedger != null
+        : !alreadyMapped && _selectedTdsParty != null;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -551,24 +591,31 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
-            onPressed: canLink
+            onPressed: alreadyMapped
+                ? null
+                : canLink
                 ? () {
                     if (row.is26QUnmatched) {
                       widget.onLinkToLedgerRow(row, selectedLedger!);
+                      setState(() {
+                        _selectedLeftKey = row.rowKey;
+                        _reverseHighlightText = null;
+                      });
                     } else {
-                      widget.onLinkToTds(
-                        row,
-                        _selectedTdsParty ?? widget.selectedValueForRow(row),
-                      );
+                      widget.onLinkToTds(row, _selectedTdsParty);
+                      setState(_clearLocalSelection);
                     }
                   }
                 : null,
-            icon: const Icon(Icons.link_rounded, size: 18),
-            label: const Text('Link Seller'),
+            icon: Icon(
+              alreadyMapped ? Icons.check_circle_rounded : Icons.link_rounded,
+              size: 18,
+            ),
+            label: Text(alreadyMapped ? 'Mapped / Linked' : 'Link Seller'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: widget.canAcceptSuggestion(row)
+            onPressed: !alreadyMapped && widget.canAcceptSuggestion(row)
                 ? () => widget.onAcceptSuggestion(row)
                 : null,
             icon: const Icon(Icons.auto_awesome_rounded, size: 18),
@@ -578,13 +625,24 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           OutlinedButton.icon(
             onPressed: row.is26QUnmatched
                 ? null
-                : () => widget.onKeepSeparate(row),
+                : () {
+                    widget.onKeepSeparate(row);
+                    setState(_clearLocalSelection);
+                  },
             icon: const Icon(Icons.call_split_rounded, size: 18),
             label: const Text('Keep Separate'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: () => widget.onClear(row),
+            onPressed: () {
+              widget.onClear(row);
+              setState(() {
+                _selectedLeftKey = row.rowKey;
+                _selectedTdsParty = null;
+                _selectedLedgerRowKey = null;
+                _reverseHighlightText = null;
+              });
+            },
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Clear'),
           ),
@@ -627,7 +685,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   List<String> _contextualTdsParties(SellerMappingRowVm row) {
-    final query = _normalize(_searchQuery);
+    final query = _normalize(_activeSearchQuery);
     final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
     final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
     final rowName = row.purchasePartyDisplayName;
@@ -657,7 +715,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   List<SellerMappingRowVm> _allSellerLedgerRows(
     SellerMappingRowVm? selectedRow,
   ) {
-    final query = _normalize(_searchQuery);
+    final query = _normalize(_activeSearchQuery);
     final ordered = <SellerMappingRowVm>[];
 
     void addCandidate(SellerMappingRowVm candidate) {
@@ -667,6 +725,20 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     }
 
     if (selectedRow != null) {
+      if (_rowHasMapping(selectedRow)) {
+        final mappedRows = _mappedLedgerRowsFor(selectedRow);
+        if (mappedRows.isNotEmpty) {
+          for (final candidate in mappedRows) {
+            addCandidate(candidate);
+          }
+          return ordered;
+        }
+        if (!selectedRow.is26QUnmatched) {
+          addCandidate(selectedRow);
+          return ordered;
+        }
+      }
+
       for (final candidate in _contextualLedgerRows(selectedRow)) {
         addCandidate(candidate);
       }
@@ -682,7 +754,17 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       }
     }
 
-    for (final candidate in widget.ledgerCandidateRows) {
+    final mappedFirst = widget.ledgerCandidateRows
+        .where(_rowHasMapping)
+        .toList(growable: false);
+    final rest = widget.ledgerCandidateRows
+        .where((row) => !_rowHasMapping(row))
+        .toList(growable: false);
+
+    for (final candidate in mappedFirst) {
+      addCandidate(candidate);
+    }
+    for (final candidate in rest) {
       addCandidate(candidate);
     }
 
@@ -690,7 +772,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   List<SellerMappingRowVm> _contextualLedgerRows(SellerMappingRowVm row) {
-    final query = _normalize(_searchQuery);
+    final query = _normalize(_activeSearchQuery);
     final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
     final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
     final selected26QName = _normalize(row.purchasePartyDisplayName);
@@ -704,6 +786,16 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       ordered.add(candidate);
     }
 
+    if (query.isNotEmpty && row.is26QUnmatched) {
+      for (final candidate in candidates) {
+        if (_rowMatchesSearch(candidate, query)) {
+          addCandidate(candidate);
+        }
+        if (ordered.length >= 40) break;
+      }
+      return ordered;
+    }
+
     // If this 26Q seller already has a linked ledger row, show only that
     // mapped ledger seller on the right. This keeps mapped 26Q review focused.
     if (selectedValue.isNotEmpty) {
@@ -715,17 +807,22 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       if (ordered.isNotEmpty) return ordered;
     }
 
-    // Also support the normal ledger -> 26Q mapping case: if a ledger row is
-    // already mapped to the selected 26Q party name, show that matching row.
-    for (final candidate in candidates) {
-      final candidateMappedParty =
-          widget.selectedValueForRow(candidate)?.trim() ?? '';
-      if (candidateMappedParty.isEmpty) continue;
-      if (_normalize(candidateMappedParty) == selected26QName) {
-        addCandidate(candidate);
+    // Also support the normal ledger -> 26Q mapping case only while the
+    // selected left row is still mapped. After Clear, parent state can rebuild
+    // the left row as Unmapped while ledgerCandidateRows may still contain the
+    // previous candidate snapshot. Without this guard, the right panel keeps
+    // showing the old candidate as Mapped.
+    if (_rowHasMapping(row)) {
+      for (final candidate in candidates) {
+        final candidateMappedParty =
+            widget.selectedValueForRow(candidate)?.trim() ?? '';
+        if (candidateMappedParty.isEmpty) continue;
+        if (_normalize(candidateMappedParty) == selected26QName) {
+          addCandidate(candidate);
+        }
       }
+      if (ordered.isNotEmpty) return ordered;
     }
-    if (ordered.isNotEmpty) return ordered;
 
     // Show the explicit suggestion first when it matches a ledger seller name.
     if (suggestion.isNotEmpty) {
@@ -765,11 +862,77 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return null;
   }
 
-  void _clearLocalSelection() {
-    _selectedLeftKey = null;
+  bool _rowHasMapping(SellerMappingRowVm row) {
+    final status = widget.statusForRow(row).toLowerCase();
+    return status.contains('mapped') ||
+        status.contains('accepted') ||
+        status.contains('linked');
+  }
+
+  List<SellerMappingRowVm> _mappedLedgerRowsFor(SellerMappingRowVm row) {
+    if (!_rowHasMapping(row)) {
+      return const <SellerMappingRowVm>[];
+    }
+
+    if (!row.is26QUnmatched) {
+      return <SellerMappingRowVm>[row];
+    }
+
+    final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
+    final rowName = _normalize(row.purchasePartyDisplayName);
+    final mappedRows = <SellerMappingRowVm>[];
+
+    void addMapped(SellerMappingRowVm candidate) {
+      if (mappedRows.any((item) => item.rowKey == candidate.rowKey)) return;
+      mappedRows.add(candidate);
+    }
+
+    for (final candidate in widget.ledgerCandidateRows) {
+      if (candidate.sectionCode != row.sectionCode) continue;
+      if (selectedValue.isNotEmpty &&
+          selectedValue.contains(candidate.rowKey)) {
+        addMapped(candidate);
+        continue;
+      }
+      final candidateMappedParty =
+          widget.selectedValueForRow(candidate)?.trim() ?? '';
+      if (candidateMappedParty.isNotEmpty &&
+          _normalize(candidateMappedParty) == rowName) {
+        addMapped(candidate);
+      }
+    }
+
+    return mappedRows;
+  }
+
+  bool _isMappedLedgerCandidate(
+    SellerMappingRowVm row,
+    SellerMappingRowVm candidate,
+  ) {
+    if (row.rowKey == candidate.rowKey) return _rowHasMapping(row);
+    return _mappedLedgerRowsFor(
+      row,
+    ).any((item) => item.rowKey == candidate.rowKey);
+  }
+
+  SellerMappingRowVm? _selectedLeftRowFrom(List<SellerMappingRowVm> rows) {
+    final selectedLeftKey = _selectedLeftKey;
+    if (selectedLeftKey == null) return null;
+    for (final row in rows) {
+      if (row.rowKey == selectedLeftKey) return row;
+    }
+    return null;
+  }
+
+  void _clearRightPanelSelection() {
     _selectedTdsParty = null;
     _selectedLedgerRowKey = null;
     _reverseHighlightText = null;
+  }
+
+  void _clearLocalSelection() {
+    _selectedLeftKey = null;
+    _clearRightPanelSelection();
   }
 
   bool _rowMatchesSearch(SellerMappingRowVm row, String normalizedQuery) {
@@ -841,20 +1004,23 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   String _friendlyStatusLabel(SellerMappingRowVm row, String status) {
-    if (row.is26QUnmatched) return 'Only in 26Q';
+    if (row.is26QUnmatched && status == '26Q Unmatched') return 'Only in 26Q';
     if (status == 'No 26Q') return 'Only in Ledger';
     if (status == 'Review') return 'Needs Action';
     return status;
   }
 
   Color _statusColor(SellerMappingRowVm row, String status) {
-    if (row.is26QUnmatched) return SellerMappingTheme.warningColor;
     if (status.contains('Conflict') || status.contains('Unresolved')) {
       return SellerMappingTheme.dangerColor;
     }
     if (status.contains('Mapped') || status.contains('Accepted')) {
       return SellerMappingTheme.successColor;
     }
+    if (status.contains('Linked')) {
+      return SellerMappingTheme.successColor;
+    }
+    if (row.is26QUnmatched) return SellerMappingTheme.warningColor;
     if (status == 'No 26Q' || status == 'Review') {
       return SellerMappingTheme.warningColor;
     }
