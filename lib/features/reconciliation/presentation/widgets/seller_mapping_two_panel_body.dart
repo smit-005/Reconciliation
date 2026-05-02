@@ -566,10 +566,20 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 
     final helperMessages = widget.helperMessagesForRow(row);
     final selectedLedger = _selectedLedgerFor(row);
-    final alreadyMapped = _rowHasMapping(row);
-    final canLink = row.is26QUnmatched
-        ? !alreadyMapped && selectedLedger != null
-        : !alreadyMapped && _selectedTdsParty != null;
+    final status = widget.statusForRow(row);
+    final hasSavedDecision =
+        status == 'Mapped' ||
+        status == 'Linked to Ledger' ||
+        status == 'Mapped (PAN missing)' ||
+        status == 'Timing Difference' ||
+        status == 'Missing in Books' ||
+        status == 'Marked Separate';
+    final hasPendingCandidate = row.is26QUnmatched
+        ? _selectedLedgerRowKey != null
+        : _selectedTdsParty != null;
+    final canLink = !hasSavedDecision && hasPendingCandidate;
+    final canAcceptSuggestion =
+        !hasSavedDecision && widget.canAcceptSuggestion(row);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -591,9 +601,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
-            onPressed: alreadyMapped
-                ? null
-                : canLink
+            onPressed: canLink
                 ? () {
                     if (row.is26QUnmatched) {
                       widget.onLinkToLedgerRow(row, selectedLedger!);
@@ -608,14 +616,16 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                   }
                 : null,
             icon: Icon(
-              alreadyMapped ? Icons.check_circle_rounded : Icons.link_rounded,
+              hasSavedDecision
+                  ? Icons.check_circle_rounded
+                  : Icons.link_rounded,
               size: 18,
             ),
-            label: Text(alreadyMapped ? 'Mapped / Linked' : 'Link Seller'),
+            label: Text(hasSavedDecision ? 'Mapped / Linked' : 'Link Seller'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: !alreadyMapped && widget.canAcceptSuggestion(row)
+            onPressed: canAcceptSuggestion
                 ? () => widget.onAcceptSuggestion(row)
                 : null,
             icon: const Icon(Icons.auto_awesome_rounded, size: 18),
