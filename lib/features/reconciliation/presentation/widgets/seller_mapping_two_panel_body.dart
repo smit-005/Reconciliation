@@ -603,6 +603,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         _safeCanAcceptSuggestion(row);
     final canKeepSeparate =
         !hasSavedDecision && (!row.is26QUnmatched || noLedgerForSection);
+    final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
+    final status = _safeStatusForRow(row);
+    final canShowExceptionActions =
+        row.is26QUnmatched ||
+        (selectedValue.isEmpty &&
+            (status == 'Unmapped' || status == '26Q Unmatched'));
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -661,7 +667,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Clear'),
           ),
-          if (row.is26QUnmatched) ...[
+          if (canShowExceptionActions) ...[
             const Divider(height: 24),
             OutlinedButton.icon(
               onPressed: () => widget.onMarkTimingDifference(row),
