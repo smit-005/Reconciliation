@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
 
-typedef SellerReviewStatusGetter = String Function(SellerMappingRowVm row);
-typedef SellerReviewValueGetter = String? Function(SellerMappingRowVm row);
-typedef SellerReviewStringGetter = String Function(SellerMappingRowVm row);
+typedef SellerReviewStatusGetter = Object? Function(SellerMappingRowVm row);
+typedef SellerReviewValueGetter = Object? Function(SellerMappingRowVm row);
+typedef SellerReviewStringGetter = Object? Function(SellerMappingRowVm row);
 typedef SellerReviewLinkedLedgerGetter =
-    SellerMappingRowVm? Function(SellerMappingRowVm row);
+    Object? Function(SellerMappingRowVm row);
 
 class SellerMappingReviewView extends StatelessWidget {
   final List<SellerMappingRowVm> rows;
@@ -113,15 +113,26 @@ class SellerMappingReviewView extends StatelessWidget {
                 : ListView.separated(
                     padding: const EdgeInsets.all(12),
                     itemCount: rows.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final row = rows[index];
+                      final status = sellerMappingSafeText(statusForRow(row));
+                      final selectedValue = sellerMappingSafeText(
+                        selectedValueForRow(row),
+                      );
                       return _ReviewSellerRow(
                         row: row,
-                        status: statusForRow(row),
-                        selectedValue: selectedValueForRow(row),
-                        selectedPan: selectedPanForRow(row),
-                        linkedLedgerRow: linkedLedgerRowForRow(row),
+                        status: status,
+                        selectedValue: selectedValue.isEmpty
+                            ? null
+                            : selectedValue,
+                        selectedPan: sellerMappingSafeText(
+                          selectedPanForRow(row),
+                        ),
+                        linkedLedgerRow: _safeLinkedLedgerRow(
+                          linkedLedgerRowForRow(row),
+                        ),
                       );
                     },
                   ),
@@ -129,6 +140,10 @@ class SellerMappingReviewView extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  SellerMappingRowVm? _safeLinkedLedgerRow(Object? value) {
+    return value is SellerMappingRowVm ? value : null;
   }
 }
 
@@ -161,7 +176,7 @@ class _ReviewSummary {
       if (!has26Q) continue;
       total26Q++;
 
-      final status = statusForRow(row);
+      final status = sellerMappingSafeText(statusForRow(row));
       if (_isMappedStatus(status)) {
         mapped++;
       } else if (_isExceptionStatus(status)) {
@@ -179,20 +194,23 @@ class _ReviewSummary {
     );
   }
 
-  static bool _isMappedStatus(String status) {
+  static bool _isMappedStatus(Object? value) {
+    final status = sellerMappingSafeText(value);
     return status == 'Mapped' ||
         status == 'Mapped (PAN missing)' ||
         status == 'Linked to Ledger';
   }
 
-  static bool _isExceptionStatus(String status) {
+  static bool _isExceptionStatus(Object? value) {
+    final status = sellerMappingSafeText(value);
     return status == 'Missing in Books' ||
         status == 'Timing Difference' ||
         status == 'Marked Separate' ||
         status == 'Purchase Only';
   }
 
-  static bool _isPendingStatus(String status) {
+  static bool _isPendingStatus(Object? value) {
+    final status = sellerMappingSafeText(value);
     return status == '26Q Unmatched' ||
         status == 'PAN Conflict' ||
         status == 'Conflicting PAN' ||
@@ -332,6 +350,8 @@ class _ReviewSellerRow extends StatelessWidget {
     final is26QSeller = row.tdsRowCount > 0 || row.is26QUnmatched;
     final isException = _ReviewSummary._isExceptionStatus(status);
     final isMapped = _ReviewSummary._isMappedStatus(status);
+    final leftTitle = resolveTdsSellerTitle(row);
+    final leftPan = sellerMappingSafeText(row.tdsPan);
     final borderColor = isMapped
         ? const Color(0xFFBBF7D0)
         : isException
@@ -356,15 +376,13 @@ class _ReviewSellerRow extends StatelessWidget {
           Expanded(
             flex: 3,
             child: _SellerInfoBlock(
-              title: row.purchasePartyDisplayName.trim().isEmpty
-                  ? row.normalizedAlias
-                  : row.purchasePartyDisplayName.trim(),
+              title: leftTitle,
               subtitle: is26QSeller ? '26Q Seller' : 'Ledger Seller',
               chips: [
                 'Section ${row.sectionCode}',
-                row.purchasePan.trim().isEmpty
+                leftPan.isEmpty
                     ? '${is26QSeller ? '26Q' : 'Ledger'} PAN not available'
-                    : '${is26QSeller ? '26Q' : 'Ledger'} PAN ${row.purchasePan.trim().toUpperCase()}',
+                    : '${is26QSeller ? '26Q' : 'Ledger'} PAN ${leftPan.toUpperCase()}',
                 'Ledger rows ${row.sourceRowCount}',
                 '26Q rows ${row.tdsRowCount}',
               ],
@@ -393,16 +411,19 @@ class _ReviewSellerRow extends StatelessWidget {
   }
 
   String _targetTitle() {
-    final selected = selectedValue?.trim() ?? '';
+    final selected = sellerMappingSafeText(selectedValue);
     if (selected.isEmpty) return 'No reviewed target';
     if (selected.startsWith('__MISSING_IN_BOOKS__:')) return 'Missing in Books';
-    if (selected.startsWith('__TIMING_DIFFERENCE__:'))
+    if (selected.startsWith('__TIMING_DIFFERENCE__:')) {
       return 'Timing Difference';
+    }
     if (selected.startsWith('__SEPARATE__:')) return 'Keep Separate';
     if (selected.startsWith('__LINK_LEDGER__:')) {
-      final linkedName = linkedLedgerRow?.purchasePartyDisplayName.trim() ?? '';
-      return linkedName.isEmpty ? 'Linked ledger seller' : linkedName;
+      return linkedLedgerRow == null
+          ? 'Linked ledger seller'
+          : resolveLedgerSellerTitle(linkedLedgerRow!);
     }
+    if (row.sourceRowCount > 0) return resolveLedgerSellerTitle(row);
     return selected;
   }
 
@@ -417,23 +438,24 @@ class _ReviewSellerRow extends StatelessWidget {
   }
 
   List<String> _targetChips() {
-    final linkedPan = linkedLedgerRow?.purchasePan.trim() ?? '';
+    final linkedPan = sellerMappingSafeText(linkedLedgerRow?.purchasePan);
     if (linkedPan.isNotEmpty) {
       return ['Ledger PAN ${linkedPan.toUpperCase()}'];
     }
     if (linkedLedgerRow != null) {
       return ['Ledger PAN not available'];
     }
-    if (selectedPan.trim().isNotEmpty && selectedPan != '-') {
-      return ['Target PAN ${selectedPan.trim().toUpperCase()}'];
+    final safeSelectedPan = sellerMappingSafeText(selectedPan);
+    if (safeSelectedPan.isNotEmpty && safeSelectedPan != '-') {
+      return ['Target PAN ${safeSelectedPan.toUpperCase()}'];
     }
     return ['Target PAN not available'];
   }
 }
 
 class _SellerInfoBlock extends StatelessWidget {
-  final String title;
-  final String subtitle;
+  final Object? title;
+  final Object? subtitle;
   final List<String> chips;
 
   const _SellerInfoBlock({
@@ -448,7 +470,7 @@ class _SellerInfoBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          subtitle,
+          sellerMappingSafeText(subtitle),
           style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w800,
@@ -457,7 +479,7 @@ class _SellerInfoBlock extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          title,
+          sellerMappingSafeText(title),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -471,7 +493,7 @@ class _SellerInfoBlock extends StatelessWidget {
           spacing: 6,
           runSpacing: 6,
           children: chips
-              .where((chip) => chip.trim().isNotEmpty)
+              .where((chip) => sellerMappingSafeText(chip).isNotEmpty)
               .map(
                 (chip) => Container(
                   padding: const EdgeInsets.symmetric(
@@ -484,7 +506,7 @@ class _SellerInfoBlock extends StatelessWidget {
                     border: Border.all(color: SellerMappingTheme.borderColor),
                   ),
                   child: Text(
-                    chip,
+                    sellerMappingSafeText(chip),
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -501,14 +523,15 @@ class _SellerInfoBlock extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  final String status;
+  final Object? status;
 
   const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    final isMapped = _ReviewSummary._isMappedStatus(status);
-    final isException = _ReviewSummary._isExceptionStatus(status);
+    final safeStatus = sellerMappingSafeText(status);
+    final isMapped = _ReviewSummary._isMappedStatus(safeStatus);
+    final isException = _ReviewSummary._isExceptionStatus(safeStatus);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
@@ -527,7 +550,7 @@ class _StatusBadge extends StatelessWidget {
         ),
       ),
       child: Text(
-        status,
+        safeStatus,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

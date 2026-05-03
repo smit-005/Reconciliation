@@ -1,11 +1,14 @@
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
+import 'package:flutter/foundation.dart';
 
 class SellerMappingRowVm {
   final String purchasePartyDisplayName;
   final String normalizedAlias;
   final String sectionCode;
   final int rowIndex;
+  final String tdsDisplayName;
+  final String tdsPan;
   final String purchasePan;
   final String purchaseGstNo;
   final int sourceRowCount;
@@ -31,6 +34,8 @@ class SellerMappingRowVm {
     required this.normalizedAlias,
     required this.sectionCode,
     this.rowIndex = 0,
+    this.tdsDisplayName = '',
+    this.tdsPan = '',
     required this.purchasePan,
     required this.purchaseGstNo,
     this.sourceRowCount = 0,
@@ -52,7 +57,61 @@ class SellerMappingRowVm {
     this.isPurchaseOnly = false,
   });
 
-  String get rowKey => '$normalizedAlias|$sectionCode|$rowIndex';
+  String get rowKey =>
+      '${sellerMappingSafeText(normalizedAlias)}|'
+      '${sellerMappingSafeText(sectionCode)}|$rowIndex';
+}
+
+String sellerMappingSafeText(Object? value) {
+  if (value == null) return '';
+  if (value is String) return value.trim();
+  return value.toString().trim();
+}
+
+String resolveTdsSellerTitle(SellerMappingRowVm row) {
+  final tdsDisplayName = sellerMappingSafeText(row.tdsDisplayName);
+  if (tdsDisplayName.isNotEmpty) return tdsDisplayName;
+
+  final tdsPan = sellerMappingSafeText(row.tdsPan).toUpperCase();
+  if (tdsPan.isNotEmpty) return tdsPan;
+
+  final normalizedAlias = sellerMappingSafeText(row.normalizedAlias);
+  if (normalizedAlias.isNotEmpty) return normalizedAlias;
+
+  final purchasePartyDisplayName = sellerMappingSafeText(
+    row.purchasePartyDisplayName,
+  );
+  if (purchasePartyDisplayName.isNotEmpty) return purchasePartyDisplayName;
+
+  debugPrint(
+    'SELLER UI WARN => missing 26Q identity '
+    'rowKey=${sellerMappingSafeText(row.rowKey)} '
+    'section=${sellerMappingSafeText(row.sectionCode)}',
+  );
+  return 'Unknown 26Q Seller';
+}
+
+String resolveLedgerSellerTitle(SellerMappingRowVm row) {
+  final purchasePartyDisplayName = sellerMappingSafeText(
+    row.purchasePartyDisplayName,
+  );
+  if (purchasePartyDisplayName.isNotEmpty) return purchasePartyDisplayName;
+
+  final purchasePan = sellerMappingSafeText(row.purchasePan).toUpperCase();
+  if (purchasePan.isNotEmpty) return purchasePan;
+
+  final purchaseGstNo = sellerMappingSafeText(row.purchaseGstNo).toUpperCase();
+  if (purchaseGstNo.isNotEmpty) return purchaseGstNo;
+
+  final normalizedAlias = sellerMappingSafeText(row.normalizedAlias);
+  if (normalizedAlias.isNotEmpty) return normalizedAlias;
+
+  debugPrint(
+    'SELLER UI WARN => missing ledger identity '
+    'rowKey=${sellerMappingSafeText(row.rowKey)} '
+    'section=${sellerMappingSafeText(row.sectionCode)}',
+  );
+  return 'Unknown Ledger Seller';
 }
 
 enum SellerMappingListView { needsAction, allSellers }

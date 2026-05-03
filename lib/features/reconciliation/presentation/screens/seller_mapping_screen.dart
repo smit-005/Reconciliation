@@ -21,6 +21,8 @@ class SellerMappingScreenRowData {
   final String purchasePartyDisplayName;
   final String normalizedAlias;
   final String sectionCode;
+  final String tdsDisplayName;
+  final String tdsPan;
   final String purchasePan;
   final String purchaseGstNo;
   final int sourceRowCount;
@@ -43,6 +45,8 @@ class SellerMappingScreenRowData {
     required this.purchasePartyDisplayName,
     required this.normalizedAlias,
     required this.sectionCode,
+    this.tdsDisplayName = '',
+    this.tdsPan = '',
     required this.purchasePan,
     this.purchaseGstNo = '',
     this.sourceRowCount = 0,
@@ -270,10 +274,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
   }
 
-  String _rowKey(String alias, String sectionCode) {
+  String _rowKey(Object? alias, Object? sectionCode) {
+    final safeAlias = sellerMappingSafeText(alias);
+    final safeSection = sellerMappingSafeText(sectionCode);
     return '${normalizePan(widget.buyerPan)}|'
-        '${normalizeName(alias.trim())}|'
-        '${normalizeSellerMappingSectionCode(sectionCode)}';
+        '${normalizeName(safeAlias)}|'
+        '${normalizeSellerMappingSectionCode(safeSection)}';
   }
 
   bool get _isPreflightMode => widget.mode == SellerMappingScreenMode.preflight;
@@ -282,38 +288,38 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return '$_separatePrefix${row.rowKey}';
   }
 
-  bool _isSeparateSelection(SellerMappingRowVm row, String? value) {
-    return value == _separateSelectionValue(row);
+  bool _isSeparateSelection(SellerMappingRowVm row, Object? value) {
+    return sellerMappingSafeText(value) == _separateSelectionValue(row);
   }
 
   String _timingDifferenceValue(SellerMappingRowVm row) {
     return '$_timingDifferencePrefix${row.rowKey}';
   }
 
-  bool _isTimingDifferenceSelection(SellerMappingRowVm row, String? value) {
-    return value == _timingDifferenceValue(row);
+  bool _isTimingDifferenceSelection(SellerMappingRowVm row, Object? value) {
+    return sellerMappingSafeText(value) == _timingDifferenceValue(row);
   }
 
   String _missingInBooksValue(SellerMappingRowVm row) {
     return '$_missingInBooksPrefix${row.rowKey}';
   }
 
-  bool _isMissingInBooksSelection(SellerMappingRowVm row, String? value) {
-    return value == _missingInBooksValue(row);
+  bool _isMissingInBooksSelection(SellerMappingRowVm row, Object? value) {
+    return sellerMappingSafeText(value) == _missingInBooksValue(row);
   }
 
-  String _linkLedgerValue(String linkedRowKey) =>
-      '$_linkLedgerPrefix$linkedRowKey';
+  String _linkLedgerValue(Object? linkedRowKey) =>
+      '$_linkLedgerPrefix${sellerMappingSafeText(linkedRowKey)}';
 
-  bool _isLinkLedgerSelection(String? value) {
-    return value?.startsWith(_linkLedgerPrefix) ?? false;
+  bool _isLinkLedgerSelection(Object? value) {
+    return sellerMappingSafeText(value).startsWith(_linkLedgerPrefix);
   }
 
-  String _linkedLedgerRowKey(String? value) {
+  String _linkedLedgerRowKey(Object? value) {
     if (!_isLinkLedgerSelection(value)) {
       return '';
     }
-    return value!.substring(_linkLedgerPrefix.length);
+    return sellerMappingSafeText(value).substring(_linkLedgerPrefix.length);
   }
 
   List<String> get _availableSectionCodes {
@@ -349,45 +355,53 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
       final displayName = row.purchasePartyDisplayName.trim();
       final purchasePan = normalizePan(row.purchasePan);
+      final tdsDisplayName = row.tdsDisplayName.trim().isNotEmpty
+          ? row.tdsDisplayName.trim()
+          : row.resolvedSuggestion?.mappedName.trim() ?? '';
+      final tdsPan = normalizePan(
+        row.tdsPan.trim().isNotEmpty
+            ? row.tdsPan
+            : row.resolvedSuggestion?.mappedPan ?? '',
+      );
 
       final exactMappingKey = _rowKey(aliasKey, normalizedSection);
-      builtRows.add(SellerMappingRowVm(
-        purchasePartyDisplayName: displayName.isNotEmpty
-            ? displayName
-            : '',
-        normalizedAlias: aliasKey,
-        sectionCode: normalizedSection,
-        rowIndex: index,
-        purchasePan: purchasePan.isNotEmpty
-            ? purchasePan
-            : '',
-        purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
-            ? row.purchaseGstNo.trim()
-            : '',
-        sourceRowCount: row.sourceRowCount,
-        tdsRowCount: row.tdsRowCount,
-        exactMapping: _exactMappingsByKey[exactMappingKey],
-        fallbackMapping: _fallbackMappingsByAlias[aliasKey],
-        resolvedSuggestion: row.resolvedSuggestion,
-        isReadOnly: row.isReadOnly,
-        isAboveThreshold: row.isAboveThreshold,
-        hasReconciliationMismatch: row.hasReconciliationMismatch,
-        hasNameOrPanConflict: row.hasNameOrPanConflict,
-        hasApplicableTdsImpact: row.hasApplicableTdsImpact,
-        is26QUnmatched: row.is26QUnmatched,
-        hasMissingOrUncertainPan: row.hasMissingOrUncertainPan,
-        preflightReasonCode: row.preflightReasonCode.trim(),
-        preflightReasonLabel: row.preflightReasonLabel.trim(),
-        preflightReasonDetail: row.preflightReasonDetail.trim(),
-        requiresDangerousReview: row.requiresDangerousReview,
-        isPurchaseOnly: row.isPurchaseOnly,
-      ));
+      builtRows.add(
+        SellerMappingRowVm(
+          purchasePartyDisplayName: displayName.isNotEmpty ? displayName : '',
+          normalizedAlias: aliasKey,
+          sectionCode: normalizedSection,
+          rowIndex: index,
+          tdsDisplayName: tdsDisplayName,
+          tdsPan: tdsPan,
+          purchasePan: purchasePan.isNotEmpty ? purchasePan : '',
+          purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
+              ? row.purchaseGstNo.trim()
+              : '',
+          sourceRowCount: row.sourceRowCount,
+          tdsRowCount: row.tdsRowCount,
+          exactMapping: _exactMappingsByKey[exactMappingKey],
+          fallbackMapping: _fallbackMappingsByAlias[aliasKey],
+          resolvedSuggestion: row.resolvedSuggestion,
+          isReadOnly: row.isReadOnly,
+          isAboveThreshold: row.isAboveThreshold,
+          hasReconciliationMismatch: row.hasReconciliationMismatch,
+          hasNameOrPanConflict: row.hasNameOrPanConflict,
+          hasApplicableTdsImpact: row.hasApplicableTdsImpact,
+          is26QUnmatched: row.is26QUnmatched,
+          hasMissingOrUncertainPan: row.hasMissingOrUncertainPan,
+          preflightReasonCode: row.preflightReasonCode.trim(),
+          preflightReasonLabel: row.preflightReasonLabel.trim(),
+          preflightReasonDetail: row.preflightReasonDetail.trim(),
+          requiresDangerousReview: row.requiresDangerousReview,
+          isPurchaseOnly: row.isPurchaseOnly,
+        ),
+      );
     }
 
     builtRows.sort((a, b) {
-      final nameCompare = a.purchasePartyDisplayName.compareTo(
-        b.purchasePartyDisplayName,
-      );
+      final nameCompare = resolveTdsSellerTitle(
+        a,
+      ).compareTo(resolveTdsSellerTitle(b));
       if (nameCompare != 0) return nameCompare;
       return a.sectionCode.compareTo(b.sectionCode);
     });
@@ -395,8 +409,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return builtRows;
   }
 
-  String _normalizeBusinessName(String value) {
-    var text = value.toUpperCase().trim();
+  String _normalizeBusinessName(Object? value) {
+    var text = sellerMappingSafeText(value).toUpperCase();
     text = text.replaceAll('&', ' AND ');
     text = text.replaceAll(RegExp(r'[^A-Z0-9 ]'), ' ');
     text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -412,7 +426,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return tokens.join(' ');
   }
 
-  List<String> _tokenizeBusinessName(String value) {
+  List<String> _tokenizeBusinessName(Object? value) {
     final normalized = _normalizeBusinessName(value);
     if (normalized.isEmpty) return const <String>[];
 
@@ -423,8 +437,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         .toList();
   }
 
-  Set<String> _resolveTargetPans(String mappedName) {
-    final exactPans = widget.tdsPartyPans[mappedName];
+  Set<String> _resolveTargetPans(Object? mappedName) {
+    final safeMappedName = sellerMappingSafeText(mappedName);
+    final exactPans = widget.tdsPartyPans[safeMappedName];
     if (exactPans != null) {
       return exactPans
           .map((pan) => normalizePan(pan))
@@ -432,7 +447,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           .toSet();
     }
 
-    final normalizedMappedName = normalizeName(mappedName.trim());
+    final normalizedMappedName = normalizeName(safeMappedName);
     for (final entry in widget.tdsPartyPans.entries) {
       if (normalizeName(entry.key) != normalizedMappedName) continue;
       return entry.value
@@ -458,8 +473,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       ..sort((a, b) => a.partyName.compareTo(b.partyName));
   }
 
-  String _getPanForTdsParty(String? mappedName) {
-    if (mappedName == null || mappedName.trim().isEmpty) return '';
+  String _getPanForTdsParty(Object? mappedName) {
+    if (sellerMappingSafeText(mappedName).isEmpty) return '';
 
     final pans = _resolveTargetPans(mappedName);
     if (pans.isEmpty) return '';
@@ -468,7 +483,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return 'Multiple PANs';
   }
 
-  String _getPanForSelection(SellerMappingRowVm row, String? selectedValue) {
+  String _getPanForSelection(SellerMappingRowVm row, Object? selectedValue) {
     if (_isSeparateSelection(row, selectedValue) ||
         _isTimingDifferenceSelection(row, selectedValue) ||
         _isMissingInBooksSelection(row, selectedValue) ||
@@ -480,7 +495,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   SellerMappingRowVm? _linkedLedgerRowForSelection({
     required String sectionCode,
-    required String? selectedValue,
+    required Object? selectedValue,
   }) {
     final linkedRowKey = _linkedLedgerRowKey(selectedValue);
     if (linkedRowKey.isEmpty) {
@@ -507,10 +522,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         (_isPreflightMode && _isSeparateSelection(row, selectedValue));
   }
 
-  String? _normalizeToKnownTdsParty(String? mappedName) {
-    if (mappedName == null || mappedName.trim().isEmpty) return null;
+  String? _normalizeToKnownTdsParty(Object? mappedName) {
+    if (sellerMappingSafeText(mappedName).isEmpty) return null;
 
-    final trimmed = mappedName.trim();
+    final trimmed = sellerMappingSafeText(mappedName);
     if (uniqueTdsParties.contains(trimmed)) {
       return trimmed;
     }
@@ -533,7 +548,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return !candidatePans.contains(purchasePan);
   }
 
-  double _levenshteinSimilarity(String a, String b) {
+  double _levenshteinSimilarity(Object? left, Object? right) {
+    final a = sellerMappingSafeText(left);
+    final b = sellerMappingSafeText(right);
     if (a.isEmpty || b.isEmpty) return 0.0;
     if (a == b) return 1.0;
 
@@ -854,7 +871,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   String _getStatus({
     required SellerMappingRowVm row,
-    required String? selectedValue,
+    required Object? selectedValue,
   }) {
     if (row.is26QUnmatched) {
       if (_isLinkLedgerSelection(selectedValue)) {
@@ -878,14 +895,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       return 'Marked Separate';
     }
 
-    if (selectedValue == null || selectedValue.trim().isEmpty) {
+    if (sellerMappingSafeText(selectedValue).isEmpty) {
       if (row.isPurchaseOnly) {
         return 'Purchase Only';
       }
       if (_isPreflightMode &&
           row.requiresDangerousReview &&
-          row.preflightReasonLabel.trim().isNotEmpty) {
-        return row.preflightReasonLabel.trim();
+          sellerMappingSafeText(row.preflightReasonLabel).isNotEmpty) {
+        return sellerMappingSafeText(row.preflightReasonLabel);
       }
       return 'Unmapped';
     }
@@ -918,7 +935,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return sectionRows.any((row) => !row.is26QUnmatched);
   }
 
-  String _statusChipLabel(String status, {SellerMappingRowVm? row}) {
+  String _statusChipLabel(Object? value, {SellerMappingRowVm? row}) {
+    final status = sellerMappingSafeText(value);
     if (row != null &&
         row.is26QUnmatched &&
         status == '26Q Unmatched' &&
@@ -930,7 +948,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         status == 'Unresolved Identity') {
       return 'Needs Review';
     }
-    return status;
+    return status.isEmpty ? 'Unmapped' : status;
   }
 
   String? _getExplicitSelectedValue(SellerMappingRowVm row) {
@@ -955,6 +973,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return selectedValue;
   }
 
+  // ignore: unused_element
   String? _getResolvedSuggestionValue(SellerMappingRowVm row) {
     if (_clearedRowKeys.contains(row.rowKey)) {
       return null;
@@ -968,7 +987,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   String? _getSelectedValue(SellerMappingRowVm row) {
-    return _getExplicitSelectedValue(row) ?? _getResolvedSuggestionValue(row);
+    return _getExplicitSelectedValue(row);
   }
 
   bool _is26QAuditRow(SellerMappingRowVm row) {
@@ -1036,12 +1055,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   String _buildSearchHaystack({
     required SellerMappingRowVm row,
-    required String? selectedValue,
-    required String selectedPan,
-    required String status,
+    required Object? selectedValue,
+    required Object? selectedPan,
+    required Object? status,
   }) {
-    return <String>[
+    return <Object?>[
       row.purchasePartyDisplayName,
+      resolveTdsSellerTitle(row),
+      resolveLedgerSellerTitle(row),
       row.normalizedAlias,
       row.sectionCode,
       sectionDisplayLabel(row.sectionCode),
@@ -1058,7 +1079,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       row.resolvedSuggestion?.mappedPan ?? '',
       row.preflightReasonLabel,
       row.preflightReasonDetail,
-    ].join(' | ').toUpperCase();
+    ].map(sellerMappingSafeText).join(' | ').toUpperCase();
   }
 
   _SellerFilterRowState _buildFilterRowState(SellerMappingRowVm row) {
@@ -1150,11 +1171,25 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     switch (_statusFilter) {
       case 'All':
         return true;
+      case 'Mapped':
+        return state.status == 'Mapped' ||
+            state.status == 'Mapped (PAN missing)' ||
+            state.status == 'Linked to Ledger' ||
+            state.status == 'Timing Difference' ||
+            state.status == 'Missing in Books' ||
+            state.status == 'Marked Separate';
+      case 'Unmapped':
+        return state.status == '26Q Unmatched' ||
+            state.status == 'Unmapped' ||
+            state.status == 'PAN Conflict' ||
+            _isDangerousPreflightStatus(state.status);
       case 'Only in Ledger':
         return true; // ✅ DO NOT filter LEFT panel
+      case 'Conflict':
       case 'PAN Conflict':
         return state.status == 'PAN Conflict' ||
-            state.status == 'Conflicting PAN';
+            state.status == 'Conflicting PAN' ||
+            _isDangerousPreflightStatus(state.status);
       default:
         return state.status == _statusFilter;
     }
@@ -1169,7 +1204,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         // These are the rows counted under the Review View "Mapped" chip.
         return state.status == 'Mapped' ||
             state.status == 'Mapped (PAN missing)' ||
-            state.status == 'Linked to Ledger';
+            state.status == 'Linked to Ledger' ||
+            state.status == 'Timing Difference' ||
+            state.status == 'Missing in Books' ||
+            state.status == 'Marked Separate';
       case 'Unmapped':
         // In Review View, "Unmapped" means a 26Q seller still pending review.
         // Exceptions like Missing in Books / Timing Difference are not unmapped.
@@ -1179,9 +1217,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             _isDangerousPreflightStatus(state.status);
       case 'Only in Ledger':
         return state.status == 'Purchase Only';
+      case 'Conflict':
       case 'PAN Conflict':
         return state.status == 'PAN Conflict' ||
-            state.status == 'Conflicting PAN';
+            state.status == 'Conflicting PAN' ||
+            _isDangerousPreflightStatus(state.status);
       default:
         return state.status == _statusFilter;
     }
@@ -1499,16 +1539,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       if (row.isReadOnly) {
         continue;
       }
-      final resolvedSuggestionName =
-          _normalizeToKnownTdsParty(
-            row.resolvedSuggestion?.mappedName,
-          )?.trim() ??
-          '';
-      final shouldPersistSuggestionFallback =
-          _isPreflightMode && !row.requiresDangerousReview;
-      final effectiveMappedName = currentMappedName.isNotEmpty
-          ? currentMappedName
-          : (shouldPersistSuggestionFallback ? resolvedSuggestionName : '');
+      final effectiveMappedName = currentMappedName;
 
       if (effectiveMappedName.isEmpty) {
         if (existingExactName.isNotEmpty &&
@@ -2224,7 +2255,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 'Mapped',
                 'Unmapped',
                 'Only in Ledger',
-                'PAN Conflict',
+                'Conflict',
                 'Timing Difference',
                 'Missing in Books',
               ],
@@ -2279,40 +2310,48 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       if (row.is26QUnmatched || !seenRowKeys.add(row.rowKey)) {
         continue;
       }
+      if (row.sourceRowCount <= 0) {
+        debugPrint(
+          'SELLER UI WARN => candidate source contains non-ledger row '
+          'rowKey=${row.rowKey} section=${row.sectionCode}',
+        );
+        continue;
+      }
       candidateRows.add(row);
-      final displayName = row.purchasePartyDisplayName.trim().isEmpty
-          ? row.normalizedAlias
-          : row.purchasePartyDisplayName.trim();
+      final displayName = resolveLedgerSellerTitle(row);
       displayNameCounts[displayName] =
           (displayNameCounts[displayName] ?? 0) + 1;
     }
 
-    final options = candidateRows.map((row) {
-      final displayName = row.purchasePartyDisplayName.trim().isEmpty
-          ? row.normalizedAlias
-          : row.purchasePartyDisplayName.trim();
-      final identityParts = <String>[
-        'Alias ${row.normalizedAlias}',
-        if (row.purchasePan.isNotEmpty) 'PAN ${row.purchasePan}',
-        if (row.purchaseGstNo.isNotEmpty) 'GST ${row.purchaseGstNo}',
-      ];
-      final subtitle = identityParts.join(' | ');
-      final displayValue = (displayNameCounts[displayName] ?? 0) > 1
-          ? '$displayName ($subtitle)'
-          : displayName;
-      return _LedgerLinkOption(
-        linkedRowKey: row.rowKey,
-        displayValue: displayValue,
-        subtitle: subtitle,
-        searchableTerms: <String>[
-          displayName,
-          row.normalizedAlias,
-          row.purchasePan,
-          row.purchaseGstNo,
-          sectionDisplayLabel(row.sectionCode),
-        ],
-      );
-    }).toList()..sort((a, b) => a.displayValue.compareTo(b.displayValue));
+    final options =
+        candidateRows.map((row) {
+          final displayName = resolveLedgerSellerTitle(row);
+          final identityParts = <String>[
+            'Alias ${row.normalizedAlias}',
+            if (row.purchasePan.isNotEmpty) 'PAN ${row.purchasePan}',
+            if (row.purchaseGstNo.isNotEmpty) 'GST ${row.purchaseGstNo}',
+          ];
+          final subtitle = identityParts.join(' | ');
+          final displayValue = (displayNameCounts[displayName] ?? 0) > 1
+              ? '$displayName ($subtitle)'
+              : displayName;
+          return _LedgerLinkOption(
+            linkedRowKey: row.rowKey,
+            displayValue: displayValue,
+            subtitle: subtitle,
+            searchableTerms: <String>[
+              displayName,
+              row.normalizedAlias,
+              row.purchasePan,
+              row.purchaseGstNo,
+              sectionDisplayLabel(row.sectionCode),
+            ],
+          );
+        }).toList()..sort(
+          (a, b) => sellerMappingSafeText(
+            a.displayValue,
+          ).compareTo(sellerMappingSafeText(b.displayValue)),
+        );
 
     return options;
   }
@@ -2329,7 +2368,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return null;
   }
 
-  String _linkedLedgerLabel(SellerMappingRowVm row, String? selectedValue) {
+  String _linkedLedgerLabel(SellerMappingRowVm row, Object? selectedValue) {
     final linkedRow = _linkedLedgerRowForSelection(
       sectionCode: row.sectionCode,
       selectedValue: selectedValue,
@@ -2342,7 +2381,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return option.displayValue;
       }
     }
-    return linkedRow.purchasePartyDisplayName;
+    return resolveLedgerSellerTitle(linkedRow);
   }
 
   void _setLinkedLedgerSeller(SellerMappingRowVm row, String? displayValue) {
@@ -2886,7 +2925,18 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   Widget _buildTableSection(List<SellerMappingRowVm> visibleRows) {
     final activeSectionRows = _rowsForActiveSection();
     final ledgerCandidateRows = activeSectionRows
-        .where((row) => row.sourceRowCount > 0)
+        .where((row) {
+          if (row.sourceRowCount > 0) {
+            return true;
+          }
+          if (!row.is26QUnmatched) {
+            debugPrint(
+              'SELLER UI WARN => candidate source contains non-ledger row '
+              'rowKey=${row.rowKey} section=${row.sectionCode}',
+            );
+          }
+          return false;
+        })
         .toList(growable: false);
 
     return SellerMappingTwoPanelBody(
@@ -3045,6 +3095,20 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Builder(
+      builder: (context) {
+        try {
+          return _buildSellerMappingScaffold(context);
+        } catch (e, st) {
+          debugPrint('SELLER CRASH => $e');
+          debugPrint('$st');
+          return const Scaffold(body: Center(child: Text('UI Error')));
+        }
+      },
+    );
+  }
+
+  Widget _buildSellerMappingScaffold(BuildContext context) {
     if (_isInitializing) {
       return _buildLoadingScaffold();
     }
@@ -3415,44 +3479,52 @@ List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
         '${normalizePan(buyerPan)}|$aliasKey|$normalizedSection';
     final displayName = row.purchasePartyDisplayName.trim();
     final purchasePan = normalizePan(row.purchasePan);
+    final tdsDisplayName = row.tdsDisplayName.trim().isNotEmpty
+        ? row.tdsDisplayName.trim()
+        : row.resolvedSuggestion?.mappedName.trim() ?? '';
+    final tdsPan = normalizePan(
+      row.tdsPan.trim().isNotEmpty
+          ? row.tdsPan
+          : row.resolvedSuggestion?.mappedPan ?? '',
+    );
 
-    builtRows.add(SellerMappingRowVm(
-      purchasePartyDisplayName: displayName.isNotEmpty
-          ? displayName
-          : '',
-      normalizedAlias: aliasKey,
-      sectionCode: normalizedSection,
-      rowIndex: index,
-      purchasePan: purchasePan.isNotEmpty
-          ? purchasePan
-          : '',
-      purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
-          ? row.purchaseGstNo.trim()
-          : '',
-      sourceRowCount: row.sourceRowCount,
-      tdsRowCount: row.tdsRowCount,
-      exactMapping: exactMappingsByKey[exactMappingKey],
-      fallbackMapping: fallbackMappingsByAlias[aliasKey],
-      resolvedSuggestion: row.resolvedSuggestion,
-      isReadOnly: row.isReadOnly,
-      isAboveThreshold: row.isAboveThreshold,
-      hasReconciliationMismatch: row.hasReconciliationMismatch,
-      hasNameOrPanConflict: row.hasNameOrPanConflict,
-      hasApplicableTdsImpact: row.hasApplicableTdsImpact,
-      is26QUnmatched: row.is26QUnmatched,
-      hasMissingOrUncertainPan: row.hasMissingOrUncertainPan,
-      preflightReasonCode: row.preflightReasonCode.trim(),
-      preflightReasonLabel: row.preflightReasonLabel.trim(),
-      preflightReasonDetail: row.preflightReasonDetail.trim(),
-      requiresDangerousReview: row.requiresDangerousReview,
-      isPurchaseOnly: row.isPurchaseOnly,
-    ));
+    builtRows.add(
+      SellerMappingRowVm(
+        purchasePartyDisplayName: displayName.isNotEmpty ? displayName : '',
+        normalizedAlias: aliasKey,
+        sectionCode: normalizedSection,
+        rowIndex: index,
+        tdsDisplayName: tdsDisplayName,
+        tdsPan: tdsPan,
+        purchasePan: purchasePan.isNotEmpty ? purchasePan : '',
+        purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
+            ? row.purchaseGstNo.trim()
+            : '',
+        sourceRowCount: row.sourceRowCount,
+        tdsRowCount: row.tdsRowCount,
+        exactMapping: exactMappingsByKey[exactMappingKey],
+        fallbackMapping: fallbackMappingsByAlias[aliasKey],
+        resolvedSuggestion: row.resolvedSuggestion,
+        isReadOnly: row.isReadOnly,
+        isAboveThreshold: row.isAboveThreshold,
+        hasReconciliationMismatch: row.hasReconciliationMismatch,
+        hasNameOrPanConflict: row.hasNameOrPanConflict,
+        hasApplicableTdsImpact: row.hasApplicableTdsImpact,
+        is26QUnmatched: row.is26QUnmatched,
+        hasMissingOrUncertainPan: row.hasMissingOrUncertainPan,
+        preflightReasonCode: row.preflightReasonCode.trim(),
+        preflightReasonLabel: row.preflightReasonLabel.trim(),
+        preflightReasonDetail: row.preflightReasonDetail.trim(),
+        requiresDangerousReview: row.requiresDangerousReview,
+        isPurchaseOnly: row.isPurchaseOnly,
+      ),
+    );
   }
 
   builtRows.sort((a, b) {
-    final nameCompare = a.purchasePartyDisplayName.compareTo(
-      b.purchasePartyDisplayName,
-    );
+    final nameCompare = resolveTdsSellerTitle(
+      a,
+    ).compareTo(resolveTdsSellerTitle(b));
     if (nameCompare != 0) return nameCompare;
     return a.sectionCode.compareTo(b.sectionCode);
   });
@@ -3504,6 +3576,8 @@ Map<String, dynamic> _serializeScreenRowForIsolate(
     'purchasePartyDisplayName': row.purchasePartyDisplayName,
     'normalizedAlias': row.normalizedAlias,
     'sectionCode': row.sectionCode,
+    'tdsDisplayName': row.tdsDisplayName,
+    'tdsPan': row.tdsPan,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
     'sourceRowCount': row.sourceRowCount,
@@ -3539,6 +3613,8 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     purchasePartyDisplayName: row['purchasePartyDisplayName'] as String? ?? '',
     normalizedAlias: row['normalizedAlias'] as String? ?? '',
     sectionCode: row['sectionCode'] as String? ?? '',
+    tdsDisplayName: row['tdsDisplayName'] as String? ?? '',
+    tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,
@@ -3573,6 +3649,8 @@ Map<String, dynamic> _serializeRowVmForIsolate(SellerMappingRowVm row) {
     'normalizedAlias': row.normalizedAlias,
     'sectionCode': row.sectionCode,
     'rowIndex': row.rowIndex,
+    'tdsDisplayName': row.tdsDisplayName,
+    'tdsPan': row.tdsPan,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
     'sourceRowCount': row.sourceRowCount,
@@ -3616,6 +3694,8 @@ SellerMappingRowVm _deserializeRowVmForIsolate(Map<String, dynamic> row) {
     normalizedAlias: row['normalizedAlias'] as String? ?? '',
     sectionCode: row['sectionCode'] as String? ?? '',
     rowIndex: row['rowIndex'] as int? ?? 0,
+    tdsDisplayName: row['tdsDisplayName'] as String? ?? '',
+    tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,

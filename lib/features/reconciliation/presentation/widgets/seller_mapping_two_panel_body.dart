@@ -5,11 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
 
-typedef SellerMappingRowValueGetter = String? Function(SellerMappingRowVm row);
-typedef SellerMappingRowStringGetter = String Function(SellerMappingRowVm row);
-typedef SellerMappingRowBoolGetter = bool Function(SellerMappingRowVm row);
-typedef SellerMappingRowListGetter =
-    List<String> Function(SellerMappingRowVm row);
+typedef SellerMappingRowValueGetter = Object? Function(SellerMappingRowVm row);
+typedef SellerMappingRowStringGetter = Object? Function(SellerMappingRowVm row);
+typedef SellerMappingRowBoolGetter = Object? Function(SellerMappingRowVm row);
+typedef SellerMappingRowListGetter = Object? Function(SellerMappingRowVm row);
 typedef SellerMappingRowAction = void Function(SellerMappingRowVm row);
 typedef SellerMappingTdsLinkAction =
     void Function(SellerMappingRowVm row, String? tdsParty);
@@ -65,8 +64,10 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
 
 class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   String? _selectedLeftKey;
+  SellerMappingRowVm? _selectedLeftRowSnapshot;
   String? _selectedTdsParty;
   String? _selectedLedgerRowKey;
+  String? _lastMissingSelectedRowLogKey;
 
   List<SellerMappingRowVm> get _leftReviewRows {
     // The parent screen already decides which rows belong in the current
@@ -88,7 +89,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   String get _activeSearchQuery {
-    return widget.searchQuery.trim();
+    return sellerMappingSafeText(widget.searchQuery);
   }
 
   bool get _hasLedgerForSection => widget.ledgerCandidateRows.isNotEmpty;
@@ -96,20 +97,13 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   @override
   void didUpdateWidget(covariant SellerMappingTwoPanelBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final selectedLeftKey = _selectedLeftKey;
     final selectedRow = _selectedLeftRowFrom(widget.visibleRows);
-    if (selectedLeftKey != null && selectedRow == null) {
-      _clearLocalSelection();
-      return;
-    }
-
     if (selectedRow == null) return;
 
     final oldSelectedRow = _selectedLeftRowFrom(oldWidget.visibleRows);
     final selectedRowChanged = oldSelectedRow?.rowKey != selectedRow.rowKey;
     if (selectedRowChanged) {
-      final selectedValue =
-          widget.selectedValueForRow(selectedRow)?.trim() ?? '';
+      final selectedValue = _safeSelectedValueForRow(selectedRow)?.trim() ?? '';
       _selectedTdsParty = selectedValue.isEmpty ? null : selectedValue;
       _selectedLedgerRowKey = null;
     }
@@ -165,10 +159,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                             subtitle: widget.showAllSellersMode
                                 ? 'All section ledger sellers are visible; related sellers are shown first.'
                                 : selectedRow == null
-                                ? 'Select a seller, or search to find candidates.'
-                                : selectedRow.is26QUnmatched
-                                ? 'Same-section ledger candidates for the selected 26Q seller.'
-                                : 'Suggested and matching 26Q candidates for the selected ledger seller.',
+                                ? 'Select a 26Q seller to see ledger candidates.'
+                                : 'Same-section ledger candidates for the selected 26Q seller.',
                             child: KeyedSubtree(
                               key: rightPanelKey,
                               child: _buildRightList(selectedRow),
@@ -249,9 +241,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       itemBuilder: (context, index) {
         final row = rows[index];
         final selected = row.rowKey == selectedRow?.rowKey;
-        final status = widget.statusForRow(row);
-        final selectedValue = widget.selectedValueForRow(row);
-        final selectedPan = widget.selectedPanForRow(row);
+        final status = _safeStatusForRow(row);
+        final selectedValue = _safeSelectedValueForRow(row);
+        final selectedPan = _safeSelectedPanForRow(row);
         final ledgerRowsCount = row.is26QUnmatched
             ? widget.ledgerCandidateRows
                   .where(
@@ -259,11 +251,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                   )
                   .length
             : row.sourceRowCount;
-        final leftTitle = row.tdsDisplayName.trim().isNotEmpty
-            ? row.tdsDisplayName.trim()
-            : row.purchasePartyDisplayName.trim().isNotEmpty
-            ? row.purchasePartyDisplayName.trim()
-            : row.normalizedAlias;
+        final leftTitle = resolveTdsSellerTitle(row);
         return _SellerCard(
           selected: selected,
           highlighted: false,
@@ -280,16 +268,17 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             if (selectedValue != null && selectedValue.trim().isNotEmpty)
               row.is26QUnmatched
                   ? 'Linked ledger selected'
-                  : '26Q selected: $selectedValue',
+                  : 'Mapped ledger selected',
             if (selectedPan.isNotEmpty) '26Q PAN $selectedPan',
           ],
-          footer: row.resolvedSuggestion?.mappedName.trim().isNotEmpty == true
-              ? 'Suggestion: ${row.resolvedSuggestion!.mappedName}'
+          footer: _safeResolvedSuggestionName(row).isNotEmpty
+              ? 'Suggested ledger: ${_safeResolvedSuggestionName(row)}'
               : null,
           onTap: () {
             setState(() {
               _selectedLeftKey = row.rowKey;
-              _selectedTdsParty = widget.selectedValueForRow(row);
+              _selectedLeftRowSnapshot = row;
+              _selectedTdsParty = null;
               _selectedLedgerRowKey = null;
             });
           },
@@ -299,8 +288,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   Widget _buildRightList(SellerMappingRowVm? row) {
-    final hasSearch = _activeSearchQuery.trim().isNotEmpty;
-
     if (!_hasLedgerForSection) {
       return const _PanelEmptyHint(
         icon: Icons.upload_file_outlined,
@@ -311,15 +298,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     }
 
     if (row == null) {
-      if (!hasSearch) {
-        return const _PanelEmptyHint(
-          icon: Icons.touch_app_rounded,
-          title: 'Select a seller',
-          message:
-              'Select a 26Q seller from Review Sellers to see possible matches.',
-        );
-      }
-      return _buildSearchOnlyLedgerCandidateList();
+      return const _PanelEmptyHint(
+        icon: Icons.touch_app_rounded,
+        title: 'Select a 26Q seller',
+        message:
+            'Search can narrow the left list; select a 26Q seller to see same-section ledger candidates.',
+      );
     }
 
     return _buildLedgerCandidateList(row);
@@ -345,6 +329,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildSearchOnlyLedgerCandidateList() {
     final query = _normalize(_activeSearchQuery);
     final ledgerMatches = widget.ledgerCandidateRows
@@ -415,8 +400,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         ? null
         : selectedRowUnmapped
         ? _selectedTdsParty
-        : (_selectedTdsParty ?? widget.selectedValueForRow(row));
-    final suggestion = row?.resolvedSuggestion?.mappedName.trim() ?? '';
+        : (_selectedTdsParty ?? _safeSelectedValueForRow(row));
+    final suggestion = _safeResolvedSuggestionName(row);
     final pans = widget.tdsPartyPans[party] ?? const <String>[];
     final selected = party == currentSelection;
     final suggested = suggestion.isNotEmpty && party == suggestion;
@@ -449,8 +434,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final selectedRowUnmapped = row != null && _rowIsCurrentlyUnmapped(row);
     final similarityScore = row != null && row.is26QUnmatched
         ? _ledgerSimilarityScore(
-            row.purchasePartyDisplayName,
-            candidate.purchasePartyDisplayName,
+            resolveTdsSellerTitle(row),
+            resolveLedgerSellerTitle(candidate),
           )
         : 0.0;
     final selectedRowMapped =
@@ -476,8 +461,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         !showMappedState &&
         !mappedElsewhere &&
         _looksRelated(
-          row.purchasePartyDisplayName,
-          candidate.purchasePartyDisplayName,
+          resolveTdsSellerTitle(row),
+          resolveLedgerSellerTitle(candidate),
         );
     final strongNameMatch =
         row != null &&
@@ -513,7 +498,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return _SellerCard(
       selected: selected,
       highlighted: false,
-      title: candidate.purchasePartyDisplayName,
+      title: resolveLedgerSellerTitle(candidate),
       badge: badge,
       badgeColor: badgeColor,
       details: [
@@ -597,7 +582,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       );
     }
 
-    final helperMessages = widget.helperMessagesForRow(row);
+    final helperMessages = _safeHelperMessagesForRow(row);
     final selectedLedger = _selectedLedgerFor(row);
     final hasSavedDecision = _hasSavedFinalDecision(row);
     final noLedgerForSection = !_hasLedgerForSection;
@@ -615,7 +600,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final canAcceptSuggestion =
         !hasSavedDecision &&
         !noLedgerForSection &&
-        widget.canAcceptSuggestion(row);
+        _safeCanAcceptSuggestion(row);
     final canKeepSeparate =
         !hasSavedDecision && (!row.is26QUnmatched || noLedgerForSection);
 
@@ -661,7 +646,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             onPressed: canKeepSeparate
                 ? () {
                     widget.onKeepSeparate(row);
-                    setState(_clearLocalSelection);
+                    setState(_clearRightPanelSelection);
                   }
                 : null,
             icon: const Icon(Icons.call_split_rounded, size: 18),
@@ -671,7 +656,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           OutlinedButton.icon(
             onPressed: () {
               widget.onClear(row);
-              setState(_clearLocalSelection);
+              setState(_clearRightPanelSelection);
             },
             icon: const Icon(Icons.close_rounded, size: 18),
             label: const Text('Clear'),
@@ -716,9 +701,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 
   List<String> _contextualTdsParties(SellerMappingRowVm row) {
     final query = _normalize(_activeSearchQuery);
-    final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
-    final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
-    final rowName = row.purchasePartyDisplayName;
+    final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
+    final suggestion = _safeResolvedSuggestionName(row);
+    final rowName = resolveTdsSellerTitle(row);
     final ordered = <String>[];
 
     void addParty(String party) {
@@ -776,8 +761,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       for (final candidate in widget.ledgerCandidateRows) {
         if (candidate.sectionCode == selectedRow.sectionCode &&
             _looksRelated(
-              selectedRow.purchasePartyDisplayName,
-              candidate.purchasePartyDisplayName,
+              resolveTdsSellerTitle(selectedRow),
+              resolveLedgerSellerTitle(candidate),
             )) {
           addCandidate(candidate);
         }
@@ -803,9 +788,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 
   List<SellerMappingRowVm> _contextualLedgerRows(SellerMappingRowVm row) {
     final query = _normalize(_activeSearchQuery);
-    final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
-    final suggestion = row.resolvedSuggestion?.mappedName.trim() ?? '';
-    final selected26QName = _normalize(row.purchasePartyDisplayName);
+    final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
+    final suggestion = _safeResolvedSuggestionName(row);
+    final selected26QName = _normalize(resolveTdsSellerTitle(row));
     final candidates = widget.ledgerCandidateRows
         .where(
           (candidate) =>
@@ -839,7 +824,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     if (_rowHasMapping(row)) {
       for (final candidate in candidates) {
         final candidateMappedParty =
-            widget.selectedValueForRow(candidate)?.trim() ?? '';
+            _safeSelectedValueForRow(candidate)?.trim() ?? '';
         if (candidateMappedParty.isEmpty) continue;
         if (_normalize(candidateMappedParty) == selected26QName) {
           addCandidate(candidate);
@@ -852,7 +837,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     if (suggestion.isNotEmpty) {
       final normalizedSuggestion = _normalize(suggestion);
       for (final candidate in candidates) {
-        if (_normalize(candidate.purchasePartyDisplayName) ==
+        if (_normalize(resolveLedgerSellerTitle(candidate)) ==
             normalizedSuggestion) {
           addCandidate(candidate);
         }
@@ -869,12 +854,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             .toList(growable: false)
           ..sort((a, b) {
             final aRelated = _looksRelated(
-              row.purchasePartyDisplayName,
-              a.purchasePartyDisplayName,
+              resolveTdsSellerTitle(row),
+              resolveLedgerSellerTitle(a),
             );
             final bRelated = _looksRelated(
-              row.purchasePartyDisplayName,
-              b.purchasePartyDisplayName,
+              resolveTdsSellerTitle(row),
+              resolveLedgerSellerTitle(b),
             );
             if (aRelated != bRelated) {
               return bRelated ? 1 : -1;
@@ -882,12 +867,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 
             final byScore =
                 _ledgerSimilarityScore(
-                  row.purchasePartyDisplayName,
-                  b.purchasePartyDisplayName,
+                  resolveTdsSellerTitle(row),
+                  resolveLedgerSellerTitle(b),
                 ).compareTo(
                   _ledgerSimilarityScore(
-                    row.purchasePartyDisplayName,
-                    a.purchasePartyDisplayName,
+                    resolveTdsSellerTitle(row),
+                    resolveLedgerSellerTitle(a),
                   ),
                 );
             if (byScore != 0) return byScore;
@@ -895,9 +880,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             final byLedgerRows = b.sourceRowCount.compareTo(a.sourceRowCount);
             if (byLedgerRows != 0) return byLedgerRows;
 
-            return a.purchasePartyDisplayName.compareTo(
-              b.purchasePartyDisplayName,
-            );
+            return resolveLedgerSellerTitle(
+              a,
+            ).compareTo(resolveLedgerSellerTitle(b));
           });
 
     for (final candidate in remainingCandidates) {
@@ -920,14 +905,14 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   bool _rowHasMapping(SellerMappingRowVm row) {
-    final status = widget.statusForRow(row).toLowerCase();
+    final status = _safeStatusForRow(row).toLowerCase();
     return status.contains('mapped') ||
         status.contains('accepted') ||
         status.contains('linked');
   }
 
   bool _hasSavedFinalDecision(SellerMappingRowVm row) {
-    final status = widget.statusForRow(row);
+    final status = _safeStatusForRow(row);
     return status == 'Mapped' ||
         status == 'Linked to Ledger' ||
         status == 'Mapped (PAN missing)' ||
@@ -937,7 +922,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   bool _rowIsCurrentlyUnmapped(SellerMappingRowVm row) {
-    return widget.statusForRow(row) == 'Unmapped';
+    return _safeStatusForRow(row) == 'Unmapped';
   }
 
   List<SellerMappingRowVm> _mappedLedgerRowsFor(SellerMappingRowVm row) {
@@ -949,8 +934,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       return <SellerMappingRowVm>[row];
     }
 
-    final selectedValue = widget.selectedValueForRow(row)?.trim() ?? '';
-    final rowName = _normalize(row.purchasePartyDisplayName);
+    final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
+    final rowName = _normalize(resolveTdsSellerTitle(row));
     final mappedRows = <SellerMappingRowVm>[];
 
     void addMapped(SellerMappingRowVm candidate) {
@@ -966,7 +951,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         continue;
       }
       final candidateMappedParty =
-          widget.selectedValueForRow(candidate)?.trim() ?? '';
+          _safeSelectedValueForRow(candidate)?.trim() ?? '';
       if (candidateMappedParty.isNotEmpty &&
           _normalize(candidateMappedParty) == rowName) {
         addMapped(candidate);
@@ -990,7 +975,22 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final selectedLeftKey = _selectedLeftKey;
     if (selectedLeftKey == null) return null;
     for (final row in rows) {
-      if (row.rowKey == selectedLeftKey) return row;
+      if (row.rowKey == selectedLeftKey) {
+        _selectedLeftRowSnapshot = row;
+        _lastMissingSelectedRowLogKey = null;
+        return row;
+      }
+    }
+    final snapshot = _selectedLeftRowSnapshot;
+    if (snapshot?.rowKey == selectedLeftKey) {
+      return snapshot;
+    }
+    if (_lastMissingSelectedRowLogKey != selectedLeftKey) {
+      _lastMissingSelectedRowLogKey = selectedLeftKey;
+      debugPrint(
+        'SELLER UI WARN => selected row not found after filtering '
+        'rowKey=$selectedLeftKey',
+      );
     }
     return null;
   }
@@ -1000,19 +1000,21 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     _selectedLedgerRowKey = null;
   }
 
+  // ignore: unused_element
   void _clearLocalSelection() {
     _selectedLeftKey = null;
+    _selectedLeftRowSnapshot = null;
     _clearRightPanelSelection();
   }
 
   bool _rowMatchesSearch(SellerMappingRowVm row, String normalizedQuery) {
     if (normalizedQuery.isEmpty) return true;
-    final selected = widget.selectedValueForRow(row) ?? '';
-    final suggestion = row.resolvedSuggestion?.mappedName ?? '';
-    final status = widget.statusForRow(row);
+    final selected = _safeSelectedValueForRow(row) ?? '';
+    final suggestion = _safeResolvedSuggestionName(row);
+    final status = _safeStatusForRow(row);
     final haystack = _normalize(
       [
-        row.purchasePartyDisplayName,
+        resolveTdsSellerTitle(row),
         row.purchasePan,
         row.purchaseGstNo,
         row.sectionCode,
@@ -1024,7 +1026,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return haystack.contains(normalizedQuery);
   }
 
-  bool _looksRelated(String left, String right) {
+  bool _looksRelated(Object? left, Object? right) {
     final leftNorm = _normalize(left);
     final rightNorm = _normalize(right);
     if (leftNorm.isEmpty || rightNorm.isEmpty) return false;
@@ -1043,7 +1045,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return shared >= 2 || (shared == 1 && leftTokens.length == 1);
   }
 
-  double _ledgerSimilarityScore(String a, String b) {
+  double _ledgerSimilarityScore(Object? a, Object? b) {
     final na = _normalize(a);
     final nb = _normalize(b);
     if (na.isEmpty || nb.isEmpty) return 0.0;
@@ -1111,19 +1113,68 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         .toSet();
   }
 
-  String _normalize(String value) {
-    return value
+  String _normalize(Object? value) {
+    return _safeString(value)
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
-  String _friendlyStatusLabel(SellerMappingRowVm row, String status) {
+  String _safeString(Object? value) {
+    return sellerMappingSafeText(value);
+  }
+
+  String _safeStatusForRow(SellerMappingRowVm row) {
+    final dynamic getter = widget.statusForRow;
+    return _safeString(getter(row));
+  }
+
+  String _safeSelectedPanForRow(SellerMappingRowVm row) {
+    final dynamic getter = widget.selectedPanForRow;
+    return _safeString(getter(row));
+  }
+
+  String? _safeSelectedValueForRow(SellerMappingRowVm row) {
+    final dynamic getter = widget.selectedValueForRow;
+    final result = getter(row);
+    if (result == null) {
+      return null;
+    }
+    return result is String ? result : '$result';
+  }
+
+  String _safeResolvedSuggestionName(SellerMappingRowVm? row) {
+    if (row == null) {
+      return '';
+    }
+    return sellerMappingSafeText(row.resolvedSuggestion?.mappedName);
+  }
+
+  List<String> _safeHelperMessagesForRow(SellerMappingRowVm row) {
+    final dynamic getter = widget.helperMessagesForRow;
+    final result = getter(row);
+    if (result is Iterable) {
+      return result
+          .map(sellerMappingSafeText)
+          .where((message) => message.isNotEmpty)
+          .toList(growable: false);
+    }
+    final message = sellerMappingSafeText(result);
+    return message.isEmpty ? const <String>[] : <String>[message];
+  }
+
+  bool _safeCanAcceptSuggestion(SellerMappingRowVm row) {
+    final dynamic getter = widget.canAcceptSuggestion;
+    return getter(row) == true;
+  }
+
+  String _friendlyStatusLabel(SellerMappingRowVm row, Object? value) {
+    final status = sellerMappingSafeText(value);
     if (row.is26QUnmatched && status == '26Q Unmatched') return 'Only in 26Q';
     if (status == 'No 26Q') return 'Only in Ledger';
     if (status == 'Review') return 'Needs Action';
-    return status;
+    return status.isEmpty ? 'Unmapped' : status;
   }
 
   Color _statusColor(SellerMappingRowVm row, String status) {
@@ -1145,8 +1196,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
 }
 
 class _SellerPanel extends StatelessWidget {
-  final String title;
-  final String subtitle;
+  final Object? title;
+  final Object? subtitle;
   final Widget child;
 
   const _SellerPanel({
@@ -1172,7 +1223,7 @@ class _SellerPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  sellerMappingSafeText(title),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
@@ -1181,7 +1232,7 @@ class _SellerPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  subtitle,
+                  sellerMappingSafeText(subtitle),
                   style: const TextStyle(
                     fontSize: 12.5,
                     height: 1.35,
@@ -1202,8 +1253,8 @@ class _SellerPanel extends StatelessWidget {
 
 class _PanelEmptyHint extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String message;
+  final Object? title;
+  final Object? message;
 
   const _PanelEmptyHint({
     required this.icon,
@@ -1222,7 +1273,7 @@ class _PanelEmptyHint extends StatelessWidget {
             Icon(icon, size: 36, color: SellerMappingTheme.mutedTextColor),
             const SizedBox(height: 12),
             Text(
-              title,
+              sellerMappingSafeText(title),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 15,
@@ -1232,7 +1283,7 @@ class _PanelEmptyHint extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              message,
+              sellerMappingSafeText(message),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 12.5,
@@ -1251,11 +1302,11 @@ class _PanelEmptyHint extends StatelessWidget {
 class _SellerCard extends StatelessWidget {
   final bool selected;
   final bool highlighted;
-  final String title;
-  final String badge;
+  final Object? title;
+  final Object? badge;
   final Color badgeColor;
   final List<String> details;
-  final String? footer;
+  final Object? footer;
   final VoidCallback onTap;
 
   const _SellerCard({
@@ -1271,6 +1322,9 @@ class _SellerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeTitle = sellerMappingSafeText(title);
+    final safeBadge = sellerMappingSafeText(badge);
+    final safeFooter = sellerMappingSafeText(footer);
     final borderColor = selected
         ? SellerMappingTheme.primaryColor
         : highlighted
@@ -1305,7 +1359,7 @@ class _SellerCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      title.isEmpty ? 'Unnamed seller' : title,
+                      safeTitle.isEmpty ? 'Unnamed seller' : safeTitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1326,7 +1380,7 @@ class _SellerCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      badge,
+                      safeBadge,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -1341,7 +1395,7 @@ class _SellerCard extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 6,
                 children: details
-                    .where((detail) => detail.trim().isNotEmpty)
+                    .where((detail) => sellerMappingSafeText(detail).isNotEmpty)
                     .map(
                       (detail) => Container(
                         padding: const EdgeInsets.symmetric(
@@ -1356,7 +1410,7 @@ class _SellerCard extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          detail,
+                          sellerMappingSafeText(detail),
                           style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
@@ -1367,10 +1421,10 @@ class _SellerCard extends StatelessWidget {
                     )
                     .toList(),
               ),
-              if (footer != null && footer!.trim().isNotEmpty) ...[
+              if (safeFooter.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  footer!,
+                  safeFooter,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
