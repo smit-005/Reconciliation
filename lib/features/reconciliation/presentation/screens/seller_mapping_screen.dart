@@ -873,15 +873,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required SellerMappingRowVm row,
     required Object? selectedValue,
   }) {
+    if (_isTimingDifferenceSelection(row, selectedValue)) {
+      return 'Timing Difference';
+    }
+    if (_isMissingInBooksSelection(row, selectedValue)) {
+      return 'Missing in Books';
+    }
+
     if (row.is26QUnmatched) {
       if (_isLinkLedgerSelection(selectedValue)) {
         return 'Linked to Ledger';
-      }
-      if (_isTimingDifferenceSelection(row, selectedValue)) {
-        return 'Timing Difference';
-      }
-      if (_isMissingInBooksSelection(row, selectedValue)) {
-        return 'Missing in Books';
       }
       if (_isPreflightMode && _isSeparateSelection(row, selectedValue)) {
         return 'Marked Separate';
@@ -1289,6 +1290,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       for (final row in activeRows) {
         if (row.isReadOnly) continue;
         if (widget.blockedAliases.contains(row.normalizedAlias)) continue;
+        if (_clearedRowKeys.contains(row.rowKey)) continue;
         if (selectedMappings.containsKey(row.rowKey)) continue;
 
         final decision = _resolveAutoMapForRow(row, candidates);
@@ -1495,6 +1497,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       final currentMappedName = selectedMappings[row.rowKey]?.trim() ?? '';
       final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
 
+      if (_isTimingDifferenceSelection(row, currentMappedName) ||
+          _isMissingInBooksSelection(row, currentMappedName)) {
+        upserts.add({
+          'aliasName': row.normalizedAlias,
+          'sectionCode': row.sectionCode,
+          'mappedName': currentMappedName,
+          'mappedPan': '',
+        });
+        continue;
+      }
+
       if (_isLinkLedgerSelection(currentMappedName)) {
         final linkedRow = _linkedLedgerRowForSelection(
           sectionCode: row.sectionCode,
@@ -1518,15 +1531,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
 
       if (row.is26QUnmatched) {
-        if (_isTimingDifferenceSelection(row, currentMappedName) ||
-            _isMissingInBooksSelection(row, currentMappedName)) {
-          upserts.add({
-            'aliasName': row.normalizedAlias,
-            'sectionCode': row.sectionCode,
-            'mappedName': currentMappedName,
-            'mappedPan': '',
-          });
-        } else if (existingExactName.isNotEmpty &&
+        if (existingExactName.isNotEmpty &&
             _clearedRowKeys.contains(row.rowKey)) {
           deleted.add({
             'aliasName': row.normalizedAlias,
