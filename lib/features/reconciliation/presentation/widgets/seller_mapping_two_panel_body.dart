@@ -259,10 +259,15 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                   )
                   .length
             : row.sourceRowCount;
+        final leftTitle = row.tdsDisplayName.trim().isNotEmpty
+            ? row.tdsDisplayName.trim()
+            : row.purchasePartyDisplayName.trim().isNotEmpty
+            ? row.purchasePartyDisplayName.trim()
+            : row.normalizedAlias;
         return _SellerCard(
           selected: selected,
           highlighted: false,
-          title: row.purchasePartyDisplayName,
+          title: leftTitle,
           badge: _friendlyStatusLabel(row, status),
           badgeColor: _statusColor(row, status),
           details: [
