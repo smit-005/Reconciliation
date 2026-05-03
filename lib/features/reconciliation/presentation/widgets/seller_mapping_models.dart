@@ -5,6 +5,7 @@ class SellerMappingRowVm {
   final String purchasePartyDisplayName;
   final String normalizedAlias;
   final String sectionCode;
+  final int rowIndex;
   final String purchasePan;
   final String purchaseGstNo;
   final int sourceRowCount;
@@ -29,6 +30,7 @@ class SellerMappingRowVm {
     required this.purchasePartyDisplayName,
     required this.normalizedAlias,
     required this.sectionCode,
+    this.rowIndex = 0,
     required this.purchasePan,
     required this.purchaseGstNo,
     this.sourceRowCount = 0,
@@ -50,7 +52,7 @@ class SellerMappingRowVm {
     this.isPurchaseOnly = false,
   });
 
-  String get rowKey => '$normalizedAlias|$sectionCode';
+  String get rowKey => '$normalizedAlias|$sectionCode|$rowIndex';
 }
 
 enum SellerMappingListView { needsAction, allSellers }

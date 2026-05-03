@@ -338,83 +338,59 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       _rowDataBySection[sectionCode] ?? const [],
     );
 
-    final rowMap = <String, SellerMappingRowVm>{};
-    for (final row in sourceRows) {
+    final builtRows = <SellerMappingRowVm>[];
+    for (var index = 0; index < sourceRows.length; index++) {
+      final row = sourceRows[index];
       final aliasKey = normalizeName(row.normalizedAlias.trim());
       final normalizedSection = normalizeSellerMappingSectionCode(
         row.sectionCode,
       );
       if (aliasKey.isEmpty) continue;
 
-      final rowKey = _rowKey(aliasKey, normalizedSection);
-      final existing = rowMap[rowKey];
       final displayName = row.purchasePartyDisplayName.trim();
       final purchasePan = normalizePan(row.purchasePan);
 
-      rowMap[rowKey] = SellerMappingRowVm(
+      final exactMappingKey = _rowKey(aliasKey, normalizedSection);
+      builtRows.add(SellerMappingRowVm(
         purchasePartyDisplayName: displayName.isNotEmpty
             ? displayName
-            : (existing?.purchasePartyDisplayName ?? ''),
+            : '',
         normalizedAlias: aliasKey,
         sectionCode: normalizedSection,
+        rowIndex: index,
         purchasePan: purchasePan.isNotEmpty
             ? purchasePan
-            : (existing?.purchasePan ?? ''),
+            : '',
         purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
             ? row.purchaseGstNo.trim()
-            : (existing?.purchaseGstNo ?? ''),
-        sourceRowCount: math.max(
-          row.sourceRowCount,
-          existing?.sourceRowCount ?? 0,
-        ),
-        tdsRowCount: math.max(row.tdsRowCount, existing?.tdsRowCount ?? 0),
-        exactMapping: _exactMappingsByKey[rowKey] ?? existing?.exactMapping,
-        fallbackMapping:
-            _fallbackMappingsByAlias[aliasKey] ?? existing?.fallbackMapping,
-        resolvedSuggestion:
-            row.resolvedSuggestion ?? existing?.resolvedSuggestion,
-        isReadOnly: row.isReadOnly || (existing?.isReadOnly ?? false),
-        isAboveThreshold:
-            row.isAboveThreshold || (existing?.isAboveThreshold ?? false),
-        hasReconciliationMismatch:
-            row.hasReconciliationMismatch ||
-            (existing?.hasReconciliationMismatch ?? false),
-        hasNameOrPanConflict:
-            row.hasNameOrPanConflict ||
-            (existing?.hasNameOrPanConflict ?? false),
-        hasApplicableTdsImpact:
-            row.hasApplicableTdsImpact ||
-            (existing?.hasApplicableTdsImpact ?? false),
-        is26QUnmatched:
-            row.is26QUnmatched || (existing?.is26QUnmatched ?? false),
-        hasMissingOrUncertainPan:
-            row.hasMissingOrUncertainPan ||
-            (existing?.hasMissingOrUncertainPan ?? false),
-        preflightReasonCode: row.preflightReasonCode.trim().isNotEmpty
-            ? row.preflightReasonCode.trim()
-            : (existing?.preflightReasonCode ?? ''),
-        preflightReasonLabel: row.preflightReasonLabel.trim().isNotEmpty
-            ? row.preflightReasonLabel.trim()
-            : (existing?.preflightReasonLabel ?? ''),
-        preflightReasonDetail: row.preflightReasonDetail.trim().isNotEmpty
-            ? row.preflightReasonDetail.trim()
-            : (existing?.preflightReasonDetail ?? ''),
-        requiresDangerousReview:
-            row.requiresDangerousReview ||
-            (existing?.requiresDangerousReview ?? false),
-        isPurchaseOnly:
-            row.isPurchaseOnly || (existing?.isPurchaseOnly ?? false),
-      );
+            : '',
+        sourceRowCount: row.sourceRowCount,
+        tdsRowCount: row.tdsRowCount,
+        exactMapping: _exactMappingsByKey[exactMappingKey],
+        fallbackMapping: _fallbackMappingsByAlias[aliasKey],
+        resolvedSuggestion: row.resolvedSuggestion,
+        isReadOnly: row.isReadOnly,
+        isAboveThreshold: row.isAboveThreshold,
+        hasReconciliationMismatch: row.hasReconciliationMismatch,
+        hasNameOrPanConflict: row.hasNameOrPanConflict,
+        hasApplicableTdsImpact: row.hasApplicableTdsImpact,
+        is26QUnmatched: row.is26QUnmatched,
+        hasMissingOrUncertainPan: row.hasMissingOrUncertainPan,
+        preflightReasonCode: row.preflightReasonCode.trim(),
+        preflightReasonLabel: row.preflightReasonLabel.trim(),
+        preflightReasonDetail: row.preflightReasonDetail.trim(),
+        requiresDangerousReview: row.requiresDangerousReview,
+        isPurchaseOnly: row.isPurchaseOnly,
+      ));
     }
 
-    final builtRows = rowMap.values.toList()
-      ..sort((a, b) {
-        final nameCompare = a.purchasePartyDisplayName.compareTo(
-          b.purchasePartyDisplayName,
-        );
-        if (nameCompare != 0) return nameCompare;
-        return a.sectionCode.compareTo(b.sectionCode);
-      });
+    builtRows.sort((a, b) {
+      final nameCompare = a.purchasePartyDisplayName.compareTo(
+        b.purchasePartyDisplayName,
+      );
+      if (nameCompare != 0) return nameCompare;
+      return a.sectionCode.compareTo(b.sectionCode);
+    });
 
     return builtRows;
   }
@@ -3426,8 +3402,9 @@ List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
     rowDataBySection[sectionCode] ?? const [],
   );
 
-  final rowMap = <String, SellerMappingRowVm>{};
-  for (final row in sourceRows) {
+  final builtRows = <SellerMappingRowVm>[];
+  for (var index = 0; index < sourceRows.length; index++) {
+    final row = sourceRows[index];
     final aliasKey = normalizeName(row.normalizedAlias.trim());
     final normalizedSection = normalizeSellerMappingSectionCode(
       row.sectionCode,
@@ -3436,72 +3413,49 @@ List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
 
     final exactMappingKey =
         '${normalizePan(buyerPan)}|$aliasKey|$normalizedSection';
-    final existing = rowMap['$aliasKey|$normalizedSection'];
     final displayName = row.purchasePartyDisplayName.trim();
     final purchasePan = normalizePan(row.purchasePan);
 
-    rowMap['$aliasKey|$normalizedSection'] = SellerMappingRowVm(
+    builtRows.add(SellerMappingRowVm(
       purchasePartyDisplayName: displayName.isNotEmpty
           ? displayName
-          : (existing?.purchasePartyDisplayName ?? ''),
+          : '',
       normalizedAlias: aliasKey,
       sectionCode: normalizedSection,
+      rowIndex: index,
       purchasePan: purchasePan.isNotEmpty
           ? purchasePan
-          : (existing?.purchasePan ?? ''),
+          : '',
       purchaseGstNo: row.purchaseGstNo.trim().isNotEmpty
           ? row.purchaseGstNo.trim()
-          : (existing?.purchaseGstNo ?? ''),
-      sourceRowCount: math.max(
-        row.sourceRowCount,
-        existing?.sourceRowCount ?? 0,
-      ),
-      tdsRowCount: math.max(row.tdsRowCount, existing?.tdsRowCount ?? 0),
-      exactMapping:
-          exactMappingsByKey[exactMappingKey] ?? existing?.exactMapping,
-      fallbackMapping:
-          fallbackMappingsByAlias[aliasKey] ?? existing?.fallbackMapping,
-      resolvedSuggestion:
-          row.resolvedSuggestion ?? existing?.resolvedSuggestion,
-      isReadOnly: row.isReadOnly || (existing?.isReadOnly ?? false),
-      isAboveThreshold:
-          row.isAboveThreshold || (existing?.isAboveThreshold ?? false),
-      hasReconciliationMismatch:
-          row.hasReconciliationMismatch ||
-          (existing?.hasReconciliationMismatch ?? false),
-      hasNameOrPanConflict:
-          row.hasNameOrPanConflict || (existing?.hasNameOrPanConflict ?? false),
-      hasApplicableTdsImpact:
-          row.hasApplicableTdsImpact ||
-          (existing?.hasApplicableTdsImpact ?? false),
-      is26QUnmatched: row.is26QUnmatched || (existing?.is26QUnmatched ?? false),
-      hasMissingOrUncertainPan:
-          row.hasMissingOrUncertainPan ||
-          (existing?.hasMissingOrUncertainPan ?? false),
-      preflightReasonCode: row.preflightReasonCode.trim().isNotEmpty
-          ? row.preflightReasonCode.trim()
-          : (existing?.preflightReasonCode ?? ''),
-      preflightReasonLabel: row.preflightReasonLabel.trim().isNotEmpty
-          ? row.preflightReasonLabel.trim()
-          : (existing?.preflightReasonLabel ?? ''),
-      preflightReasonDetail: row.preflightReasonDetail.trim().isNotEmpty
-          ? row.preflightReasonDetail.trim()
-          : (existing?.preflightReasonDetail ?? ''),
-      requiresDangerousReview:
-          row.requiresDangerousReview ||
-          (existing?.requiresDangerousReview ?? false),
-      isPurchaseOnly: row.isPurchaseOnly || (existing?.isPurchaseOnly ?? false),
-    );
+          : '',
+      sourceRowCount: row.sourceRowCount,
+      tdsRowCount: row.tdsRowCount,
+      exactMapping: exactMappingsByKey[exactMappingKey],
+      fallbackMapping: fallbackMappingsByAlias[aliasKey],
+      resolvedSuggestion: row.resolvedSuggestion,
+      isReadOnly: row.isReadOnly,
+      isAboveThreshold: row.isAboveThreshold,
+      hasReconciliationMismatch: row.hasReconciliationMismatch,
+      hasNameOrPanConflict: row.hasNameOrPanConflict,
+      hasApplicableTdsImpact: row.hasApplicableTdsImpact,
+      is26QUnmatched: row.is26QUnmatched,
+      hasMissingOrUncertainPan: row.hasMissingOrUncertainPan,
+      preflightReasonCode: row.preflightReasonCode.trim(),
+      preflightReasonLabel: row.preflightReasonLabel.trim(),
+      preflightReasonDetail: row.preflightReasonDetail.trim(),
+      requiresDangerousReview: row.requiresDangerousReview,
+      isPurchaseOnly: row.isPurchaseOnly,
+    ));
   }
 
-  final builtRows = rowMap.values.toList()
-    ..sort((a, b) {
-      final nameCompare = a.purchasePartyDisplayName.compareTo(
-        b.purchasePartyDisplayName,
-      );
-      if (nameCompare != 0) return nameCompare;
-      return a.sectionCode.compareTo(b.sectionCode);
-    });
+  builtRows.sort((a, b) {
+    final nameCompare = a.purchasePartyDisplayName.compareTo(
+      b.purchasePartyDisplayName,
+    );
+    if (nameCompare != 0) return nameCompare;
+    return a.sectionCode.compareTo(b.sectionCode);
+  });
 
   return builtRows;
 }
@@ -3618,6 +3572,7 @@ Map<String, dynamic> _serializeRowVmForIsolate(SellerMappingRowVm row) {
     'purchasePartyDisplayName': row.purchasePartyDisplayName,
     'normalizedAlias': row.normalizedAlias,
     'sectionCode': row.sectionCode,
+    'rowIndex': row.rowIndex,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
     'sourceRowCount': row.sourceRowCount,
@@ -3660,6 +3615,7 @@ SellerMappingRowVm _deserializeRowVmForIsolate(Map<String, dynamic> row) {
     purchasePartyDisplayName: row['purchasePartyDisplayName'] as String? ?? '',
     normalizedAlias: row['normalizedAlias'] as String? ?? '',
     sectionCode: row['sectionCode'] as String? ?? '',
+    rowIndex: row['rowIndex'] as int? ?? 0,
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,
