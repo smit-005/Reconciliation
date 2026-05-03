@@ -329,6 +329,7 @@ class _ReviewSellerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final is26QSeller = row.tdsRowCount > 0 || row.is26QUnmatched;
     final isException = _ReviewSummary._isExceptionStatus(status);
     final isMapped = _ReviewSummary._isMappedStatus(status);
     final borderColor = isMapped
@@ -358,12 +359,12 @@ class _ReviewSellerRow extends StatelessWidget {
               title: row.purchasePartyDisplayName.trim().isEmpty
                   ? row.normalizedAlias
                   : row.purchasePartyDisplayName.trim(),
-              subtitle: row.is26QUnmatched ? '26Q Seller' : 'Ledger Seller',
+              subtitle: is26QSeller ? '26Q Seller' : 'Ledger Seller',
               chips: [
                 'Section ${row.sectionCode}',
                 row.purchasePan.trim().isEmpty
-                    ? '${row.is26QUnmatched ? '26Q' : 'Ledger'} PAN not available'
-                    : '${row.is26QUnmatched ? '26Q' : 'Ledger'} PAN ${row.purchasePan.trim().toUpperCase()}',
+                    ? '${is26QSeller ? '26Q' : 'Ledger'} PAN not available'
+                    : '${is26QSeller ? '26Q' : 'Ledger'} PAN ${row.purchasePan.trim().toUpperCase()}',
                 'Ledger rows ${row.sourceRowCount}',
                 '26Q rows ${row.tdsRowCount}',
               ],

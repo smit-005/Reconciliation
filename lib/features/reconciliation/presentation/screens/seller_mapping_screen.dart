@@ -521,10 +521,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return null;
   }
 
-  bool _isReviewed26QDecision(
-    SellerMappingRowVm row,
-    String? selectedValue,
-  ) {
+  bool _isReviewed26QDecision(SellerMappingRowVm row, String? selectedValue) {
     if (!row.is26QUnmatched || selectedValue == null) {
       return false;
     }
@@ -998,6 +995,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return _getExplicitSelectedValue(row) ?? _getResolvedSuggestionValue(row);
   }
 
+  bool _is26QAuditRow(SellerMappingRowVm row) {
+    return row.tdsRowCount > 0 || row.is26QUnmatched;
+  }
+
   List<SellerMappingRowVm> _rowsForCurrentViewScope() =>
       _rowsForActiveSection();
 
@@ -1136,7 +1137,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     final stopwatch = Stopwatch()..start();
     final query = _searchQuery.trim().toUpperCase();
-    final activeRows = _rowsForCurrentViewScope();
+    final activeRows = _rowsForCurrentViewScope()
+        .where(_is26QAuditRow)
+        .toList(growable: false);
 
     _cachedFilteredRows = activeRows.where((row) {
       final state = _rowStateByKey[row.rowKey];
@@ -1144,12 +1147,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return false;
       }
 
-      // ✅ FIX: LEFT panel = only 26Q sellers
-      if (row.isPurchaseOnly) {
-        return false;
-      }
-
-      // existing logic
       if (_statusFilter != 'Only in Ledger') {
         if (!_matchesListViewFromState(state, _activeListView)) {
           return false;
@@ -1482,27 +1479,30 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       final currentMappedName = selectedMappings[row.rowKey]?.trim() ?? '';
       final existingExactName = row.exactMapping?.mappedName.trim() ?? '';
 
-      if (row.is26QUnmatched) {
-        if (_isLinkLedgerSelection(currentMappedName)) {
-          final linkedRow = _linkedLedgerRowForSelection(
-            sectionCode: row.sectionCode,
-            selectedValue: currentMappedName,
-          );
-          if (linkedRow != null) {
-            upserts.add({
-              'aliasName': linkedRow.normalizedAlias,
+      if (_isLinkLedgerSelection(currentMappedName)) {
+        final linkedRow = _linkedLedgerRowForSelection(
+          sectionCode: row.sectionCode,
+          selectedValue: currentMappedName,
+        );
+        if (linkedRow != null) {
+          upserts.add({
+            'aliasName': linkedRow.normalizedAlias,
+            'sectionCode': row.sectionCode,
+            'mappedName': row.purchasePartyDisplayName,
+            'mappedPan': row.resolvedSuggestion?.mappedPan.trim() ?? '',
+          });
+          if (existingExactName.isNotEmpty) {
+            deleted.add({
+              'aliasName': row.normalizedAlias,
               'sectionCode': row.sectionCode,
-              'mappedName': row.purchasePartyDisplayName,
-              'mappedPan': row.resolvedSuggestion?.mappedPan.trim() ?? '',
             });
-            if (existingExactName.isNotEmpty) {
-              deleted.add({
-                'aliasName': row.normalizedAlias,
-                'sectionCode': row.sectionCode,
-              });
-            }
           }
-        } else if (_isTimingDifferenceSelection(row, currentMappedName) ||
+        }
+        continue;
+      }
+
+      if (row.is26QUnmatched) {
+        if (_isTimingDifferenceSelection(row, currentMappedName) ||
             _isMissingInBooksSelection(row, currentMappedName)) {
           upserts.add({
             'aliasName': row.normalizedAlias,
@@ -2391,7 +2391,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _linkToLedgerRow(SellerMappingRowVm row, SellerMappingRowVm ledgerRow) {
-    if (!row.is26QUnmatched) return;
     setState(() {
       autoMapDetails.remove(row.rowKey);
       _clearedRowKeys.remove(row.rowKey);
@@ -2911,7 +2910,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   Widget _buildTableSection(List<SellerMappingRowVm> visibleRows) {
     final activeSectionRows = _rowsForActiveSection();
     final ledgerCandidateRows = activeSectionRows
-        .where((row) => !row.is26QUnmatched)
+        .where((row) => row.sourceRowCount > 0)
         .toList(growable: false);
 
     return SellerMappingTwoPanelBody(
@@ -2952,8 +2951,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final dangerousCount = _dangerousUnresolvedCount();
     final unreviewedExceptionCount = _unreviewedExceptionCount();
     final canContinue = _canContinue();
+    final totalReviewSellers = _rowsForCurrentViewScope()
+        .where(_is26QAuditRow)
+        .length;
     final summaryText =
-        '${visibleRows.length} visible of ${_rowsForCurrentViewScope().length} sellers in ${sectionDisplayLabel(_activeSectionCode)}.';
+        '${visibleRows.length} visible of $totalReviewSellers review sellers in ${sectionDisplayLabel(_activeSectionCode)}.';
     final reviewText = canContinue
         ? 'All blocking identities and unmatched 26Q exceptions are reviewed.'
         : '$dangerousCount dangerous identity ${dangerousCount == 1 ? 'issue remains' : 'issues remain'} and '
@@ -3046,7 +3048,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       for (final view in SellerMappingListView.values) view: 0,
     };
     for (final view in SellerMappingListView.values) {
-      final rowsForView = _rowsForActiveSection();
+      final rowsForView = _rowsForActiveSection()
+          .where(_is26QAuditRow)
+          .toList(growable: false);
       for (final row in rowsForView) {
         final state = _rowStateByKey[row.rowKey];
         if (state != null && _matchesListViewFromState(state, view)) {
