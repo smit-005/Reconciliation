@@ -169,35 +169,63 @@ class SellerMappingPreflightService {
       'PREFLIGHT INPUT CLEANUP => droppedInvalidSellerKeys=$droppedInvalidSellerKeys keptSellerKeys=$keptSellerKeys',
     );
 
-    final observations = <SellerIdentityObservation>[
-      ...validSourceRowsBySection.values.expand(
-        (rows) => rows.map(
-          (row) => SellerIdentityObservation(
-            originalName: row.partyName,
-            mappedName: row.partyName,
-            normalizedName: row.normalizedName,
-            originalPan: row.panNumber,
-            normalizedPan: row.normalizedPan,
-            observationCount: row.observationCount,
-          ),
-        ),
-      ),
-      ...tdsRows.map(
-        (row) => SellerIdentityObservation(
-          originalName: row.deducteeName,
-          mappedName: row.deducteeName,
-          normalizedName: row.normalizedName,
-          originalPan: row.panNumber,
-          normalizedPan: row.normalizedPan,
-        ),
-      ),
-    ];
+    final resolverBySection = <String, SellerIdentityResolver>{};
+    final sourceObservationsBySection =
+        <String, List<SellerIdentityObservation>>{};
+    final tdsObservationsBySection = <String, List<SellerIdentityObservation>>{};
 
-    final resolver = SellerIdentityResolver.build(
-      observations: observations,
-      savedMappings: existingMappings,
-      savedAliasToPan: savedAliasToPan,
-    );
+    for (final entry in validSourceRowsBySection.entries) {
+      for (final row in entry.value) {
+        final sectionCode = normalizeSellerMappingSectionCode(row.section);
+        if (sectionCode.isEmpty) continue;
+        sourceObservationsBySection
+            .putIfAbsent(sectionCode, () => <SellerIdentityObservation>[])
+            .add(
+              SellerIdentityObservation(
+                originalName: row.partyName,
+                mappedName: row.partyName,
+                normalizedName: row.normalizedName,
+                originalPan: row.panNumber,
+                normalizedPan: row.normalizedPan,
+                observationCount: row.observationCount,
+              ),
+            );
+      }
+    }
+
+    for (final row in tdsRows) {
+      final sectionCode = normalizeSellerMappingSectionCode(row.section);
+      if (sectionCode.isEmpty) continue;
+      tdsObservationsBySection
+          .putIfAbsent(sectionCode, () => <SellerIdentityObservation>[])
+          .add(
+            SellerIdentityObservation(
+              originalName: row.deducteeName,
+              mappedName: row.deducteeName,
+              normalizedName: row.normalizedName,
+              originalPan: row.panNumber,
+              normalizedPan: row.normalizedPan,
+            ),
+          );
+    }
+
+    final resolverSections = <String>{
+      ...sourceObservationsBySection.keys,
+      ...tdsObservationsBySection.keys,
+    };
+    for (final sectionCode in resolverSections) {
+      final observations = <SellerIdentityObservation>[
+        ...sourceObservationsBySection[sectionCode] ??
+            const <SellerIdentityObservation>[],
+        ...tdsObservationsBySection[sectionCode] ??
+            const <SellerIdentityObservation>[],
+      ];
+      resolverBySection[sectionCode] = SellerIdentityResolver.build(
+        observations: observations,
+        savedMappings: existingMappings,
+        savedAliasToPan: savedAliasToPan,
+      );
+    }
 
     final sourceGroups = <String, _SourceAliasAccumulator>{};
 
@@ -206,6 +234,9 @@ class SellerMappingPreflightService {
         final normalizedAlias = normalizeName(row.partyName.trim());
         final sectionCode = normalizeSellerMappingSectionCode(row.section);
         if (normalizedAlias.isEmpty || sectionCode.isEmpty) continue;
+
+        final resolver = resolverBySection[sectionCode];
+        if (resolver == null) continue;
 
         final identity = resolver.resolve(
           buyerPan: normalizedBuyerPan,
@@ -237,6 +268,9 @@ class SellerMappingPreflightService {
       final sectionCode = normalizeSellerMappingSectionCode(row.section);
       final normalizedPan = normalizePan(row.panNumber);
       if (normalizedName.isEmpty || sectionCode.isEmpty) continue;
+
+      final resolver = resolverBySection[sectionCode];
+      if (resolver == null) continue;
 
       final identity = resolver.resolve(
         buyerPan: normalizedBuyerPan,
