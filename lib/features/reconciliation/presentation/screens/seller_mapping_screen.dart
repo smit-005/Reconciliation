@@ -355,14 +355,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
       final displayName = row.purchasePartyDisplayName.trim();
       final purchasePan = normalizePan(row.purchasePan);
-      final tdsDisplayName = row.tdsDisplayName.trim().isNotEmpty
-          ? row.tdsDisplayName.trim()
-          : row.resolvedSuggestion?.mappedName.trim() ?? '';
-      final tdsPan = normalizePan(
-        row.tdsPan.trim().isNotEmpty
-            ? row.tdsPan
-            : row.resolvedSuggestion?.mappedPan ?? '',
-      );
+      final tdsDisplayName = row.tdsDisplayName.trim();
+      final tdsPan = normalizePan(row.tdsPan);
 
       final exactMappingKey = _rowKey(aliasKey, normalizedSection);
       builtRows.add(
@@ -1134,7 +1128,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (_cachedFilteredRows != null) return _cachedFilteredRows!;
 
     final stopwatch = Stopwatch()..start();
-    final query = _searchQuery.trim().toUpperCase();
     final activeRows = _rowsForCurrentViewScope()
         .where(_is26QAuditRow)
         .toList(growable: false);
@@ -1145,18 +1138,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         return false;
       }
 
-      if (_statusFilter != 'Only in Ledger') {
-        if (!_matchesListViewFromState(state, _activeListView)) {
-          return false;
-        }
-      }
-
-      final matchesStatus = _matchesStatusFilter(state);
-      if (!matchesStatus) return false;
-
-      if (query.isEmpty) return true;
-
-      return state.searchHaystack.contains(query);
+      return _matchesWorkingVisibleFilters(row, state);
     }).toList();
     stopwatch.stop();
     debugPrint(
@@ -1166,6 +1148,37 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       'view=${_activeListView.name} status=$_statusFilter',
     );
     return _cachedFilteredRows!;
+  }
+
+  bool _matchesWorkingVisibleFilters(
+    SellerMappingRowVm row,
+    _SellerFilterRowState state,
+  ) {
+    if (!_is26QAuditRow(row)) return false;
+
+    if (_statusFilter != 'Only in Ledger') {
+      if (!_matchesListViewFromState(state, _activeListView)) {
+        return false;
+      }
+    }
+
+    if (!_matchesStatusFilter(state)) return false;
+
+    final query = _searchQuery.trim().toUpperCase();
+    if (query.isEmpty) return true;
+    return state.searchHaystack.contains(query);
+  }
+
+  bool _matchesReviewVisibleFilters(
+    SellerMappingRowVm row,
+    _SellerFilterRowState state,
+  ) {
+    if (!_is26QAuditRow(row)) return false;
+    if (!_matchesReviewStatusFilter(state)) return false;
+
+    final query = _searchQuery.trim().toUpperCase();
+    if (query.isEmpty) return true;
+    return state.searchHaystack.contains(query);
   }
 
   bool _matchesStatusFilter(_SellerFilterRowState state) {
@@ -1229,28 +1242,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   List<SellerMappingRowVm> _reviewFilteredRows() {
-    final query = _searchQuery.trim().toUpperCase();
     final activeRows = _rowsForActiveSection();
 
     return activeRows
         .where((row) {
-          // Review View must be a 26Q audit list only.
-          // Mapped 26Q sellers usually have tdsRowCount > 0, while unmatched
-          // / exception rows use is26QUnmatched. Do not limit this list to
-          // is26QUnmatched only, otherwise Mapped/All filters show only the
-          // exception row.
-          final is26QSeller = row.tdsRowCount > 0 || row.is26QUnmatched;
-          if (!is26QSeller) return false;
-
           final state = _rowStateByKey[row.rowKey];
           if (state == null) return false;
 
-          if (!_matchesReviewStatusFilter(state)) {
-            return false;
-          }
-
-          if (query.isEmpty) return true;
-          return state.searchHaystack.contains(query);
+          return _matchesReviewVisibleFilters(row, state);
         })
         .toList(growable: false);
   }
@@ -1594,6 +1593,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           if (!row.is26QUnmatched) {
             return false;
           }
+          if (!_hasLedgerDataForSection(row.sectionCode)) {
+            return false;
+          }
           final selectedValue = selectedMappings[row.rowKey]?.trim() ?? '';
           return !_isReviewed26QDecision(row, selectedValue);
         })
@@ -1688,12 +1690,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       final state = _rowStateByKey[row.rowKey];
       if (state == null) return false;
 
-      // Match the Working View left panel behavior.
-      // Do not count ledger-only rows, but include normal 26Q seller rows that
-      // need review because of PAN conflict / dangerous identity preflight.
-      if (row.isPurchaseOnly) return false;
-
-      return state.matchesNeedsAction;
+      if (_activeWorkspaceView == SellerMappingWorkspaceView.review) {
+        return _matchesReviewVisibleFilters(row, state);
+      }
+      return _matchesWorkingVisibleFilters(row, state);
     }).length;
   }
 
@@ -3484,14 +3484,8 @@ List<SellerMappingRowVm> _buildRowsForSectionInIsolate({
         '${normalizePan(buyerPan)}|$aliasKey|$normalizedSection';
     final displayName = row.purchasePartyDisplayName.trim();
     final purchasePan = normalizePan(row.purchasePan);
-    final tdsDisplayName = row.tdsDisplayName.trim().isNotEmpty
-        ? row.tdsDisplayName.trim()
-        : row.resolvedSuggestion?.mappedName.trim() ?? '';
-    final tdsPan = normalizePan(
-      row.tdsPan.trim().isNotEmpty
-          ? row.tdsPan
-          : row.resolvedSuggestion?.mappedPan ?? '',
-    );
+    final tdsDisplayName = row.tdsDisplayName.trim();
+    final tdsPan = normalizePan(row.tdsPan);
 
     builtRows.add(
       SellerMappingRowVm(

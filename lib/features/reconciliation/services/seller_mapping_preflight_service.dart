@@ -172,7 +172,8 @@ class SellerMappingPreflightService {
     final resolverBySection = <String, SellerIdentityResolver>{};
     final sourceObservationsBySection =
         <String, List<SellerIdentityObservation>>{};
-    final tdsObservationsBySection = <String, List<SellerIdentityObservation>>{};
+    final tdsObservationsBySection =
+        <String, List<SellerIdentityObservation>>{};
 
     for (final entry in validSourceRowsBySection.entries) {
       for (final row in entry.value) {
@@ -356,6 +357,8 @@ class SellerMappingPreflightService {
             purchasePartyDisplayName: tdsGroup.displayName,
             normalizedAlias: tdsGroup.normalizedName,
             sectionCode: tdsGroup.sectionCode,
+            tdsDisplayName: tdsGroup.displayName,
+            tdsPan: tdsGroup.effectivePan,
             purchasePan: '',
             resolvedSuggestion: SellerMappingResolvedSuggestion(
               mappedName: tdsGroup.displayName,
@@ -404,6 +407,8 @@ class SellerMappingPreflightService {
             purchasePartyDisplayName: match.sourceAlias.displayName,
             normalizedAlias: match.sourceAlias.alias,
             sectionCode: match.sourceAlias.sectionCode,
+            tdsDisplayName: tdsGroup.displayName,
+            tdsPan: tdsGroup.effectivePan,
             purchasePan: match.sourceAlias.sourcePan,
             purchaseGstNo: match.sourceAlias.sourceGst,
             sourceRowCount: match.sourceAlias.sourceRowCount,
@@ -1461,6 +1466,8 @@ Map<String, dynamic> _serializeScreenRowForIsolate(
     'purchasePartyDisplayName': row.purchasePartyDisplayName,
     'normalizedAlias': row.normalizedAlias,
     'sectionCode': row.sectionCode,
+    'tdsDisplayName': row.tdsDisplayName,
+    'tdsPan': row.tdsPan,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
     'sourceRowCount': row.sourceRowCount,
@@ -1496,6 +1503,8 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     purchasePartyDisplayName: row['purchasePartyDisplayName'] as String? ?? '',
     normalizedAlias: row['normalizedAlias'] as String? ?? '',
     sectionCode: row['sectionCode'] as String? ?? '',
+    tdsDisplayName: row['tdsDisplayName'] as String? ?? '',
+    tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,

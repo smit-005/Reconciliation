@@ -78,11 +78,6 @@ String resolveTdsSellerTitle(SellerMappingRowVm row) {
   final normalizedAlias = sellerMappingSafeText(row.normalizedAlias);
   if (normalizedAlias.isNotEmpty) return normalizedAlias;
 
-  final purchasePartyDisplayName = sellerMappingSafeText(
-    row.purchasePartyDisplayName,
-  );
-  if (purchasePartyDisplayName.isNotEmpty) return purchasePartyDisplayName;
-
   debugPrint(
     'SELLER UI WARN => missing 26Q identity '
     'rowKey=${sellerMappingSafeText(row.rowKey)} '

@@ -243,14 +243,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         final selected = row.rowKey == selectedRow?.rowKey;
         final status = _safeStatusForRow(row);
         final selectedValue = _safeSelectedValueForRow(row);
-        final selectedPan = _safeSelectedPanForRow(row);
-        final ledgerRowsCount = row.is26QUnmatched
-            ? widget.ledgerCandidateRows
-                  .where(
-                    (candidate) => candidate.sectionCode == row.sectionCode,
-                  )
-                  .length
-            : row.sourceRowCount;
         final leftTitle = resolveTdsSellerTitle(row);
         return _SellerCard(
           selected: selected,
@@ -260,20 +252,14 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           badgeColor: _statusColor(row, status),
           details: [
             'Section ${row.sectionCode}',
-            if (row.purchasePan.isNotEmpty) 'Ledger PAN ${row.purchasePan}',
-            if (row.purchasePan.isEmpty) 'Ledger PAN not available',
-            if (row.purchaseGstNo.isNotEmpty) 'GST ${row.purchaseGstNo}',
-            'Ledger rows $ledgerRowsCount',
+            if (row.tdsPan.isNotEmpty) '26Q PAN ${row.tdsPan}',
+            if (row.tdsPan.isEmpty) '26Q PAN not available',
             '26Q rows ${row.tdsRowCount}',
             if (selectedValue != null && selectedValue.trim().isNotEmpty)
               row.is26QUnmatched
                   ? 'Linked ledger selected'
                   : 'Mapped ledger selected',
-            if (selectedPan.isNotEmpty) '26Q PAN $selectedPan',
           ],
-          footer: _safeResolvedSuggestionName(row).isNotEmpty
-              ? 'Suggested ledger: ${_safeResolvedSuggestionName(row)}'
-              : null,
           onTap: () {
             setState(() {
               _selectedLeftKey = row.rowKey;
@@ -297,7 +283,14 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       );
     }
 
+    if (widget.showAllSellersMode) {
+      return _buildAllSellerLedgerList(row);
+    }
+
     if (row == null) {
+      if (_activeSearchQuery.trim().isNotEmpty) {
+        return _buildSearchOnlyLedgerCandidateList();
+      }
       return const _PanelEmptyHint(
         icon: Icons.touch_app_rounded,
         title: 'Select a 26Q seller',
@@ -1136,11 +1129,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return _safeString(getter(row));
   }
 
-  String _safeSelectedPanForRow(SellerMappingRowVm row) {
-    final dynamic getter = widget.selectedPanForRow;
-    return _safeString(getter(row));
-  }
-
   String? _safeSelectedValueForRow(SellerMappingRowVm row) {
     final dynamic getter = widget.selectedValueForRow;
     final result = getter(row);
@@ -1312,7 +1300,6 @@ class _SellerCard extends StatelessWidget {
   final Object? badge;
   final Color badgeColor;
   final List<String> details;
-  final Object? footer;
   final VoidCallback onTap;
 
   const _SellerCard({
@@ -1323,14 +1310,12 @@ class _SellerCard extends StatelessWidget {
     required this.details,
     required this.onTap,
     this.highlighted = false,
-    this.footer,
   });
 
   @override
   Widget build(BuildContext context) {
     final safeTitle = sellerMappingSafeText(title);
     final safeBadge = sellerMappingSafeText(badge);
-    final safeFooter = sellerMappingSafeText(footer);
     final borderColor = selected
         ? SellerMappingTheme.primaryColor
         : highlighted
@@ -1427,19 +1412,6 @@ class _SellerCard extends StatelessWidget {
                     )
                     .toList(),
               ),
-              if (safeFooter.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  safeFooter,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: SellerMappingTheme.primaryColor,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
