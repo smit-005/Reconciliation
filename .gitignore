@@ -56,4 +56,10 @@ graphify/
 *.graphify
 graphify-out/
 
+# Codex / local AI tooling
+AGENTS.md
+.codex/
+AGENTS.md
+.codex/hooks.json
+
 .toolstate/
