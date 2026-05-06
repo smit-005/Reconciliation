@@ -88,6 +88,7 @@ class SellerIdentityResolver {
       final sectionCode = normalizeSellerMappingSectionCode(
         mapping.sectionCode,
       );
+      if (isSellerMappingReviewMarker(mapping.mappedName)) continue;
       if (alias.isEmpty || sectionCode.isEmpty) continue;
       sectionMappings['$alias|$sectionCode'] = mapping.copyWith(
         aliasName: alias,

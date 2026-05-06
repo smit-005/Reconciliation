@@ -67,6 +67,18 @@ class SellerMapping {
   }
 }
 
+const String sellerMappingSeparateMarkerPrefix = '__SEPARATE__:';
+const String sellerMappingTimingDifferenceMarkerPrefix =
+    '__TIMING_DIFFERENCE__:';
+const String sellerMappingMissingInBooksMarkerPrefix = '__MISSING_IN_BOOKS__:';
+
+bool isSellerMappingReviewMarker(String value) {
+  final normalized = value.trim().toUpperCase();
+  return normalized.startsWith(sellerMappingSeparateMarkerPrefix) ||
+      normalized.startsWith(sellerMappingTimingDifferenceMarkerPrefix) ||
+      normalized.startsWith(sellerMappingMissingInBooksMarkerPrefix);
+}
+
 String normalizeSellerMappingSectionCode(String value) {
   final trimmed = value.trim().toUpperCase();
   if (trimmed.isEmpty || trimmed == 'ALL') {

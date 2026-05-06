@@ -214,18 +214,32 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     final mappings = await _loadManualMappingRecordsFromDb();
 
     final latest = <String, String>{};
-    final mappingsByAlias = <String, List<SellerMapping>>{};
+    final fallbackMappingsByAlias = <String, List<SellerMapping>>{};
 
     for (final mapping in mappings) {
       final aliasKey = normalizeName(mapping.aliasName.trim());
+      final sectionCode = normalizeSellerMappingSectionCode(
+        mapping.sectionCode,
+      );
+      final mappedName = mapping.mappedName.trim();
       if (aliasKey.isEmpty) continue;
-      mappingsByAlias.putIfAbsent(aliasKey, () => <SellerMapping>[]);
-      mappingsByAlias[aliasKey]!.add(mapping);
+      if (mappedName.isEmpty || isSellerMappingReviewMarker(mappedName)) {
+        continue;
+      }
+
+      if (sectionCode == 'ALL') {
+        fallbackMappingsByAlias.putIfAbsent(aliasKey, () => <SellerMapping>[]);
+        fallbackMappingsByAlias[aliasKey]!.add(mapping);
+        continue;
+      }
+
+      latest[_manualMappingSectionKey(aliasKey, sectionCode)] = mappedName;
     }
 
-    for (final entry in mappingsByAlias.entries) {
+    for (final entry in fallbackMappingsByAlias.entries) {
       final mappedNames = entry.value
           .map((mapping) => mapping.mappedName.trim())
+          .where((name) => !isSellerMappingReviewMarker(name))
           .where((name) => name.isNotEmpty)
           .toSet();
 
@@ -237,6 +251,26 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   String _normalizeAlias(String value) => normalizeName(value.trim());
+
+  String _normalizeManualMappingLookupKey(String value) {
+    final parts = value.split('|');
+    final aliasKey = _normalizeAlias(parts.first);
+    if (aliasKey.isEmpty) return '';
+    if (parts.length < 2) return aliasKey;
+
+    final sectionCode = normalizeSellerMappingSectionCode(parts[1]);
+    if (sectionCode.isEmpty || sectionCode == 'ALL') return aliasKey;
+    return _manualMappingSectionKey(aliasKey, sectionCode);
+  }
+
+  String _manualMappingSectionKey(String aliasKey, String sectionCode) {
+    final normalizedAlias = _normalizeAlias(aliasKey);
+    final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
+    if (normalizedAlias.isEmpty || normalizedSection.isEmpty) {
+      return normalizedAlias;
+    }
+    return '$normalizedAlias|$normalizedSection';
+  }
 
   String _buildCollectionSignature(Iterable<String> values) {
     final items = values.toList()..sort();
@@ -545,7 +579,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       }
 
       final aliasKey = _normalizeAlias(row.partyName);
-      final mappedName = nameMapping[aliasKey]?.trim() ?? '';
+      final sectionCode = normalizeSellerMappingSectionCode(
+        row.section.trim().isNotEmpty ? row.section : row.normalizedSection,
+      );
+      final mappedName =
+          nameMapping[_manualMappingSectionKey(aliasKey, sectionCode)]
+              ?.trim() ??
+          nameMapping[aliasKey]?.trim() ??
+          '';
       if (aliasKey.isEmpty || mappedName.isEmpty) {
         return row;
       }
@@ -709,7 +750,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       }
 
       for (final entry in latestManualMappings.entries) {
-        final normalizedSource = normalizeName(entry.key.trim());
+        final normalizedSource = _normalizeManualMappingLookupKey(entry.key);
         final mappedTarget = entry.value.trim();
 
         if (normalizedSource.isEmpty || mappedTarget.isEmpty) continue;

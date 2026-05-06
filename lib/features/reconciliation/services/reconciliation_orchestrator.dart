@@ -346,35 +346,51 @@ class CalculationService {
     );
     final savedAliasToPan = <String, String>{
       for (final mapping in savedMappings)
-        if (normalizeSellerMappingSectionCode(mapping.sectionCode) == 'ALL')
+        if (normalizeSellerMappingSectionCode(mapping.sectionCode) == 'ALL' &&
+            !isSellerMappingReviewMarker(mapping.mappedName))
           normalizeName(mapping.aliasName): normalizePan(mapping.mappedPan),
     };
 
     final observations = <SellerIdentityObservation>[
-      ...sourceRows.map(
-        (row) => SellerIdentityObservation(
+      ...sourceRows.map((row) {
+        final section = _normalizeSourceSection(
+          row.section,
+          row.normalizedSection,
+        );
+        return SellerIdentityObservation(
           originalName: row.partyName,
-          mappedName: _applyNameMapping(row.partyName, normalizedMapping),
+          mappedName: _applyNameMapping(
+            row.partyName,
+            normalizedMapping,
+            sectionCode: section,
+          ),
           normalizedName: _normalizeSellerName(
             row.partyName,
             normalizedMapping,
+            sectionCode: section,
           ),
           originalPan: row.panNumber,
           normalizedPan: normalizePan(row.panNumber),
-        ),
-      ),
-      ...tdsRows.map(
-        (row) => SellerIdentityObservation(
+        );
+      }),
+      ...tdsRows.map((row) {
+        final section = _normalizeTdsSection(row.section);
+        return SellerIdentityObservation(
           originalName: row.deducteeName,
-          mappedName: _applyNameMapping(row.deducteeName, normalizedMapping),
+          mappedName: _applyNameMapping(
+            row.deducteeName,
+            normalizedMapping,
+            sectionCode: section,
+          ),
           normalizedName: _normalizeSellerName(
             row.deducteeName,
             normalizedMapping,
+            sectionCode: section,
           ),
           originalPan: row.panNumber,
           normalizedPan: normalizePan(row.panNumber),
-        ),
-      ),
+        );
+      }),
     ];
     debugPrint(
       'RECON ORCH INPUT => sourceRows=${sourceRows.length} tdsRows=${tdsRows.length} '
@@ -638,15 +654,23 @@ class CalculationService {
     required SellerIdentityResolver resolver,
     required _SkippedRowAccumulator skippedRows,
   }) {
-    final mappedName = _applyNameMapping(row.partyName, nameMapping);
-    final normalizedName = _normalizeSellerName(row.partyName, nameMapping);
+    final section = _normalizeSourceSection(row.section, row.normalizedSection);
+    final mappedName = _applyNameMapping(
+      row.partyName,
+      nameMapping,
+      sectionCode: section,
+    );
+    final normalizedName = _normalizeSellerName(
+      row.partyName,
+      nameMapping,
+      sectionCode: section,
+    );
     final month = row.normalizedMonth.trim().isNotEmpty
         ? row.normalizedMonth.trim()
         : normalizeMonth(row.month);
     final financialYear = row.financialYear.trim().isNotEmpty
         ? row.financialYear.trim()
         : financialYearFromMonthKey(month);
-    final section = _normalizeSourceSection(row.section, row.normalizedSection);
     final amount = round2(
       row.taxableAmount > 0 ? row.taxableAmount : row.amount,
     );
@@ -703,15 +727,23 @@ class CalculationService {
     required SellerIdentityResolver resolver,
     required _SkippedRowAccumulator skippedRows,
   }) {
-    final mappedName = _applyNameMapping(row.deducteeName, nameMapping);
-    final normalizedName = _normalizeSellerName(row.deducteeName, nameMapping);
+    final section = _normalizeTdsSection(row.section);
+    final mappedName = _applyNameMapping(
+      row.deducteeName,
+      nameMapping,
+      sectionCode: section,
+    );
+    final normalizedName = _normalizeSellerName(
+      row.deducteeName,
+      nameMapping,
+      sectionCode: section,
+    );
     final month = row.normalizedMonth.trim().isNotEmpty
         ? row.normalizedMonth.trim()
         : normalizeMonth(row.month);
     final financialYear = row.financialYear.trim().isNotEmpty
         ? row.financialYear.trim()
         : financialYearFromMonthKey(month);
-    final section = _normalizeTdsSection(row.section);
 
     if (month.isEmpty || financialYear.isEmpty) {
       skippedRows.add(
@@ -1219,15 +1251,33 @@ class CalculationService {
     );
   }
 
-  static String _applyNameMapping(String name, Map<String, String> mapping) {
+  static String _applyNameMapping(
+    String name,
+    Map<String, String> mapping, {
+    String sectionCode = '',
+  }) {
     final normalized = normalizeName(name);
+    final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
+    final sectionKey = normalizedSection.isEmpty
+        ? ''
+        : '$normalized|$normalizedSection';
+    if (sectionKey.isNotEmpty &&
+        mapping[sectionKey]?.trim().isNotEmpty == true) {
+      return mapping[sectionKey]!.trim();
+    }
     return mapping[normalized]?.trim().isNotEmpty == true
         ? mapping[normalized]!.trim()
         : name.trim();
   }
 
-  static String _normalizeSellerName(String name, Map<String, String> mapping) {
-    return normalizeName(_applyNameMapping(name, mapping));
+  static String _normalizeSellerName(
+    String name,
+    Map<String, String> mapping, {
+    String sectionCode = '',
+  }) {
+    return normalizeName(
+      _applyNameMapping(name, mapping, sectionCode: sectionCode),
+    );
   }
 
   static Map<String, String> _normalizeNameMapping(
@@ -1235,13 +1285,23 @@ class CalculationService {
   ) {
     final normalized = <String, String>{};
     for (final entry in mapping.entries) {
-      final key = normalizeName(entry.key);
+      final key = _normalizeMappingLookupKey(entry.key);
       final value = entry.value.trim();
       if (key.isNotEmpty && value.isNotEmpty) {
         normalized[key] = value;
       }
     }
     return normalized;
+  }
+
+  static String _normalizeMappingLookupKey(String value) {
+    final parts = value.split('|');
+    final aliasKey = normalizeName(parts.first);
+    if (aliasKey.isEmpty || parts.length < 2) return aliasKey;
+
+    final sectionCode = normalizeSellerMappingSectionCode(parts[1]);
+    if (sectionCode.isEmpty || sectionCode == 'ALL') return aliasKey;
+    return '$aliasKey|$sectionCode';
   }
 
   static String _normalizeSourceSection(

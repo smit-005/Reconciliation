@@ -21,6 +21,18 @@ void main() {
       );
     });
 
+    test('keeps section-aware manual mapping keys intact', () {
+      final mapping = buildPanPropagationMapping(
+        manualMappings: const [
+          MapEntry('Shared Alias Vendor|194C', 'Contract Vendor'),
+        ],
+        autoMappings: const [],
+      );
+
+      expect(mapping.keys, contains('SHAREDALIASVENDOR|194C'));
+      expect(mapping['SHAREDALIASVENDOR|194C'], 'Contract Vendor');
+    });
+
     test('allows auto propagation only for exact normalized-name matches', () {
       final mapping = buildPanPropagationMapping(
         manualMappings: const [],

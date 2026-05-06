@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
+import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/services/reconciliation_orchestrator.dart';
+import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -101,6 +104,113 @@ void main() {
         expect(bySection['194Q']!.tdsPresent, isTrue);
       },
     );
+
+    test(
+      'manual name mapping prefers section key over alias fallback',
+      () async {
+        const buyerPan = 'SECTM1111A';
+        await _clearMappings(buyerPan);
+
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          sourceRows: [
+            _sourceRow(
+              section: '194C',
+              amount: 50000,
+              partyName: 'Shared Alias Vendor',
+              panNumber: '',
+            ),
+          ],
+          tdsRows: [
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 50000,
+              tds: 500,
+              deducteeName: 'Correct Contract Vendor',
+              panNumber: 'AAAAA1111A',
+            ),
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 75000,
+              tds: 750,
+              deducteeName: 'Wrong Fallback Vendor',
+              panNumber: 'BBBBB2222B',
+            ),
+          ],
+          nameMapping: const {
+            'SHAREDALIASVENDOR': 'Wrong Fallback Vendor',
+            'SHAREDALIASVENDOR|194C': 'Correct Contract Vendor',
+          },
+        );
+
+        final matched = rows.rows.singleWhere(
+          (row) =>
+              row.purchasePresent &&
+              row.tdsPresent &&
+              row.sellerName == 'Correct Contract Vendor',
+        );
+        expect(matched.section, '194C');
+        expect(matched.sellerPan, 'AAAAA1111A');
+        expect(matched.purchasePresent, isTrue);
+        expect(matched.tdsPresent, isTrue);
+      },
+    );
+
+    test(
+      'saved exception marker mappings are not treated as seller names',
+      () async {
+        const buyerPan = 'SECTM2222B';
+        await _clearMappings(buyerPan);
+        await SellerMappingService.saveMapping(
+          SellerMapping(
+            buyerName: 'Test Buyer',
+            buyerPan: buyerPan,
+            aliasName: 'Exception Alias Vendor',
+            sectionCode: '194C',
+            mappedPan: '',
+            mappedName: '__TIMING_DIFFERENCE__:EXCEPTIONALIASVENDOR|194C|0',
+          ),
+        );
+
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          sourceRows: [
+            _sourceRow(
+              section: '194C',
+              amount: 50000,
+              partyName: 'Exception Alias Vendor',
+              panNumber: '',
+            ),
+          ],
+          tdsRows: [
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 50000,
+              tds: 500,
+              deducteeName: 'Original 26Q Vendor',
+              panNumber: 'CCCCC3333C',
+            ),
+          ],
+        );
+
+        expect(
+          rows.rows.where((row) => row.sellerName.contains('__')),
+          isEmpty,
+        );
+        expect(
+          rows.rows.any(
+            (row) =>
+                row.tdsPresent &&
+                !row.purchasePresent &&
+                row.sellerName == 'Original 26Q Vendor' &&
+                row.sellerPan == 'CCCCC3333C',
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }
 
@@ -108,14 +218,16 @@ NormalizedTransactionRow _sourceRow({
   required String section,
   required double amount,
   String documentNo = 'BILL-DEFAULT',
+  String partyName = 'Acme Traders',
+  String panNumber = 'ABCPD1234F',
 }) {
   return NormalizedTransactionRow(
     sourceType: 'purchase',
     transactionDateRaw: '2024-04-15',
     month: 'Apr-2024',
     financialYear: '2024-25',
-    partyName: 'Acme Traders',
-    panNumber: 'ABCPD1234F',
+    partyName: partyName,
+    panNumber: panNumber,
     gstNo: '',
     documentNo: documentNo,
     description: 'Test row',
@@ -132,16 +244,27 @@ Tds26QRow _tdsRow({
   required String section,
   required double deductedAmount,
   required double tds,
+  String deducteeName = 'Acme Traders',
+  String panNumber = 'ABCPD1234F',
 }) {
   return Tds26QRow(
     month: 'Apr-2024',
     financialYear: '2024-25',
-    deducteeName: 'Acme Traders',
-    panNumber: 'ABCPD1234F',
+    deducteeName: deducteeName,
+    panNumber: panNumber,
     deductedAmount: deductedAmount,
     tds: tds,
     section: section,
     normalizedMonth: 'Apr-2024',
     normalizedSection: section,
+  );
+}
+
+Future<void> _clearMappings(String buyerPan) async {
+  final db = await DBHelper.database;
+  await db.delete(
+    'seller_mappings',
+    where: 'buyer_pan = ?',
+    whereArgs: [buyerPan.trim().toUpperCase()],
   );
 }
