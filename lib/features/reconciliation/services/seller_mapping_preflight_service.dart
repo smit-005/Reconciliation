@@ -918,7 +918,8 @@ class _SourceAliasAccumulator {
   String get resolvedPan =>
       suggestedPan.isNotEmpty ? normalizePan(suggestedPan) : '';
 
-  int get ledgerPanVariantsCount => ledgerPanVariants.length;
+  int get ledgerPanVariantsCount =>
+      ledgerPanVariants.isEmpty ? 1 : ledgerPanVariants.length;
 }
 
 class _SourceAliasCandidateIndex {
@@ -1523,7 +1524,7 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
-    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 0,
+    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 1,
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,
     tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     resolvedSuggestion: suggestion == null

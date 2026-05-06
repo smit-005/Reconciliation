@@ -1311,18 +1311,21 @@ class _SellerCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _detailChipBackgroundColor(detail),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: SellerMappingTheme.borderColor,
+                            color: _detailChipBorderColor(detail),
                           ),
                         ),
-                        child: Text(
-                          sellerMappingSafeText(detail),
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: SellerMappingTheme.mutedTextColor,
+                        child: Tooltip(
+                          message: _detailTooltip(detail),
+                          child: Text(
+                            sellerMappingSafeText(detail),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: _detailChipTextColor(detail),
+                            ),
                           ),
                         ),
                       ),
@@ -1334,5 +1337,31 @@ class _SellerCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _isPanVariantWarning(String value) {
+    return sellerMappingSafeText(value).startsWith('Multiple PANs:');
+  }
+
+  Color _detailChipBackgroundColor(String value) {
+    return _isPanVariantWarning(value) ? const Color(0xFFFFFBEB) : Colors.white;
+  }
+
+  Color _detailChipBorderColor(String value) {
+    return _isPanVariantWarning(value)
+        ? const Color(0xFFF59E0B)
+        : SellerMappingTheme.borderColor;
+  }
+
+  Color _detailChipTextColor(String value) {
+    return _isPanVariantWarning(value)
+        ? const Color(0xFF92400E)
+        : SellerMappingTheme.mutedTextColor;
+  }
+
+  String _detailTooltip(String value) {
+    return _isPanVariantWarning(value)
+        ? 'Same ledger seller name appears with multiple PANs in this section. Verify before mapping.'
+        : sellerMappingSafeText(value);
   }
 }

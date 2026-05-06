@@ -39,7 +39,7 @@ class SellerMappingRowVm {
     this.tdsPan = '',
     required this.purchasePan,
     required this.purchaseGstNo,
-    this.ledgerPanVariantsCount = 0,
+    this.ledgerPanVariantsCount = 1,
     this.sourceRowCount = 0,
     this.tdsRowCount = 0,
     this.exactMapping,

@@ -48,7 +48,7 @@ class SellerMappingScreenRowData {
     this.tdsPan = '',
     required this.purchasePan,
     this.purchaseGstNo = '',
-    this.ledgerPanVariantsCount = 0,
+    this.ledgerPanVariantsCount = 1,
     this.sourceRowCount = 0,
     this.tdsRowCount = 0,
     this.resolvedSuggestion,
@@ -2856,7 +2856,7 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
-    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 0,
+    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 1,
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,
     tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     resolvedSuggestion: suggestion == null
@@ -2939,7 +2939,7 @@ SellerMappingRowVm _deserializeRowVmForIsolate(Map<String, dynamic> row) {
     tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
-    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 0,
+    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 1,
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,
     tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     exactMapping: exactMapping == null
