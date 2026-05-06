@@ -221,6 +221,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   SellerMappingListView _activeListView = SellerMappingListView.needsAction;
   SellerMappingWorkspaceView _activeWorkspaceView =
       SellerMappingWorkspaceView.working;
+  String? _selectedTwoPanelLeftKey;
   int _visibleRowLimit = _initialVisibleRowLimit;
   List<SellerMappingRowVm>? _cachedFilteredRows;
   Map<SellerMappingListView, int>? _cachedListViewCounts;
@@ -277,6 +278,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   bool _isLinkLedgerSelection(Object? value) {
     return sellerMappingSafeText(value).startsWith(_linkLedgerPrefix);
+  }
+
+  bool _isUiDecisionSelection(Object? value) {
+    final safeValue = sellerMappingSafeText(value);
+    return safeValue.startsWith(_linkLedgerPrefix) ||
+        safeValue.startsWith(_separatePrefix) ||
+        safeValue.startsWith(_timingDifferencePrefix) ||
+        safeValue.startsWith(_missingInBooksPrefix);
   }
 
   String _linkedLedgerRowKey(Object? value) {
@@ -934,6 +943,80 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return _getExplicitSelectedValue(row);
   }
 
+  String _tdsDecisionName(SellerMappingRowVm row) {
+    return sellerMappingSafeText(resolveTdsSellerTitle(row));
+  }
+
+  String _selectionTargetKey(SellerMappingRowVm row, Object? value) {
+    final safeValue = sellerMappingSafeText(value);
+    if (safeValue.isEmpty) return '';
+    if (_isUiDecisionSelection(safeValue)) {
+      return normalizeName(_tdsDecisionName(row));
+    }
+    return normalizeName(safeValue);
+  }
+
+  void _removeSelectedMappingsTargeting({
+    required String sectionCode,
+    required String targetName,
+    String? exceptRowKey,
+  }) {
+    final targetKey = normalizeName(targetName);
+    if (targetKey.isEmpty) return;
+
+    for (final row in _rowsForSection(sectionCode)) {
+      if (row.rowKey == exceptRowKey) continue;
+      final selectedValue = selectedMappings[row.rowKey];
+      if (_selectionTargetKey(row, selectedValue) != targetKey) continue;
+      selectedMappings.remove(row.rowKey);
+      _clearedRowKeys.add(row.rowKey);
+    }
+  }
+
+  Map<String, String> _dedupeSelectedMappingsByTarget(
+    Map<String, String> mappings,
+    Iterable<SellerMappingRowVm> rows,
+  ) {
+    final rowByKey = {for (final row in rows) row.rowKey: row};
+    final bestRowByTarget = <String, String>{};
+    final bestScoreByTarget = <String, int>{};
+
+    for (final entry in mappings.entries) {
+      final row = rowByKey[entry.key];
+      if (row == null) continue;
+
+      final targetKey = _selectionTargetKey(row, entry.value);
+      if (targetKey.isEmpty) continue;
+      final groupKey = '${row.sectionCode}|$targetKey';
+      final score = _selectionDedupeScore(row, entry.value);
+      final bestScore = bestScoreByTarget[groupKey];
+      if (bestScore == null || score >= bestScore) {
+        bestRowByTarget[groupKey] = row.rowKey;
+        bestScoreByTarget[groupKey] = score;
+      }
+    }
+
+    final deduped = <String, String>{};
+    for (final entry in mappings.entries) {
+      final row = rowByKey[entry.key];
+      if (row == null) continue;
+      final targetKey = _selectionTargetKey(row, entry.value);
+      if (targetKey.isEmpty) continue;
+      if (bestRowByTarget['${row.sectionCode}|$targetKey'] == entry.key) {
+        deduped[entry.key] = entry.value;
+      }
+    }
+    return deduped;
+  }
+
+  int _selectionDedupeScore(SellerMappingRowVm row, Object? value) {
+    final safeValue = sellerMappingSafeText(value);
+    final savedMappingId = row.exactMapping?.id ?? row.fallbackMapping?.id ?? 0;
+    if (_isLinkLedgerSelection(safeValue)) return 3000000 + savedMappingId;
+    if (_isUiDecisionSelection(safeValue)) return 2000000 + savedMappingId;
+    return 1000000 + savedMappingId;
+  }
+
   bool _is26QAuditRow(SellerMappingRowVm row) {
     return row.tdsRowCount > 0 ||
         row.is26QUnmatched ||
@@ -1251,6 +1334,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   void _clearMapping(SellerMappingRowVm row) {
     if (row.isReadOnly && !row.is26QUnmatched) return;
     setState(() {
+      _removeSelectedMappingsTargeting(
+        sectionCode: row.sectionCode,
+        targetName: _tdsDecisionName(row),
+      );
       _clearedRowKeys.add(row.rowKey);
       selectedMappings.remove(row.rowKey);
       autoMapDetails.remove(row.rowKey);
@@ -1315,6 +1402,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     for (final rowKey in hydratedClearedRowKeys) {
       hydratedSelectedMappings.remove(rowKey);
     }
+    final dedupedSelectedMappings = _dedupeSelectedMappingsByTarget(
+      hydratedSelectedMappings,
+      readyState.mappingRowsBySection.values.expand((rows) => rows),
+    );
 
     setState(() {
       uniqueTdsParties = preparedState.uniqueTdsParties;
@@ -1324,7 +1415,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       _mappingRowsBySectionCache
         ..clear()
         ..addAll(readyState.mappingRowsBySection);
-      selectedMappings = hydratedSelectedMappings;
+      selectedMappings = dedupedSelectedMappings;
       autoMapDetails = <String, AutoMapDecision>{};
       _clearedRowKeys
         ..clear()
@@ -1408,10 +1499,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   void _saveMappings() {
     final upserts = <Map<String, String>>[];
     final deleted = <Map<String, String>>[];
+    final deletedKeys = <String>{};
     final rowsToPersist = _mappingRowsBySectionCache.values
         .expand((rows) => rows)
         .toList();
     final dangerousRows = <String, SellerMappingRowVm>{};
+
+    void addDeleted({required String aliasName, required String sectionCode}) {
+      final normalizedAlias = normalizeName(aliasName);
+      final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
+      if (normalizedAlias.isEmpty) return;
+      final key = '$normalizedAlias|$normalizedSection';
+      if (!deletedKeys.add(key)) return;
+      deleted.add({
+        'aliasName': normalizedAlias,
+        'sectionCode': normalizedSection,
+      });
+    }
 
     for (final row in rowsToPersist) {
       if (_isPreflightMode &&
@@ -1425,6 +1529,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
       if (_isTimingDifferenceSelection(row, currentMappedName) ||
           _isMissingInBooksSelection(row, currentMappedName)) {
+        _addDeletedMappingsTargeting(
+          addDeleted: addDeleted,
+          sectionCode: row.sectionCode,
+          targetName: _tdsDecisionName(row),
+        );
         upserts.add({
           'aliasName': row.normalizedAlias,
           'sectionCode': row.sectionCode,
@@ -1440,17 +1549,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           selectedValue: currentMappedName,
         );
         if (linkedRow != null) {
+          _addDeletedMappingsTargeting(
+            addDeleted: addDeleted,
+            sectionCode: row.sectionCode,
+            targetName: _tdsDecisionName(row),
+            exceptAliasName: linkedRow.normalizedAlias,
+          );
           upserts.add({
             'aliasName': linkedRow.normalizedAlias,
             'sectionCode': row.sectionCode,
-            'mappedName': row.purchasePartyDisplayName,
-            'mappedPan': row.resolvedSuggestion?.mappedPan.trim() ?? '',
+            'mappedName': _tdsDecisionName(row),
+            'mappedPan': row.tdsPan.trim(),
           });
           if (existingExactName.isNotEmpty) {
-            deleted.add({
-              'aliasName': row.normalizedAlias,
-              'sectionCode': row.sectionCode,
-            });
+            addDeleted(
+              aliasName: row.normalizedAlias,
+              sectionCode: row.sectionCode,
+            );
           }
         }
         continue;
@@ -1459,10 +1574,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       if (row.is26QUnmatched) {
         if (existingExactName.isNotEmpty &&
             _clearedRowKeys.contains(row.rowKey)) {
-          deleted.add({
-            'aliasName': row.normalizedAlias,
-            'sectionCode': row.sectionCode,
-          });
+          addDeleted(
+            aliasName: row.normalizedAlias,
+            sectionCode: row.sectionCode,
+          );
+        }
+        if (_clearedRowKeys.contains(row.rowKey)) {
+          _addDeletedMappingsTargeting(
+            addDeleted: addDeleted,
+            sectionCode: row.sectionCode,
+            targetName: _tdsDecisionName(row),
+          );
         }
         continue;
       }
@@ -1475,12 +1597,21 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       if (effectiveMappedName.isEmpty) {
         if (existingExactName.isNotEmpty &&
             _clearedRowKeys.contains(row.rowKey)) {
-          deleted.add({
-            'aliasName': row.normalizedAlias,
-            'sectionCode': row.sectionCode,
-          });
+          addDeleted(
+            aliasName: row.normalizedAlias,
+            sectionCode: row.sectionCode,
+          );
         }
         continue;
+      }
+
+      if (!_isUiDecisionSelection(effectiveMappedName)) {
+        _addDeletedMappingsTargeting(
+          addDeleted: addDeleted,
+          sectionCode: row.sectionCode,
+          targetName: effectiveMappedName,
+          exceptAliasName: row.normalizedAlias,
+        );
       }
 
       // In preflight mode, always upsert mapped rows so that the upload
@@ -1547,6 +1678,34 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         clearedRowKeys: Set<String>.from(_clearedRowKeys),
       ),
     );
+  }
+
+  void _addDeletedMappingsTargeting({
+    required void Function({
+      required String aliasName,
+      required String sectionCode,
+    })
+    addDeleted,
+    required String sectionCode,
+    required String targetName,
+    String? exceptAliasName,
+  }) {
+    final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
+    final targetKey = normalizeName(targetName);
+    final exceptAliasKey = normalizeName(exceptAliasName ?? '');
+    if (targetKey.isEmpty) return;
+
+    for (final mapping in widget.existingMappings) {
+      if (normalizeSellerMappingSectionCode(mapping.sectionCode) !=
+          normalizedSection) {
+        continue;
+      }
+      final aliasKey = normalizeName(mapping.aliasName);
+      if (aliasKey.isEmpty || aliasKey == exceptAliasKey) continue;
+      if (isSellerMappingReviewMarker(mapping.mappedName)) continue;
+      if (normalizeName(mapping.mappedName) != targetKey) continue;
+      addDeleted(aliasName: aliasKey, sectionCode: normalizedSection);
+    }
   }
 
   List<SellerMappingSummaryMetric> _buildSummaryMetrics() {
@@ -2099,6 +2258,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         _clearedRowKeys.add(row.rowKey);
         selectedMappings.remove(row.rowKey);
       } else {
+        _removeSelectedMappingsTargeting(
+          sectionCode: row.sectionCode,
+          targetName: normalizedValue,
+          exceptRowKey: row.rowKey,
+        );
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = normalizedValue;
       }
@@ -2110,6 +2274,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   void _linkToLedgerRow(SellerMappingRowVm row, SellerMappingRowVm ledgerRow) {
     setState(() {
       autoMapDetails.remove(row.rowKey);
+      _removeSelectedMappingsTargeting(
+        sectionCode: row.sectionCode,
+        targetName: _tdsDecisionName(row),
+        exceptRowKey: row.rowKey,
+      );
+      _clearedRowKeys.remove(ledgerRow.rowKey);
       _clearedRowKeys.remove(row.rowKey);
       selectedMappings[row.rowKey] = _linkLedgerValue(ledgerRow.rowKey);
       _rebuildDerivedRowStateCache();
@@ -2124,6 +2294,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         _clearedRowKeys.add(row.rowKey);
         selectedMappings.remove(row.rowKey);
       } else {
+        _removeSelectedMappingsTargeting(
+          sectionCode: row.sectionCode,
+          targetName: _tdsDecisionName(row),
+          exceptRowKey: row.rowKey,
+        );
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = value;
       }
@@ -2158,6 +2333,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (row.isReadOnly) return;
     setState(() {
       autoMapDetails.remove(row.rowKey);
+      _removeSelectedMappingsTargeting(
+        sectionCode: row.sectionCode,
+        targetName: _tdsDecisionName(row),
+        exceptRowKey: row.rowKey,
+      );
       _clearedRowKeys.remove(row.rowKey);
       selectedMappings[row.rowKey] = _separateSelectionValue(row);
       _rebuildDerivedRowStateCache();
@@ -2167,6 +2347,9 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   Widget _buildTableSection(List<SellerMappingRowVm> visibleRows) {
     final activeSectionRows = _rowsForActiveSection();
+    final allLeftRows = activeSectionRows
+        .where(_is26QAuditRow)
+        .toList(growable: false);
     final ledgerCandidateRows = activeSectionRows
         .where((row) {
           if (row.sourceRowCount > 0) {
@@ -2184,9 +2367,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     return SellerMappingTwoPanelBody(
       visibleRows: visibleRows,
+      allLeftRows: allLeftRows,
       ledgerCandidateRows: ledgerCandidateRows,
       searchQuery: _searchQuery,
       showAllSellersMode: _activeListView == SellerMappingListView.allSellers,
+      selectedLeftKey: _selectedTwoPanelLeftKey,
+      onSelectedLeftKeyChanged: (rowKey) {
+        _selectedTwoPanelLeftKey = rowKey;
+      },
       tdsParties: uniqueTdsParties,
       tdsPartyPans: widget.tdsPartyPans,
       selectedValueForRow: _getSelectedValue,
@@ -2411,6 +2599,16 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                                   _linkedLedgerRowForSelection(
                                     sectionCode: row.sectionCode,
                                     selectedValue: _getSelectedValue(row),
+                                  ),
+                              onMarkTimingDifference: (row) =>
+                                  _setExceptionDecision(
+                                    row,
+                                    _timingDifferenceValue(row),
+                                  ),
+                              onMarkMissingInBooks: (row) =>
+                                  _setExceptionDecision(
+                                    row,
+                                    _missingInBooksValue(row),
                                   ),
                             )
                           : _buildTableSection(visibleRows),
