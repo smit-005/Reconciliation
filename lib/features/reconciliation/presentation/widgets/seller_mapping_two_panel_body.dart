@@ -445,6 +445,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
               (strongNameMatch || fuzzyPossibleMatch || possibleNameMatch)
         ? SellerMappingTheme.primaryColor
         : SellerMappingTheme.mutedTextColor;
+    final candidatePanStatus = row == null
+        ? ''
+        : _candidatePanStatus(row, candidate);
 
     return _SellerCard(
       selected: selected,
@@ -457,6 +460,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         if (candidate.purchasePan.isNotEmpty)
           'Ledger PAN ${candidate.purchasePan}',
         if (candidate.purchasePan.isEmpty) 'Ledger PAN not available',
+        if (candidatePanStatus.isNotEmpty) candidatePanStatus,
         if (candidate.ledgerPanVariantsCount > 1)
           'Multiple PANs: ${candidate.ledgerPanVariantsCount}',
         if (candidate.purchaseGstNo.isNotEmpty)
@@ -739,7 +743,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           addCandidate(candidate);
         }
       }
-      if (ordered.isNotEmpty) return ordered;
+      if (ordered.isNotEmpty && query.isEmpty) return ordered;
     }
 
     // Also support the normal ledger -> 26Q mapping case only while the
@@ -756,7 +760,13 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           addCandidate(candidate);
         }
       }
-      if (ordered.isNotEmpty) return ordered;
+      if (ordered.isNotEmpty && query.isEmpty) return ordered;
+    }
+
+    for (final candidate in candidates) {
+      if (_isSuggestedLedgerCandidate(row, candidate)) {
+        addCandidate(candidate);
+      }
     }
 
     final remainingCandidates =
@@ -818,6 +828,16 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final tdsPan = _normalizePanToken(row.tdsPan);
     final ledgerPan = _normalizePanToken(candidate.purchasePan);
     return tdsPan.isNotEmpty && ledgerPan.isNotEmpty && tdsPan == ledgerPan;
+  }
+
+  String _candidatePanStatus(
+    SellerMappingRowVm row,
+    SellerMappingRowVm candidate,
+  ) {
+    final tdsPan = _normalizePanToken(row.tdsPan);
+    final ledgerPan = _normalizePanToken(candidate.purchasePan);
+    if (tdsPan.isEmpty || ledgerPan.isEmpty) return '';
+    return tdsPan == ledgerPan ? 'PAN matches 26Q' : 'PAN differs';
   }
 
   bool _isSuggestedLedgerCandidate(
@@ -1012,6 +1032,11 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final haystack = _normalize(
       [
         resolveTdsSellerTitle(row),
+        resolveLedgerSellerTitle(row),
+        row.tdsDisplayName,
+        row.purchasePartyDisplayName,
+        row.normalizedAlias,
+        row.tdsPan,
         row.purchasePan,
         row.purchaseGstNo,
         row.sectionCode,
@@ -1430,25 +1455,48 @@ class _SellerCard extends StatelessWidget {
     return sellerMappingSafeText(value).startsWith('Multiple PANs:');
   }
 
+  bool _isPanMatchHint(String value) {
+    return sellerMappingSafeText(value) == 'PAN matches 26Q';
+  }
+
+  bool _isPanDiffWarning(String value) {
+    return sellerMappingSafeText(value) == 'PAN differs';
+  }
+
   Color _detailChipBackgroundColor(String value) {
-    return _isPanVariantWarning(value) ? const Color(0xFFFFFBEB) : Colors.white;
+    if (_isPanMatchHint(value)) return const Color(0xFFEAF7EF);
+    if (_isPanVariantWarning(value) || _isPanDiffWarning(value)) {
+      return const Color(0xFFFFFBEB);
+    }
+    return Colors.white;
   }
 
   Color _detailChipBorderColor(String value) {
-    return _isPanVariantWarning(value)
-        ? const Color(0xFFF59E0B)
-        : SellerMappingTheme.borderColor;
+    if (_isPanMatchHint(value)) return const Color(0xFFB7E4C7);
+    if (_isPanVariantWarning(value) || _isPanDiffWarning(value)) {
+      return const Color(0xFFF59E0B);
+    }
+    return SellerMappingTheme.borderColor;
   }
 
   Color _detailChipTextColor(String value) {
-    return _isPanVariantWarning(value)
-        ? const Color(0xFF92400E)
-        : SellerMappingTheme.mutedTextColor;
+    if (_isPanMatchHint(value)) return const Color(0xFF166534);
+    if (_isPanVariantWarning(value) || _isPanDiffWarning(value)) {
+      return const Color(0xFF92400E);
+    }
+    return SellerMappingTheme.mutedTextColor;
   }
 
   String _detailTooltip(String value) {
-    return _isPanVariantWarning(value)
-        ? 'Same ledger seller name appears with multiple PANs in this section. Verify before mapping.'
-        : sellerMappingSafeText(value);
+    if (_isPanVariantWarning(value)) {
+      return 'Same ledger seller name appears with multiple PANs in this section. Verify before mapping.';
+    }
+    if (_isPanMatchHint(value)) {
+      return 'Ledger PAN exactly matches the selected 26Q PAN.';
+    }
+    if (_isPanDiffWarning(value)) {
+      return 'Ledger PAN differs from the selected 26Q PAN. Verify before mapping.';
+    }
+    return sellerMappingSafeText(value);
   }
 }
