@@ -861,13 +861,15 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   SellerMappingRowVm? _selectedLedgerFor(SellerMappingRowVm row) {
-    if (_selectedLedgerRowKey == null) return null;
-    for (final candidate in widget.ledgerCandidateRows) {
-      if (candidate.rowKey == _selectedLedgerRowKey &&
+    final selectedLedgerRowKey = _selectedLedgerRowKey;
+    if (selectedLedgerRowKey == null) return null;
+    for (final candidate in _contextualLedgerRows(row)) {
+      if (candidate.rowKey == selectedLedgerRowKey &&
           candidate.sectionCode == row.sectionCode) {
         return candidate;
       }
     }
+    _selectedLedgerRowKey = null;
     return null;
   }
 
@@ -1010,6 +1012,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       );
     }
     _selectedLeftKey = null;
+    widget.onSelectedLeftKeyChanged?.call(null);
     _clearRightPanelSelection();
     return null;
   }
@@ -1021,6 +1024,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   // ignore: unused_element
   void _clearLocalSelection() {
     _selectedLeftKey = null;
+    widget.onSelectedLeftKeyChanged?.call(null);
     _clearRightPanelSelection();
   }
 

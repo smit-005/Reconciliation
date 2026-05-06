@@ -1503,6 +1503,19 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final rowsToPersist = _mappingRowsBySectionCache.values
         .expand((rows) => rows)
         .toList();
+    final rowByKey = {for (final row in rowsToPersist) row.rowKey: row};
+    final linkedLedgerTargetRowKeys = <String>{};
+    for (final entry in selectedMappings.entries) {
+      final sourceRow = rowByKey[entry.key];
+      if (sourceRow == null || !sourceRow.is26QUnmatched) continue;
+      final linkedRow = _linkedLedgerRowForSelection(
+        sectionCode: sourceRow.sectionCode,
+        selectedValue: entry.value,
+      );
+      if (linkedRow != null) {
+        linkedLedgerTargetRowKeys.add(linkedRow.rowKey);
+      }
+    }
     final dangerousRows = <String, SellerMappingRowVm>{};
 
     void addDeleted({required String aliasName, required String sectionCode}) {
@@ -1522,6 +1535,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           row.requiresDangerousReview &&
           !row.isPurchaseOnly) {
         dangerousRows[row.rowKey] = row;
+      }
+
+      if (linkedLedgerTargetRowKeys.contains(row.rowKey)) {
+        continue;
       }
 
       final currentMappedName = selectedMappings[row.rowKey]?.trim() ?? '';
@@ -1667,10 +1684,20 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       'unreviewedExceptionCount=$unreviewedExceptionCount',
     );
 
+    final dedupedUpsertsByKey = <String, Map<String, String>>{};
+    for (final upsert in upserts) {
+      final normalizedAlias = normalizeName(upsert['aliasName'] ?? '');
+      final normalizedSection = normalizeSellerMappingSectionCode(
+        upsert['sectionCode'] ?? '',
+      );
+      if (normalizedAlias.isEmpty) continue;
+      dedupedUpsertsByKey['$normalizedAlias|$normalizedSection'] = upsert;
+    }
+
     Navigator.pop(
       context,
       SellerMappingScreenResult(
-        upserts: upserts,
+        upserts: dedupedUpsertsByKey.values.toList(growable: false),
         deleted: deleted,
         dangerousRemaining: dangerousRemaining,
         unreviewedExceptionCount: unreviewedExceptionCount,
@@ -2279,6 +2306,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         targetName: _tdsDecisionName(row),
         exceptRowKey: row.rowKey,
       );
+      selectedMappings.remove(ledgerRow.rowKey);
+      autoMapDetails.remove(ledgerRow.rowKey);
       _clearedRowKeys.remove(ledgerRow.rowKey);
       _clearedRowKeys.remove(row.rowKey);
       selectedMappings[row.rowKey] = _linkLedgerValue(ledgerRow.rowKey);
