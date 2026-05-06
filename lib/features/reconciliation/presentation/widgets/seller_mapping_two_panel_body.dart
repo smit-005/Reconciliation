@@ -234,7 +234,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: rows.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final row = rows[index];
         final selected = row.rowKey == selectedRow?.rowKey;
@@ -312,7 +312,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: candidates.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) =>
           _ledgerCandidateCard(selectedRow, candidates[index]),
     );
@@ -338,7 +338,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: ledgerMatches.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) =>
           _ledgerCandidateCard(null, ledgerMatches[index]),
     );
@@ -358,7 +358,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: candidates.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) =>
           _ledgerCandidateCard(row, candidates[index]),
     );
@@ -443,6 +443,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         if (candidate.purchasePan.isNotEmpty)
           'Ledger PAN ${candidate.purchasePan}',
         if (candidate.purchasePan.isEmpty) 'Ledger PAN not available',
+        if (candidate.ledgerPanVariantsCount > 1)
+          'Multiple PANs: ${candidate.ledgerPanVariantsCount}',
         if (candidate.purchaseGstNo.isNotEmpty)
           'GST ${candidate.purchaseGstNo}',
         'Ledger rows ${candidate.sourceRowCount}',

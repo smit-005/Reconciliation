@@ -412,6 +412,7 @@ class SellerMappingPreflightService {
             tdsPan: tdsGroup.effectivePan,
             purchasePan: match.sourceAlias.sourcePan,
             purchaseGstNo: match.sourceAlias.sourceGst,
+            ledgerPanVariantsCount: match.sourceAlias.ledgerPanVariantsCount,
             sourceRowCount: match.sourceAlias.sourceRowCount,
             tdsRowCount: tdsGroup.tdsRowCount,
             resolvedSuggestion: SellerMappingResolvedSuggestion(
@@ -446,6 +447,7 @@ class SellerMappingPreflightService {
             sectionCode: sourceGroup.sectionCode,
             purchasePan: sourceGroup.sourcePan,
             purchaseGstNo: sourceGroup.sourceGst,
+            ledgerPanVariantsCount: sourceGroup.ledgerPanVariantsCount,
             sourceRowCount: sourceGroup.sourceRowCount,
             tdsRowCount: 0,
             resolvedSuggestion: sourceGroup.suggestedName.isNotEmpty
@@ -830,6 +832,7 @@ class _SourceAliasAccumulator {
   String displayName;
   String sourcePan;
   String sourceGst;
+  final Set<String> ledgerPanVariants = <String>{};
   final Set<String> identityFlags = <String>{};
   final List<String> identityNotes = <String>[];
   String suggestedName = '';
@@ -843,7 +846,12 @@ class _SourceAliasAccumulator {
     required this.displayName,
     required this.sourcePan,
     required this.sourceGst,
-  });
+  }) {
+    final normalizedPan = normalizePan(sourcePan);
+    if (normalizedPan.isNotEmpty) {
+      ledgerPanVariants.add(normalizedPan);
+    }
+  }
 
   void add(ResolvedSellerIdentity identity) {
     identityFlags.addAll(identity.identityFlags);
@@ -857,6 +865,10 @@ class _SourceAliasAccumulator {
     }
     if (sourcePan.isEmpty && normalizePan(identity.originalPan).isNotEmpty) {
       sourcePan = normalizePan(identity.originalPan);
+    }
+    final observedPan = normalizePan(identity.originalPan);
+    if (observedPan.isNotEmpty) {
+      ledgerPanVariants.add(observedPan);
     }
 
     if (suggestedName.isEmpty &&
@@ -905,6 +917,8 @@ class _SourceAliasAccumulator {
 
   String get resolvedPan =>
       suggestedPan.isNotEmpty ? normalizePan(suggestedPan) : '';
+
+  int get ledgerPanVariantsCount => ledgerPanVariants.length;
 }
 
 class _SourceAliasCandidateIndex {
@@ -1471,6 +1485,7 @@ Map<String, dynamic> _serializeScreenRowForIsolate(
     'tdsPan': row.tdsPan,
     'purchasePan': row.purchasePan,
     'purchaseGstNo': row.purchaseGstNo,
+    'ledgerPanVariantsCount': row.ledgerPanVariantsCount,
     'sourceRowCount': row.sourceRowCount,
     'tdsRowCount': row.tdsRowCount,
     'resolvedSuggestion': row.resolvedSuggestion == null
@@ -1508,6 +1523,7 @@ SellerMappingScreenRowData _deserializeScreenRowForIsolate(
     tdsPan: row['tdsPan'] as String? ?? '',
     purchasePan: row['purchasePan'] as String? ?? '',
     purchaseGstNo: row['purchaseGstNo'] as String? ?? '',
+    ledgerPanVariantsCount: row['ledgerPanVariantsCount'] as int? ?? 0,
     sourceRowCount: row['sourceRowCount'] as int? ?? 0,
     tdsRowCount: row['tdsRowCount'] as int? ?? 0,
     resolvedSuggestion: suggestion == null

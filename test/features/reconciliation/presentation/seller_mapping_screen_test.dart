@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_two_panel_body.dart';
 
 void main() {
   testWidgets(
@@ -192,6 +194,68 @@ void main() {
       expect(find.textContaining('Load More'), findsNothing);
     },
   );
+
+  testWidgets('right ledger card warns when alias has multiple PAN variants', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const leftRow = SellerMappingRowVm(
+      purchasePartyDisplayName: '',
+      normalizedAlias: 'Vendor From 26Q',
+      sectionCode: '194C',
+      rowIndex: 0,
+      tdsDisplayName: 'Vendor From 26Q',
+      tdsPan: 'AAAAA1111A',
+      purchasePan: '',
+      purchaseGstNo: '',
+      tdsRowCount: 1,
+      is26QUnmatched: true,
+    );
+    const ledgerRow = SellerMappingRowVm(
+      purchasePartyDisplayName: 'Ledger Vendor Alias',
+      normalizedAlias: 'Ledger Vendor Alias',
+      sectionCode: '194C',
+      rowIndex: 1,
+      purchasePan: 'AAAAA1111A',
+      purchaseGstNo: '',
+      ledgerPanVariantsCount: 2,
+      sourceRowCount: 2,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SellerMappingTwoPanelBody(
+            visibleRows: const <SellerMappingRowVm>[leftRow],
+            ledgerCandidateRows: const <SellerMappingRowVm>[ledgerRow],
+            tdsParties: const <String>['Vendor From 26Q'],
+            tdsPartyPans: const <String, List<String>>{
+              'Vendor From 26Q': <String>['AAAAA1111A'],
+            },
+            selectedValueForRow: (_) => null,
+            selectedPanForRow: (_) => '',
+            statusForRow: (_) => '26Q Unmatched',
+            helperMessagesForRow: (_) => const <String>[],
+            canAcceptSuggestion: (_) => false,
+            onAcceptSuggestion: (_) {},
+            onLinkToTds: (row, tdsParty) {},
+            onLinkToLedgerRow: (row, ledgerRow) {},
+            onKeepSeparate: (_) {},
+            onClear: (_) {},
+            onMarkTimingDifference: (_) {},
+            onMarkMissingInBooks: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Vendor From 26Q'));
+    await tester.pump();
+
+    expect(find.text('Multiple PANs: 2'), findsOneWidget);
+  });
 }
 
 class _SellerMappingLaunchHarness extends StatelessWidget {

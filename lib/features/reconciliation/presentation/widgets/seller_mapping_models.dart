@@ -11,6 +11,7 @@ class SellerMappingRowVm {
   final String tdsPan;
   final String purchasePan;
   final String purchaseGstNo;
+  final int ledgerPanVariantsCount;
   final int sourceRowCount;
   final int tdsRowCount;
   final SellerMapping? exactMapping;
@@ -38,6 +39,7 @@ class SellerMappingRowVm {
     this.tdsPan = '',
     required this.purchasePan,
     required this.purchaseGstNo,
+    this.ledgerPanVariantsCount = 0,
     this.sourceRowCount = 0,
     this.tdsRowCount = 0,
     this.exactMapping,

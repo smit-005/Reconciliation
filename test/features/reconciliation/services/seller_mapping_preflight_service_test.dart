@@ -370,6 +370,39 @@ void main() {
     );
 
     test(
+      'same ledger alias and section exposes multiple PAN variant count',
+      () async {
+        const buyerPan = 'PREFT1010J';
+        await _clearMappings(buyerPan);
+
+        final result = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Ten',
+          buyerPan: buyerPan,
+          tdsRows: <Tds26QRow>[],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(
+                name: 'Multi PAN Ledger Vendor',
+                pan: 'AAAAA1111A',
+                section: '194C',
+              ),
+              _sourceRow(
+                name: 'Multi PAN Ledger Vendor',
+                pan: 'BBBBB2222B',
+                section: '194C',
+              ),
+            ],
+          },
+        );
+
+        final row = result.reviewRows.singleWhere(
+          (row) => row.purchasePartyDisplayName == 'Multi PAN Ledger Vendor',
+        );
+        expect(row.ledgerPanVariantsCount, 2);
+      },
+    );
+
+    test(
       'weighted observations preserve unresolved identity threshold behavior',
       () {
         ResolvedSellerIdentity resolveWithCount(int observationCount) {
