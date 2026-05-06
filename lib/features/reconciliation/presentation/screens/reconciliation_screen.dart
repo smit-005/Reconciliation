@@ -28,6 +28,7 @@ import 'package:reconciliation_app/features/upload/services/auto_mapping_service
 import 'package:reconciliation_app/features/reconciliation/services/excel_export_service.dart';
 import 'package:reconciliation_app/features/reconciliation/services/reconciliation_orchestrator.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
+import 'package:reconciliation_app/features/workspace/services/workspace_export_path_service.dart';
 
 class _FilteredMetrics {
   final ReconciliationSummary summary;
@@ -113,6 +114,7 @@ class ReconciliationScreen extends StatefulWidget {
   final Map<String, int> sourceFileCountBySection;
   final List<Tds26QRow> tdsRows;
 
+  final String selectedBuyerId;
   final String buyerName;
   final String buyerPan;
   final String? selectedFinancialYearId;
@@ -125,6 +127,7 @@ class ReconciliationScreen extends StatefulWidget {
     required this.sourceRowsBySection,
     this.sourceFileCountBySection = const {},
     required this.tdsRows,
+    this.selectedBuyerId = '',
     this.buyerName = '',
     this.buyerPan = '',
     this.selectedFinancialYearId,
@@ -180,6 +183,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   String? _tdsPanLookupCacheKey;
   Map<String, String> _exactTdsPanLookup = {};
   Map<String, String> _normalizedTdsPanLookup = {};
+  final WorkspaceExportPathService _workspaceExportPathService =
+      WorkspaceExportPathService();
 
   final List<String> statusOptions = const [
     'All Status',
@@ -2188,6 +2193,16 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return query.isEmpty ? 'All Sellers' : query;
   }
 
+  String _exportFinancialYearLabel() {
+    final selected = selectedFinancialYear.trim();
+    if (selected.isNotEmpty && selected != 'All FY') {
+      return selected;
+    }
+
+    final workflowLabel = _workflowFinancialYearLabel();
+    return workflowLabel.isEmpty ? selectedFinancialYear : workflowLabel;
+  }
+
   List<ReconciliationRow> _rowsForAllSectionsExport() {
     return _filterRows(
       rows: allRows,
@@ -2239,17 +2254,27 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   Future<void> _exportPivotExcel() async {
     try {
+      final workingDirectory = await _workspaceExportPathService
+          .resolveWorkingDirectory(
+            buyerId: widget.selectedBuyerId,
+            financialYearId: widget.selectedFinancialYearId,
+          );
       final filePath = await ExcelExportService.exportPivotSummaryExcel(
         rows: filteredRows,
         buyerName: widget.buyerName,
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
-        financialYear: selectedFinancialYear,
+        outputFolderPath: workingDirectory?.path,
+        financialYear: _exportFinancialYearLabel(),
         sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
-      _showSnackBar('Pivot Exported to: $filePath');
+      _showSnackBar(
+        workingDirectory == null
+            ? 'Workspace unavailable. Exported to Downloads: $filePath'
+            : 'Pivot report exported to workspace: $filePath',
+      );
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Pivot export failed: $e');

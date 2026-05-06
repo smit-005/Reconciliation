@@ -168,15 +168,15 @@ class ExcelExportService {
       _writeTdsSectionInfoSheet(infoSheet);
 
       final bytes = workbook.saveAsStream();
-      final fileName = _buildExportFileName(
+      final fileName = buildPivotReportFileName(
         buyerName: buyerName,
         sellerName: sellerName,
         financialYear: financialYear,
-        isPivot: true,
       );
 
       final folderPath = outputFolderPath ?? _getDownloadsPath();
-      final fullPath = p.join(folderPath, fileName);
+      await Directory(folderPath).create(recursive: true);
+      final fullPath = await _resolveAvailableFilePath(folderPath, fileName);
 
       final file = File(fullPath);
       await file.writeAsBytes(bytes, flush: true);
@@ -1085,6 +1085,34 @@ class ExcelExportService {
         .replaceAll(RegExp(r'\s+'), '_');
   }
 
+  static String buildPivotReportFileName({
+    required String buyerName,
+    String? sellerName,
+    String? financialYear,
+    DateTime? generatedAt,
+  }) {
+    final safeBuyerName = _safeFileName(
+      buyerName.trim().isEmpty ? 'Buyer' : buyerName,
+    );
+    final sellerNameValue = sellerName?.trim() ?? '';
+    final financialYearValue = financialYear?.trim() ?? '';
+    final hasSeller =
+        sellerNameValue.isNotEmpty && sellerNameValue != 'All Sellers';
+    final hasFy =
+        financialYearValue.isNotEmpty && financialYearValue != 'All FY';
+
+    final segments = <String>['Pivot_Report', safeBuyerName];
+    if (hasSeller) {
+      segments.add(_safeFileName(sellerNameValue));
+    }
+    if (hasFy) {
+      segments.add(_financialYearFileSegment(financialYearValue));
+    }
+    segments.add(_timestamp(generatedAt ?? DateTime.now()));
+
+    return '${segments.where((segment) => segment.trim().isNotEmpty).join('_')}.xlsx';
+  }
+
   static String _buildExportFileName({
     required String buyerName,
     String? sellerName,
@@ -1140,6 +1168,43 @@ class ExcelExportService {
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
     return fileName.replaceAll('.xlsx', '_$timestamp.xlsx');
+  }
+
+  static String _financialYearFileSegment(String financialYear) {
+    final stripped = financialYear
+        .trim()
+        .replaceFirst(RegExp(r'^fy\s*', caseSensitive: false), '');
+    return 'FY_${_safeFileName(stripped)}';
+  }
+
+  static String _timestamp(DateTime value) {
+    return '${value.year.toString().padLeft(4, '0')}'
+        '${value.month.toString().padLeft(2, '0')}'
+        '${value.day.toString().padLeft(2, '0')}_'
+        '${value.hour.toString().padLeft(2, '0')}'
+        '${value.minute.toString().padLeft(2, '0')}'
+        '${value.second.toString().padLeft(2, '0')}';
+  }
+
+  static Future<String> _resolveAvailableFilePath(
+    String folderPath,
+    String fileName,
+  ) async {
+    var fullPath = p.join(folderPath, fileName);
+    if (!await File(fullPath).exists()) {
+      return fullPath;
+    }
+
+    final extension = p.extension(fileName);
+    final baseName = p.basenameWithoutExtension(fileName);
+    var index = 2;
+    while (true) {
+      final candidate = p.join(folderPath, '${baseName}_$index$extension');
+      if (!await File(candidate).exists()) {
+        return candidate;
+      }
+      index++;
+    }
   }
 
   static String _getDownloadsPath() {

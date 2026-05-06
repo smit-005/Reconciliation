@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/widgets/app_page_scaffold.dart';
@@ -30,6 +32,7 @@ import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_mapping_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_profile_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_upload_flow_service.dart';
+import 'package:reconciliation_app/features/workspace/services/workspace_export_path_service.dart';
 
 String formatSellerMappingFinancialYearLabel(
   dynamic financialYear, {
@@ -130,6 +133,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   bool _isSellerPreflightDirty = true;
   Map<String, String> _sellerSelectedMappings = <String, String>{};
   Set<String> _sellerClearedRowKeys = <String>{};
+  final WorkspaceExportPathService _workspaceExportPathService =
+      WorkspaceExportPathService();
 
   final Set<String> selectedSections = {'194Q'};
   final Map<String, bool> sectionLoading = {
@@ -357,6 +362,32 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
 
     return file;
+  }
+
+  Future<void> _snapshotSourceFile({
+    required PlatformFile pickedFile,
+    required List<int> bytes,
+    required SourceFileSnapshotType type,
+  }) async {
+    try {
+      final snapshotPath = await _workspaceExportPathService
+          .copySourceFileSnapshot(
+            buyerId: widget.selectedBuyerId,
+            financialYearId: widget.selectedFinancialYearId,
+            originalFileName: pickedFile.name,
+            bytes: bytes,
+            type: type,
+          );
+      if (snapshotPath == null) {
+        debugPrint(
+          'SOURCE SNAPSHOT => skipped workspace unavailable file=${pickedFile.name}',
+        );
+        return;
+      }
+      debugPrint('SOURCE SNAPSHOT => copied $snapshotPath');
+    } catch (e) {
+      debugPrint('SOURCE SNAPSHOT => failed file=${pickedFile.name} error=$e');
+    }
   }
 
   void _setSectionLoading(String sectionCode, bool isLoading) {
@@ -629,6 +660,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionLoading['194Q'] = false;
       });
 
+      unawaited(
+        _snapshotSourceFile(
+          pickedFile: pickedFile,
+          bytes: bytes,
+          type: SourceFileSnapshotType.ledger,
+        ),
+      );
       _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       _setSectionLoading('194Q', false);
@@ -672,6 +710,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionLoading[sectionCode] = false;
       });
 
+      unawaited(
+        _snapshotSourceFile(
+          pickedFile: pickedFile,
+          bytes: bytes,
+          type: SourceFileSnapshotType.ledger,
+        ),
+      );
       _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       _setSectionLoading(sectionCode, false);
@@ -778,6 +823,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
       debugPrint('UPLOAD COUNT => 26Q rows=${result.parsedRows.length}');
 
+      unawaited(
+        _snapshotSourceFile(
+          pickedFile: pickedFile,
+          bytes: bytes,
+          type: SourceFileSnapshotType.tds26q,
+        ),
+      );
       _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       setState(() => isLoadingTds = false);
@@ -892,6 +944,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               if (entry.value.isNotEmpty) entry.key: entry.value.length,
           },
           tdsRows: tdsRows,
+          selectedBuyerId: widget.selectedBuyerId,
           buyerName: widget.selectedBuyerName,
           buyerPan: widget.selectedBuyerPan,
           selectedFinancialYearId: widget.selectedFinancialYearId,
