@@ -146,7 +146,8 @@ class SellerMappingPreflightService {
     final tdsPartyPans = _buildTdsPartyPans(tdsRows);
     final savedAliasToPan = <String, String>{
       for (final mapping in existingMappings)
-        if (normalizeSellerMappingSectionCode(mapping.sectionCode) == 'ALL')
+        if (normalizeSellerMappingSectionCode(mapping.sectionCode) == 'ALL' &&
+            !isSellerMappingReviewMarker(mapping.mappedName))
           normalizeName(mapping.aliasName): normalizePan(mapping.mappedPan),
     };
     final validSourceRowsBySection = <String, List<_CompactSourceIdentity>>{};

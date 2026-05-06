@@ -65,7 +65,6 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
 class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   String? _selectedLeftKey;
   SellerMappingRowVm? _selectedLeftRowSnapshot;
-  String? _selectedTdsParty;
   String? _selectedLedgerRowKey;
   String? _lastMissingSelectedRowLogKey;
 
@@ -103,8 +102,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final oldSelectedRow = _selectedLeftRowFrom(oldWidget.visibleRows);
     final selectedRowChanged = oldSelectedRow?.rowKey != selectedRow.rowKey;
     if (selectedRowChanged) {
-      final selectedValue = _safeSelectedValueForRow(selectedRow)?.trim() ?? '';
-      _selectedTdsParty = selectedValue.isEmpty ? null : selectedValue;
       _selectedLedgerRowKey = null;
     }
   }
@@ -264,7 +261,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
             setState(() {
               _selectedLeftKey = row.rowKey;
               _selectedLeftRowSnapshot = row;
-              _selectedTdsParty = null;
               _selectedLedgerRowKey = null;
             });
           },
@@ -348,25 +344,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     );
   }
 
-  Widget _buildTdsCandidateList(SellerMappingRowVm row) {
-    final parties = _contextualTdsParties(row);
-
-    if (parties.isEmpty) {
-      return const _PanelEmptyHint(
-        icon: Icons.search_off_rounded,
-        title: 'No 26Q candidates found',
-        message: 'Use search to find a 26Q seller manually.',
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: parties.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _tdsCandidateCard(row, parties[index]),
-    );
-  }
-
   Widget _buildLedgerCandidateList(SellerMappingRowVm row) {
     final candidates = _contextualLedgerRows(row);
 
@@ -384,39 +361,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) =>
           _ledgerCandidateCard(row, candidates[index]),
-    );
-  }
-
-  Widget _tdsCandidateCard(SellerMappingRowVm? row, String party) {
-    final selectedRowUnmapped = row != null && _rowIsCurrentlyUnmapped(row);
-    final currentSelection = row == null
-        ? null
-        : selectedRowUnmapped
-        ? _selectedTdsParty
-        : (_selectedTdsParty ?? _safeSelectedValueForRow(row));
-    final suggestion = _safeResolvedSuggestionName(row);
-    final pans = widget.tdsPartyPans[party] ?? const <String>[];
-    final selected = party == currentSelection;
-    final suggested = suggestion.isNotEmpty && party == suggestion;
-
-    return _SellerCard(
-      selected: selected,
-      highlighted: row == null,
-      title: party,
-      badge: suggested ? 'Suggested' : '26Q Seller',
-      badgeColor: suggested
-          ? SellerMappingTheme.primaryColor
-          : SellerMappingTheme.mutedTextColor,
-      details: [
-        if (row != null) 'Section ${row.sectionCode}',
-        if (pans.isNotEmpty) '26Q PAN ${pans.join(', ')}',
-        if (pans.isEmpty) '26Q PAN not available',
-      ],
-      onTap: () {
-        setState(() {
-          if (row != null) _selectedTdsParty = party;
-        });
-      },
     );
   }
 
@@ -698,34 +642,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     );
   }
 
-  List<String> _contextualTdsParties(SellerMappingRowVm row) {
-    final query = _normalize(_activeSearchQuery);
-    final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
-    final suggestion = _safeResolvedSuggestionName(row);
-    final rowName = resolveTdsSellerTitle(row);
-    final ordered = <String>[];
-
-    void addParty(String party) {
-      final cleaned = party.trim();
-      if (cleaned.isEmpty || ordered.contains(cleaned)) return;
-      ordered.add(cleaned);
-    }
-
-    addParty(selectedValue);
-    addParty(suggestion);
-
-    for (final party in widget.tdsParties) {
-      final normalizedParty = _normalize(party);
-      final include = query.isNotEmpty
-          ? normalizedParty.contains(query)
-          : _looksRelated(rowName, party);
-      if (include) addParty(party);
-      if (ordered.length >= 40) break;
-    }
-
-    return ordered;
-  }
-
   List<SellerMappingRowVm> _allSellerLedgerRows(
     SellerMappingRowVm? selectedRow,
   ) {
@@ -995,7 +911,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   }
 
   void _clearRightPanelSelection() {
-    _selectedTdsParty = null;
     _selectedLedgerRowKey = null;
   }
 
