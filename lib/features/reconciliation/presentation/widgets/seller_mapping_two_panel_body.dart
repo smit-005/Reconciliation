@@ -17,9 +17,12 @@ typedef SellerMappingLedgerLinkAction =
 
 class SellerMappingTwoPanelBody extends StatefulWidget {
   final List<SellerMappingRowVm> visibleRows;
+  final List<SellerMappingRowVm> allLeftRows;
   final List<SellerMappingRowVm> ledgerCandidateRows;
   final String searchQuery;
   final bool showAllSellersMode;
+  final String? selectedLeftKey;
+  final ValueChanged<String?>? onSelectedLeftKeyChanged;
   final List<String> tdsParties;
   final Map<String, List<String>> tdsPartyPans;
   final SellerMappingRowValueGetter selectedValueForRow;
@@ -38,9 +41,12 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
   const SellerMappingTwoPanelBody({
     super.key,
     required this.visibleRows,
+    this.allLeftRows = const <SellerMappingRowVm>[],
     required this.ledgerCandidateRows,
     this.searchQuery = '',
     this.showAllSellersMode = false,
+    this.selectedLeftKey,
+    this.onSelectedLeftKeyChanged,
     required this.tdsParties,
     required this.tdsPartyPans,
     required this.selectedValueForRow,
@@ -64,9 +70,11 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
 
 class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   String? _selectedLeftKey;
-  SellerMappingRowVm? _selectedLeftRowSnapshot;
   String? _selectedLedgerRowKey;
   String? _lastMissingSelectedRowLogKey;
+
+  List<SellerMappingRowVm> get _leftSourceRows =>
+      widget.allLeftRows.isEmpty ? widget.visibleRows : widget.allLeftRows;
 
   List<SellerMappingRowVm> get _leftReviewRows {
     // The parent screen already decides which rows belong in the current
@@ -94,13 +102,24 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   bool get _hasLedgerForSection => widget.ledgerCandidateRows.isNotEmpty;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedLeftKey = widget.selectedLeftKey;
+  }
+
+  @override
   void didUpdateWidget(covariant SellerMappingTwoPanelBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final selectedRow = _selectedLeftRowFrom(widget.visibleRows);
+    final previousSelectedKey = _selectedLeftKey;
+    if (widget.selectedLeftKey != oldWidget.selectedLeftKey &&
+        widget.selectedLeftKey != _selectedLeftKey) {
+      _selectedLeftKey = widget.selectedLeftKey;
+    }
+
+    final selectedRow = _selectedLeftRowFrom(_leftSourceRows);
     if (selectedRow == null) return;
 
-    final oldSelectedRow = _selectedLeftRowFrom(oldWidget.visibleRows);
-    final selectedRowChanged = oldSelectedRow?.rowKey != selectedRow.rowKey;
+    final selectedRowChanged = previousSelectedKey != selectedRow.rowKey;
     if (selectedRowChanged) {
       _selectedLedgerRowKey = null;
     }
@@ -109,7 +128,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   @override
   Widget build(BuildContext context) {
     final filteredLeftRows = _filteredLeftRows;
-    final selectedRow = _selectedLeftRowFrom(widget.visibleRows);
+    final selectedRow = _selectedLeftRowFrom(_leftSourceRows);
     final rightPanelKey = ValueKey<String?>(
       selectedRow == null ? null : 'right-panel:${selectedRow.rowKey}',
     );
@@ -259,8 +278,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           ],
           onTap: () {
             setState(() {
-              _selectedLeftKey = row.rowKey;
-              _selectedLeftRowSnapshot = row;
+              _setSelectedLeftRow(row);
               _selectedLedgerRowKey = null;
             });
           },
@@ -382,11 +400,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         selectedRowMapped &&
         _isMappedLedgerCandidate(row, candidate);
     final mappedElsewhere =
-        row != null &&
-        !selectedRowUnmapped &&
-        !selectedRowMapped &&
-        row.rowKey != candidate.rowKey &&
-        _rowHasMapping(candidate);
+        row != null && _isMappedElsewhereLedgerCandidate(row, candidate);
     final explicitlySelected =
         row != null && candidate.rowKey == _selectedLedgerRowKey;
     final selected =
@@ -532,7 +546,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         ? () {
             widget.onLinkToLedgerRow(row, selectedLedger);
             setState(() {
-              _selectedLeftKey = row.rowKey;
+              _setSelectedLeftRow(row);
             });
           }
         : null;
@@ -542,12 +556,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         _safeCanAcceptSuggestion(row);
     final canKeepSeparate =
         !hasSavedDecision && (!row.is26QUnmatched || noLedgerForSection);
-    final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
     final status = _safeStatusForRow(row);
-    final canShowExceptionActions =
-        row.is26QUnmatched ||
-        (selectedValue.isEmpty &&
-            (status == 'Unmapped' || status == '26Q Unmatched'));
+    final canShowExceptionActions = _canMarkException(status);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -706,7 +716,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   List<SellerMappingRowVm> _contextualLedgerRows(SellerMappingRowVm row) {
     final query = _normalize(_activeSearchQuery);
     final selectedValue = _safeSelectedValueForRow(row)?.trim() ?? '';
-    final suggestion = _safeResolvedSuggestionName(row);
     final selected26QName = _normalize(resolveTdsSellerTitle(row));
     final candidates = widget.ledgerCandidateRows
         .where(
@@ -750,48 +759,27 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       if (ordered.isNotEmpty) return ordered;
     }
 
-    // Show the explicit suggestion first when it matches a ledger seller name.
-    if (suggestion.isNotEmpty) {
-      final normalizedSuggestion = _normalize(suggestion);
-      for (final candidate in candidates) {
-        if (_normalize(resolveLedgerSellerTitle(candidate)) ==
-            normalizedSuggestion) {
-          addCandidate(candidate);
-        }
-      }
-    }
-
     final remainingCandidates =
         candidates
             .where(
               (candidate) =>
                   !ordered.any((item) => item.rowKey == candidate.rowKey) &&
-                  (query.isEmpty || _rowMatchesSearch(candidate, query)),
+                  (query.isEmpty ||
+                      _rowMatchesSearch(candidate, query) ||
+                      _isSuggestedLedgerCandidate(row, candidate)),
             )
             .toList(growable: false)
           ..sort((a, b) {
-            final aRelated = _looksRelated(
-              resolveTdsSellerTitle(row),
-              resolveLedgerSellerTitle(a),
-            );
-            final bRelated = _looksRelated(
-              resolveTdsSellerTitle(row),
-              resolveLedgerSellerTitle(b),
-            );
-            if (aRelated != bRelated) {
-              return bRelated ? 1 : -1;
-            }
+            final byRank = _candidateRank(
+              row,
+              a,
+            ).compareTo(_candidateRank(row, b));
+            if (byRank != 0) return byRank;
 
-            final byScore =
-                _ledgerSimilarityScore(
-                  resolveTdsSellerTitle(row),
-                  resolveLedgerSellerTitle(b),
-                ).compareTo(
-                  _ledgerSimilarityScore(
-                    resolveTdsSellerTitle(row),
-                    resolveLedgerSellerTitle(a),
-                  ),
-                );
+            final byScore = _candidateNameScore(
+              row,
+              b,
+            ).compareTo(_candidateNameScore(row, a));
             if (byScore != 0) return byScore;
 
             final byLedgerRows = b.sourceRowCount.compareTo(a.sourceRowCount);
@@ -808,6 +796,48 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     }
 
     return ordered;
+  }
+
+  int _candidateRank(SellerMappingRowVm row, SellerMappingRowVm candidate) {
+    if (_hasExactPanMatch(row, candidate)) return 0;
+    if (_isSuggestedLedgerCandidate(row, candidate) ||
+        _candidateNameScore(row, candidate) > 0.75) {
+      return 1;
+    }
+    if (_candidateNameScore(row, candidate) > 0.5 ||
+        _looksRelated(
+          resolveTdsSellerTitle(row),
+          resolveLedgerSellerTitle(candidate),
+        )) {
+      return 2;
+    }
+    return 3;
+  }
+
+  bool _hasExactPanMatch(SellerMappingRowVm row, SellerMappingRowVm candidate) {
+    final tdsPan = _normalizePanToken(row.tdsPan);
+    final ledgerPan = _normalizePanToken(candidate.purchasePan);
+    return tdsPan.isNotEmpty && ledgerPan.isNotEmpty && tdsPan == ledgerPan;
+  }
+
+  bool _isSuggestedLedgerCandidate(
+    SellerMappingRowVm row,
+    SellerMappingRowVm candidate,
+  ) {
+    final suggestion = _safeResolvedSuggestionName(row);
+    if (suggestion.isEmpty) return false;
+    return _normalize(resolveLedgerSellerTitle(candidate)) ==
+        _normalize(suggestion);
+  }
+
+  double _candidateNameScore(
+    SellerMappingRowVm row,
+    SellerMappingRowVm candidate,
+  ) {
+    return _ledgerSimilarityScore(
+      resolveTdsSellerTitle(row),
+      resolveLedgerSellerTitle(candidate),
+    );
   }
 
   SellerMappingRowVm? _selectedLedgerFor(SellerMappingRowVm row) {
@@ -888,27 +918,79 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     ).any((item) => item.rowKey == candidate.rowKey);
   }
 
+  bool _isMappedElsewhereLedgerCandidate(
+    SellerMappingRowVm selectedRow,
+    SellerMappingRowVm candidate,
+  ) {
+    if (_isMappedLedgerCandidate(selectedRow, candidate)) return false;
+
+    for (final leftRow in _leftSourceRows) {
+      if (leftRow.rowKey == selectedRow.rowKey) continue;
+      if (leftRow.sectionCode != selectedRow.sectionCode) continue;
+
+      final selectedValue = _safeSelectedValueForRow(leftRow)?.trim() ?? '';
+      if (selectedValue.isEmpty) continue;
+      if (_isLinkLedgerSelection(selectedValue) &&
+          selectedValue.contains(candidate.rowKey)) {
+        return true;
+      }
+    }
+
+    final mappedParty = _safeSelectedValueForRow(candidate)?.trim() ?? '';
+    if (mappedParty.isEmpty || _isUiDecisionSelection(mappedParty)) {
+      return false;
+    }
+
+    final selectedName = _normalize(resolveTdsSellerTitle(selectedRow));
+    return _normalize(mappedParty) != selectedName;
+  }
+
+  bool _canMarkException(String status) {
+    return status == 'Unmapped' ||
+        status == '26Q Unmatched' ||
+        status == 'PAN Conflict' ||
+        status == 'Conflicting PAN' ||
+        status == 'Ambiguous Identity' ||
+        status == 'Unresolved Identity' ||
+        status == 'Timing Difference' ||
+        status == 'Missing in Books';
+  }
+
+  bool _isLinkLedgerSelection(String value) {
+    return value.startsWith('__LINK_LEDGER__:');
+  }
+
+  bool _isUiDecisionSelection(String value) {
+    return value.startsWith('__LINK_LEDGER__:') ||
+        value.startsWith('__SEPARATE__:') ||
+        value.startsWith('__TIMING_DIFFERENCE__:') ||
+        value.startsWith('__MISSING_IN_BOOKS__:');
+  }
+
+  void _setSelectedLeftRow(SellerMappingRowVm? row) {
+    _selectedLeftKey = row?.rowKey;
+    _lastMissingSelectedRowLogKey = null;
+    widget.onSelectedLeftKeyChanged?.call(_selectedLeftKey);
+  }
+
   SellerMappingRowVm? _selectedLeftRowFrom(List<SellerMappingRowVm> rows) {
     final selectedLeftKey = _selectedLeftKey;
     if (selectedLeftKey == null) return null;
     for (final row in rows) {
       if (row.rowKey == selectedLeftKey) {
-        _selectedLeftRowSnapshot = row;
         _lastMissingSelectedRowLogKey = null;
         return row;
       }
     }
-    final snapshot = _selectedLeftRowSnapshot;
-    if (snapshot?.rowKey == selectedLeftKey) {
-      return snapshot;
-    }
     if (_lastMissingSelectedRowLogKey != selectedLeftKey) {
       _lastMissingSelectedRowLogKey = selectedLeftKey;
       debugPrint(
-        'SELLER UI WARN => selected row not found after filtering '
+        'SELLER UI WARN => selected row no longer exists '
         'rowKey=$selectedLeftKey',
       );
     }
+    _selectedLeftKey = null;
+    _clearRightPanelSelection();
     return null;
   }
 
@@ -919,7 +1001,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   // ignore: unused_element
   void _clearLocalSelection() {
     _selectedLeftKey = null;
-    _selectedLeftRowSnapshot = null;
     _clearRightPanelSelection();
   }
 
@@ -1035,6 +1116,12 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  String _normalizePanToken(Object? value) {
+    return _safeString(
+      value,
+    ).toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]+'), '');
   }
 
   String _safeString(Object? value) {

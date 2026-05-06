@@ -8,6 +8,7 @@ typedef SellerReviewValueGetter = Object? Function(SellerMappingRowVm row);
 typedef SellerReviewStringGetter = Object? Function(SellerMappingRowVm row);
 typedef SellerReviewLinkedLedgerGetter =
     Object? Function(SellerMappingRowVm row);
+typedef SellerReviewRowAction = void Function(SellerMappingRowVm row);
 
 class SellerMappingReviewView extends StatelessWidget {
   final List<SellerMappingRowVm> rows;
@@ -17,6 +18,8 @@ class SellerMappingReviewView extends StatelessWidget {
   final SellerReviewValueGetter selectedValueForRow;
   final SellerReviewStringGetter selectedPanForRow;
   final SellerReviewLinkedLedgerGetter linkedLedgerRowForRow;
+  final SellerReviewRowAction onMarkTimingDifference;
+  final SellerReviewRowAction onMarkMissingInBooks;
 
   const SellerMappingReviewView({
     super.key,
@@ -27,6 +30,8 @@ class SellerMappingReviewView extends StatelessWidget {
     required this.selectedValueForRow,
     required this.selectedPanForRow,
     required this.linkedLedgerRowForRow,
+    required this.onMarkTimingDifference,
+    required this.onMarkMissingInBooks,
   });
 
   @override
@@ -133,6 +138,8 @@ class SellerMappingReviewView extends StatelessWidget {
                         linkedLedgerRow: _safeLinkedLedgerRow(
                           linkedLedgerRowForRow(row),
                         ),
+                        onMarkTimingDifference: onMarkTimingDifference,
+                        onMarkMissingInBooks: onMarkMissingInBooks,
                       );
                     },
                   ),
@@ -336,6 +343,8 @@ class _ReviewSellerRow extends StatelessWidget {
   final String? selectedValue;
   final String selectedPan;
   final SellerMappingRowVm? linkedLedgerRow;
+  final SellerReviewRowAction onMarkTimingDifference;
+  final SellerReviewRowAction onMarkMissingInBooks;
 
   const _ReviewSellerRow({
     required this.row,
@@ -343,6 +352,8 @@ class _ReviewSellerRow extends StatelessWidget {
     required this.selectedValue,
     required this.selectedPan,
     required this.linkedLedgerRow,
+    required this.onMarkTimingDifference,
+    required this.onMarkMissingInBooks,
   });
 
   @override
@@ -399,15 +410,54 @@ class _ReviewSellerRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 170,
-            child: Align(
-              alignment: Alignment.topRight,
-              child: _StatusBadge(status: status),
+            width: 190,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: _StatusBadge(status: status),
+                ),
+                if (_canMarkException) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => onMarkTimingDifference(row),
+                    icon: const Icon(Icons.schedule_rounded, size: 16),
+                    label: const Text(
+                      'Timing Difference',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    onPressed: () => onMarkMissingInBooks(row),
+                    icon: const Icon(Icons.bookmark_remove_rounded, size: 16),
+                    label: const Text(
+                      'Missing in Books',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  bool get _canMarkException {
+    return _ReviewSummary._isPendingStatus(status) ||
+        status == 'Timing Difference' ||
+        status == 'Missing in Books';
   }
 
   String _targetTitle() {
