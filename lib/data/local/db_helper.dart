@@ -5,7 +5,7 @@ import '../../core/utils/normalize_utils.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 10;
+  static const int _dbVersion = 11;
   static String? _dbNameOverrideForTest;
 
   static Future<Database> get database async {
@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
     if (oldVersion < 10) {
       await _createBuyerFinancialYearsTable(db);
     }
+    if (oldVersion < 11) {
+      await _migrateBuyersTable(db);
+    }
   }
 
   static Future<void> debugResetForTest({String? databaseName}) async {
@@ -101,7 +104,8 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
         pan TEXT NOT NULL UNIQUE,
         gst_number TEXT NOT NULL DEFAULT '',
         archived_at TEXT,
-        workspace_relative_path TEXT
+        workspace_relative_path TEXT,
+        active_financial_year_id TEXT
       )
     ''');
     await _createSellerMappingsTable(db);
@@ -250,7 +254,8 @@ CREATE TABLE IF NOT EXISTS buyer_financial_years (
         pan TEXT NOT NULL UNIQUE,
         gst_number TEXT NOT NULL DEFAULT '',
         archived_at TEXT,
-        workspace_relative_path TEXT
+        workspace_relative_path TEXT,
+        active_financial_year_id TEXT
       )
     ''');
       return;
@@ -268,6 +273,11 @@ CREATE TABLE IF NOT EXISTS buyer_financial_years (
           (row['name'] ?? '').toString().toLowerCase() ==
           'workspace_relative_path',
     );
+    final hasActiveFinancialYearId = columns.any(
+      (row) =>
+          (row['name'] ?? '').toString().toLowerCase() ==
+          'active_financial_year_id',
+    );
 
     if (!hasGstNumber) {
       await db.execute(
@@ -280,6 +290,11 @@ CREATE TABLE IF NOT EXISTS buyer_financial_years (
     if (!hasWorkspaceRelativePath) {
       await db.execute(
         "ALTER TABLE buyers ADD COLUMN workspace_relative_path TEXT",
+      );
+    }
+    if (!hasActiveFinancialYearId) {
+      await db.execute(
+        "ALTER TABLE buyers ADD COLUMN active_financial_year_id TEXT",
       );
     }
   }

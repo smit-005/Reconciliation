@@ -29,6 +29,29 @@ class BuyerRepository {
     );
   }
 
+  Future<void> updateActiveFinancialYearId(
+    String buyerId,
+    String? financialYearId,
+  ) async {
+    final db = await DBHelper.database;
+    await db.update(
+      'buyers',
+      {'active_financial_year_id': financialYearId?.trim()},
+      where: 'id = ? AND archived_at IS NULL',
+      whereArgs: [buyerId.trim()],
+    );
+  }
+
+  Future<void> clearActiveFinancialYearReference(String financialYearId) async {
+    final db = await DBHelper.database;
+    await db.update(
+      'buyers',
+      {'active_financial_year_id': null},
+      where: 'active_financial_year_id = ?',
+      whereArgs: [financialYearId.trim()],
+    );
+  }
+
   Future<void> archiveBuyer(String id) async {
     final db = await DBHelper.database;
     await db.update(

@@ -9,6 +9,7 @@ import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
+import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
 import 'package:reconciliation_app/features/buyers/presentation/screens/buyer_management_screen.dart';
 import 'package:reconciliation_app/features/upload/presentation/screens/excel_upload_screen.dart';
@@ -67,6 +68,26 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       isLoading = false;
     });
+  }
+
+  Future<void> _startReconciliation(Buyer buyer) async {
+    final activeFinancialYear = await BuyerFinancialYearStore.activeForBuyer(
+      buyer,
+    );
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExcelUploadScreen(
+          selectedBuyerId: buyer.id,
+          selectedBuyerName: buyer.name,
+          selectedBuyerPan: buyer.pan,
+          selectedFinancialYearId: activeFinancialYear?.id,
+          selectedFinancialYearLabel: activeFinancialYear?.fyLabel,
+        ),
+      ),
+    );
   }
 
   @override
@@ -176,17 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onStartReconciliation: selectedBuyerValue == null
                           ? null
                           : () {
-                              final buyer = selectedBuyerValue;
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ExcelUploadScreen(
-                                    selectedBuyerId: buyer.id,
-                                    selectedBuyerName: buyer.name,
-                                    selectedBuyerPan: buyer.pan,
-                                  ),
-                                ),
-                              );
+                              _startReconciliation(selectedBuyerValue);
                             },
                     );
 

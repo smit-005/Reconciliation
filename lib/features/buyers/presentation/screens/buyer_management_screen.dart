@@ -152,8 +152,17 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
     final financialYears = await BuyerFinancialYearStore.listActive(buyer.id);
     if (!mounted || selectedBuyerId != buyer.id) return;
+    final activeFinancialYearId = buyer.activeFinancialYearId?.trim();
+    final selectedActiveFinancialYear = activeFinancialYearId == null
+        ? null
+        : financialYears.any(
+            (financialYear) => financialYear.id == activeFinancialYearId,
+          )
+        ? activeFinancialYearId
+        : null;
     setState(() {
       selectedFinancialYears = financialYears;
+      selectedFinancialYearId = selectedActiveFinancialYear;
       isLoadingFinancialYears = false;
     });
   }
@@ -252,10 +261,29 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   ) async {
     await BuyerFinancialYearStore.archive(financialYear.id);
     if (!mounted) return;
-    if (selectedFinancialYearId == financialYear.id) {
-      selectedFinancialYearId = null;
+    final remainingFinancialYears = await BuyerFinancialYearStore.listActive(
+      buyer.id,
+    );
+    if (!mounted) return;
+
+    String? nextActiveFinancialYearId = buyer.activeFinancialYearId;
+    if (buyer.activeFinancialYearId == financialYear.id) {
+      nextActiveFinancialYearId = remainingFinancialYears.isEmpty
+          ? null
+          : remainingFinancialYears.first.id;
+      await BuyerStore.setActiveFinancialYear(
+        buyer.id,
+        nextActiveFinancialYearId,
+      );
+      if (!mounted) return;
     }
-    await selectBuyer(buyer);
+
+    if (selectedFinancialYearId == financialYear.id) {
+      selectedFinancialYearId = nextActiveFinancialYearId;
+    }
+    setState(() {
+      selectedFinancialYears = remainingFinancialYears;
+    });
   }
 
   Future<void> openFinancialYearFolder(BuyerFinancialYear financialYear) async {
@@ -322,6 +350,20 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> makeDefaultFinancialYear(
+    Buyer buyer,
+    BuyerFinancialYear financialYear,
+  ) async {
+    await BuyerStore.setActiveFinancialYear(buyer.id, financialYear.id);
+    if (!mounted) return;
+    setState(() {
+      selectedFinancialYearId = financialYear.id;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Default FY updated')));
   }
 
   @override
@@ -463,6 +505,8 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                             buyer: selectedBuyer,
                             financialYears: selectedFinancialYears,
                             selectedFinancialYearId: selectedFinancialYearId,
+                            activeFinancialYearId:
+                                selectedBuyer.activeFinancialYearId,
                             isLoading: isLoadingFinancialYears,
                             isSaving: isSavingFinancialYear,
                             onAdd: () => addFinancialYear(selectedBuyer),
@@ -473,6 +517,11 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                             },
                             onStart: () => _startReconciliation(selectedBuyer),
                             onOpenFolder: openFinancialYearFolder,
+                            onMakeDefault: (financialYear) =>
+                                makeDefaultFinancialYear(
+                                  selectedBuyer,
+                                  financialYear,
+                                ),
                             onArchive: (financialYear) => archiveFinancialYear(
                               selectedBuyer,
                               financialYear,
@@ -550,24 +599,28 @@ class _FinancialYearPanel extends StatelessWidget {
   final Buyer buyer;
   final List<BuyerFinancialYear> financialYears;
   final String? selectedFinancialYearId;
+  final String? activeFinancialYearId;
   final bool isLoading;
   final bool isSaving;
   final VoidCallback onAdd;
   final ValueChanged<BuyerFinancialYear> onSelect;
   final VoidCallback onStart;
   final ValueChanged<BuyerFinancialYear> onOpenFolder;
+  final ValueChanged<BuyerFinancialYear> onMakeDefault;
   final ValueChanged<BuyerFinancialYear> onArchive;
 
   const _FinancialYearPanel({
     required this.buyer,
     required this.financialYears,
     required this.selectedFinancialYearId,
+    required this.activeFinancialYearId,
     required this.isLoading,
     required this.isSaving,
     required this.onAdd,
     required this.onSelect,
     required this.onStart,
     required this.onOpenFolder,
+    required this.onMakeDefault,
     required this.onArchive,
   });
 
@@ -628,6 +681,7 @@ class _FinancialYearPanel extends StatelessWidget {
                   final financialYear = financialYears[index];
                   final isSelected =
                       financialYear.id == selectedFinancialYearId;
+                  final isDefault = financialYear.id == activeFinancialYearId;
                   return ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
@@ -641,11 +695,36 @@ class _FinancialYearPanel extends StatelessWidget {
                           : null,
                     ),
                     onTap: () => onSelect(financialYear),
-                    title: Text(financialYear.fyLabel),
+                    title: Row(
+                      children: [
+                        Flexible(child: Text(financialYear.fyLabel)),
+                        if (isDefault) ...[
+                          const SizedBox(width: 8),
+                          Chip(
+                            label: const Text('Default'),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            padding: EdgeInsets.zero,
+                            labelStyle: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                     subtitle: Text(financialYear.status),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (!isDefault)
+                          IconButton(
+                            tooltip: 'Make default FY',
+                            icon: const Icon(Icons.star_border_rounded),
+                            onPressed: () => onMakeDefault(financialYear),
+                          ),
                         if (financialYear.workspaceRelativePath
                             .trim()
                             .isNotEmpty)

@@ -5,6 +5,7 @@ class Buyer {
   final String gstNumber;
   final String? archivedAt;
   final String workspaceRelativePath;
+  final String? activeFinancialYearId;
 
   Buyer({
     required this.id,
@@ -13,6 +14,7 @@ class Buyer {
     this.gstNumber = '',
     this.archivedAt,
     this.workspaceRelativePath = '',
+    this.activeFinancialYearId,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +25,7 @@ class Buyer {
       'gst_number': gstNumber.trim().toUpperCase(),
       'archived_at': archivedAt?.trim(),
       'workspace_relative_path': workspaceRelativePath.trim(),
+      'active_financial_year_id': activeFinancialYearId?.trim(),
     };
   }
 
@@ -38,6 +41,34 @@ class Buyer {
       workspaceRelativePath: (map['workspace_relative_path'] ?? '')
           .toString()
           .trim(),
+      activeFinancialYearId:
+          (map['active_financial_year_id'] ?? '').toString().trim().isEmpty
+          ? null
+          : (map['active_financial_year_id'] ?? '').toString().trim(),
+    );
+  }
+
+  Buyer copyWith({
+    String? id,
+    String? name,
+    String? pan,
+    String? gstNumber,
+    String? archivedAt,
+    String? workspaceRelativePath,
+    String? activeFinancialYearId,
+    bool clearActiveFinancialYearId = false,
+  }) {
+    return Buyer(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      pan: pan ?? this.pan,
+      gstNumber: gstNumber ?? this.gstNumber,
+      archivedAt: archivedAt ?? this.archivedAt,
+      workspaceRelativePath:
+          workspaceRelativePath ?? this.workspaceRelativePath,
+      activeFinancialYearId: clearActiveFinancialYearId
+          ? null
+          : activeFinancialYearId ?? this.activeFinancialYearId,
     );
   }
 }

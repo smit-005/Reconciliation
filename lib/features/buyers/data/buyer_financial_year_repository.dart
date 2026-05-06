@@ -14,6 +14,42 @@ class BuyerFinancialYearRepository {
     return rows.map(BuyerFinancialYear.fromMap).toList();
   }
 
+  Future<BuyerFinancialYear?> getActiveByIdForBuyer({
+    required String buyerId,
+    required String financialYearId,
+  }) async {
+    final db = await DBHelper.database;
+    final rows = await db.query(
+      'buyer_financial_years',
+      where: 'buyer_id = ? AND id = ? AND archived_at IS NULL',
+      whereArgs: [buyerId.trim(), financialYearId.trim()],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return BuyerFinancialYear.fromMap(rows.first);
+  }
+
+  Future<BuyerFinancialYear?> getByLabelForBuyer({
+    required String buyerId,
+    required String fyLabel,
+  }) async {
+    final db = await DBHelper.database;
+    final rows = await db.query(
+      'buyer_financial_years',
+      where: 'buyer_id = ? AND fy_label = ? AND archived_at IS NULL',
+      whereArgs: [buyerId.trim(), fyLabel.trim()],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+    return BuyerFinancialYear.fromMap(rows.first);
+  }
+
   Future<void> create(BuyerFinancialYear financialYear) async {
     final db = await DBHelper.database;
     await db.insert('buyer_financial_years', financialYear.toMap());

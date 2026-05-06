@@ -1,6 +1,8 @@
 import 'package:uuid/uuid.dart';
 
+import 'package:reconciliation_app/core/utils/financial_year_utils.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_repository.dart';
+import 'package:reconciliation_app/features/buyers/data/buyer_repository.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer_financial_year.dart';
 import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
@@ -8,17 +10,30 @@ import 'package:reconciliation_app/features/workspace/services/workspace_service
 class BuyerFinancialYearStore {
   static final BuyerFinancialYearRepository _repository =
       BuyerFinancialYearRepository();
+  static final BuyerRepository _buyerRepository = BuyerRepository();
   static final WorkspaceService _workspaceService = WorkspaceService();
 
   static Future<List<BuyerFinancialYear>> listActive(String buyerId) {
     return _repository.getActiveByBuyer(buyerId);
   }
 
+  static Future<BuyerFinancialYear?> activeForBuyer(Buyer buyer) async {
+    final activeId = buyer.activeFinancialYearId?.trim();
+    if (activeId == null || activeId.isEmpty) {
+      return null;
+    }
+
+    return _repository.getActiveByIdForBuyer(
+      buyerId: buyer.id,
+      financialYearId: activeId,
+    );
+  }
+
   static Future<String?> create({
     required Buyer buyer,
     required String fyLabel,
   }) async {
-    final normalizedFyLabel = _normalizeFyLabel(fyLabel);
+    final normalizedFyLabel = normalizeFinancialYearLabel(fyLabel);
     if (normalizedFyLabel == null) {
       return 'Enter FY in 2024-25 format';
     }
@@ -50,24 +65,32 @@ class BuyerFinancialYearStore {
     return null;
   }
 
-  static Future<void> archive(String id) => _repository.archive(id);
-
-  static String? _normalizeFyLabel(String value) {
-    final trimmed = value.trim().toUpperCase().replaceFirst(
-      RegExp(r'^FY[_\s-]*'),
-      '',
+  static Future<BuyerFinancialYear?> ensureCurrentForBuyer({
+    required Buyer buyer,
+    DateTime? now,
+  }) async {
+    final fyLabel = currentIndianFinancialYearLabel(now: now);
+    final existing = await _repository.getByLabelForBuyer(
+      buyerId: buyer.id,
+      fyLabel: fyLabel,
     );
-    final match = RegExp(r'^(\d{4})[-/](\d{2}|\d{4})$').firstMatch(trimmed);
-    if (match == null) {
-      return null;
+    if (existing != null) {
+      return existing;
     }
 
-    final startYear = match.group(1)!;
-    final rawEndYear = match.group(2)!;
-    final endYear = rawEndYear.length == 4
-        ? rawEndYear.substring(2)
-        : rawEndYear;
+    final error = await create(buyer: buyer, fyLabel: fyLabel);
+    if (error != null) {
+      return _repository.getByLabelForBuyer(
+        buyerId: buyer.id,
+        fyLabel: fyLabel,
+      );
+    }
 
-    return '$startYear-$endYear';
+    return _repository.getByLabelForBuyer(buyerId: buyer.id, fyLabel: fyLabel);
+  }
+
+  static Future<void> archive(String id) async {
+    await _repository.archive(id);
+    await _buyerRepository.clearActiveFinancialYearReference(id);
   }
 }

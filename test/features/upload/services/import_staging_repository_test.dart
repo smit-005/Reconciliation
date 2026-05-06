@@ -32,11 +32,11 @@ void main() {
 
   group('ImportStagingRepository', () {
     test(
-      'opens v10 database with staging tables, settings, FYs, and indexes',
+      'opens v11 database with staging tables, settings, FYs, and indexes',
       () async {
         final db = await DBHelper.database;
 
-        expect(await db.getVersion(), 10);
+        expect(await db.getVersion(), 11);
 
         final tableRows = await db.query(
           'sqlite_master',
@@ -80,7 +80,11 @@ void main() {
         );
         expect(
           buyerColumns.map((row) => row['name']).toSet(),
-          containsAll(<String>{'archived_at', 'workspace_relative_path'}),
+          containsAll(<String>{
+            'archived_at',
+            'workspace_relative_path',
+            'active_financial_year_id',
+          }),
         );
         expect(settingsRows, isNotEmpty);
         expect(
