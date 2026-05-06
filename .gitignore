@@ -63,3 +63,8 @@ AGENTS.md
 .codex/hooks.json
 
 .toolstate/
+
+LedgerMatch/
+.ledgermatch/
+*.db-shm
+*.db-wal

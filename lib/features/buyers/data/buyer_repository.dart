@@ -5,7 +5,11 @@ class BuyerRepository {
   Future<List<Buyer>> getAllBuyers() async {
     final db = await DBHelper.database;
 
-    final rows = await db.query('buyers', orderBy: 'name COLLATE NOCASE ASC');
+    final rows = await db.query(
+      'buyers',
+      where: 'archived_at IS NULL',
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
 
     return rows.map((e) => Buyer.fromMap(e)).toList();
   }
@@ -25,52 +29,30 @@ class BuyerRepository {
     );
   }
 
-  Future<void> deleteBuyer(String id) async {
+  Future<void> archiveBuyer(String id) async {
     final db = await DBHelper.database;
-    await db.transaction((txn) async {
-      final rows = await txn.query(
-        'buyers',
-        columns: ['id', 'pan'],
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-
-      if (rows.isEmpty) {
-        return;
-      }
-
-      final buyerId = (rows.first['id'] ?? id).toString();
-      final buyerPan = (rows.first['pan'] ?? '')
-          .toString()
-          .trim()
-          .toUpperCase();
-
-      if (buyerPan.isNotEmpty) {
-        await txn.delete(
-          'seller_mappings',
-          where: 'buyer_pan = ?',
-          whereArgs: [buyerPan],
-        );
-      }
-
-      await txn.delete(
-        'import_format_profiles',
-        where: 'buyer_id = ?',
-        whereArgs: [buyerId],
-      );
-
-      await txn.delete('buyers', where: 'id = ?', whereArgs: [id]);
-    });
+    await db.update(
+      'buyers',
+      {'archived_at': DateTime.now().toIso8601String()},
+      where: 'id = ? AND archived_at IS NULL',
+      whereArgs: [id],
+    );
   }
 
   Future<bool> panExists(String pan, {String? excludeId}) async {
+    final normalizedPan = pan.trim().toUpperCase();
+    if (normalizedPan.isEmpty) {
+      return false;
+    }
+
     final db = await DBHelper.database;
 
     final rows = await db.query(
       'buyers',
       where: excludeId == null ? 'pan = ?' : 'pan = ? AND id != ?',
-      whereArgs: excludeId == null ? [pan] : [pan, excludeId],
+      whereArgs: excludeId == null
+          ? [normalizedPan]
+          : [normalizedPan, excludeId],
       limit: 1,
     );
 

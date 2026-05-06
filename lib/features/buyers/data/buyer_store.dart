@@ -1,10 +1,12 @@
 import 'package:uuid/uuid.dart';
 
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
+import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
 import 'buyer_repository.dart';
 
 class BuyerStore {
   static final BuyerRepository _repository = BuyerRepository();
+  static final WorkspaceService _workspaceService = WorkspaceService();
   static final List<Buyer> _buyers = [];
 
   static List<Buyer> getAll() => List.unmodifiable(_buyers);
@@ -26,11 +28,19 @@ class BuyerStore {
       return 'Buyer with this PAN already exists';
     }
 
+    final buyerId = const Uuid().v4();
+    final workspaceRelativePath = await _workspaceService.createBuyerFolder(
+      buyerId: buyerId,
+      name: normalizedName,
+      pan: normalizedPan,
+    );
+
     final buyer = Buyer(
-      id: const Uuid().v4(),
+      id: buyerId,
       name: normalizedName,
       pan: normalizedPan,
       gstNumber: normalizedGstNumber,
+      workspaceRelativePath: workspaceRelativePath ?? '',
     );
 
     await _repository.addBuyer(buyer);
@@ -56,11 +66,15 @@ class BuyerStore {
       return 'Another buyer with this PAN already exists';
     }
 
+    final currentIndex = _buyers.indexWhere((buyer) => buyer.id == id);
+    final currentBuyer = currentIndex == -1 ? null : _buyers[currentIndex];
+
     final updatedBuyer = Buyer(
       id: id,
       name: normalizedName,
       pan: normalizedPan,
       gstNumber: normalizedGstNumber,
+      workspaceRelativePath: currentBuyer?.workspaceRelativePath ?? '',
     );
 
     await _repository.updateBuyer(updatedBuyer);
@@ -76,8 +90,8 @@ class BuyerStore {
     return null;
   }
 
-  static Future<void> delete(String id) async {
-    await _repository.deleteBuyer(id);
+  static Future<void> archive(String id) async {
+    await _repository.archiveBuyer(id);
     _buyers.removeWhere((b) => b.id == id);
   }
 }

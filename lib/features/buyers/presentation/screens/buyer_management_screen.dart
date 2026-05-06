@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
+import 'package:reconciliation_app/features/buyers/models/buyer_financial_year.dart';
+import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
 
 class BuyerManagementScreen extends StatefulWidget {
   const BuyerManagementScreen({super.key});
@@ -14,10 +17,16 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   final panController = TextEditingController();
   final gstController = TextEditingController();
   final searchController = TextEditingController();
+  final fyController = TextEditingController();
+  final workspaceService = WorkspaceService();
 
   String? editingId;
+  String? selectedBuyerId;
+  List<BuyerFinancialYear> selectedFinancialYears = [];
   bool isLoading = true;
   bool isSaving = false;
+  bool isLoadingFinancialYears = false;
+  bool isSavingFinancialYear = false;
 
   List<Buyer> get buyers => BuyerStore.getAll();
 
@@ -40,6 +49,21 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     });
   }
 
+  Buyer? _selectedBuyerFrom(List<Buyer> source) {
+    final id = selectedBuyerId;
+    if (id == null) {
+      return null;
+    }
+
+    for (final buyer in source) {
+      if (buyer.id == id) {
+        return buyer;
+      }
+    }
+
+    return null;
+  }
+
   bool _isValidPan(String pan) {
     final regex = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$');
     return regex.hasMatch(pan);
@@ -51,14 +75,14 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     final gstNumber = gstController.text.trim().toUpperCase();
     final wasEditing = editingId != null;
 
-    if (name.isEmpty || pan.isEmpty) {
+    if (name.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Enter buyer name and PAN')));
+      ).showSnackBar(const SnackBar(content: Text('Enter buyer name')));
       return;
     }
 
-    if (!_isValidPan(pan)) {
+    if (pan.isNotEmpty && !_isValidPan(pan)) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Enter valid PAN format')));
@@ -114,12 +138,135 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     gstController.text = buyer.gstNumber;
     editingId = buyer.id;
     setState(() {});
+    selectBuyer(buyer);
   }
 
-  Future<void> deleteBuyer(String id) async {
-    await BuyerStore.delete(id);
+  Future<void> selectBuyer(Buyer buyer) async {
+    setState(() {
+      selectedBuyerId = buyer.id;
+      isLoadingFinancialYears = true;
+    });
+
+    final financialYears = await BuyerFinancialYearStore.listActive(buyer.id);
+    if (!mounted || selectedBuyerId != buyer.id) return;
+    setState(() {
+      selectedFinancialYears = financialYears;
+      isLoadingFinancialYears = false;
+    });
+  }
+
+  Future<void> archiveBuyer(String id) async {
+    await BuyerStore.archive(id);
     if (!mounted) return;
+    if (selectedBuyerId == id) {
+      selectedBuyerId = null;
+      selectedFinancialYears = [];
+    }
     setState(() {});
+  }
+
+  Future<void> openBuyerFolder(Buyer buyer) async {
+    if (buyer.workspaceRelativePath.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No workspace folder is linked yet')),
+      );
+      return;
+    }
+
+    final opened = await workspaceService.openFolder(
+      buyer.workspaceRelativePath,
+    );
+    if (!mounted || opened) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Buyer folder was not found. Check workspace settings.'),
+      ),
+    );
+  }
+
+  Future<void> addFinancialYear(Buyer buyer) async {
+    fyController.clear();
+
+    final shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Financial Year'),
+          content: TextField(
+            controller: fyController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Financial year',
+              hintText: '2024-25',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldCreate != true) {
+      return;
+    }
+
+    setState(() => isSavingFinancialYear = true);
+    final error = await BuyerFinancialYearStore.create(
+      buyer: buyer,
+      fyLabel: fyController.text,
+    );
+    if (!mounted) return;
+
+    setState(() => isSavingFinancialYear = false);
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
+    await selectBuyer(buyer);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Financial year added')));
+  }
+
+  Future<void> archiveFinancialYear(
+    Buyer buyer,
+    BuyerFinancialYear financialYear,
+  ) async {
+    await BuyerFinancialYearStore.archive(financialYear.id);
+    if (!mounted) return;
+    await selectBuyer(buyer);
+  }
+
+  Future<void> openFinancialYearFolder(BuyerFinancialYear financialYear) async {
+    if (financialYear.workspaceRelativePath.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No FY folder is linked yet')),
+      );
+      return;
+    }
+
+    final opened = await workspaceService.openFolder(
+      financialYear.workspaceRelativePath,
+    );
+    if (!mounted || opened) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('FY folder was not found')));
   }
 
   void clearForm() {
@@ -136,6 +283,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     panController.dispose();
     gstController.dispose();
     searchController.dispose();
+    fyController.dispose();
     super.dispose();
   }
 
@@ -148,6 +296,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
           b.pan.toLowerCase().contains(query) ||
           b.gstNumber.toLowerCase().contains(query);
     }).toList();
+    final selectedBuyer = _selectedBuyerFrom(buyers);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Buyer Management')),
@@ -188,6 +337,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                             textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(
                               labelText: 'PAN',
+                              hintText: 'Optional',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -261,6 +411,21 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
+                        if (selectedBuyer != null) ...[
+                          _FinancialYearPanel(
+                            buyer: selectedBuyer,
+                            financialYears: selectedFinancialYears,
+                            isLoading: isLoadingFinancialYears,
+                            isSaving: isSavingFinancialYear,
+                            onAdd: () => addFinancialYear(selectedBuyer),
+                            onOpenFolder: openFinancialYearFolder,
+                            onArchive: (financialYear) => archiveFinancialYear(
+                              selectedBuyer,
+                              financialYear,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         Expanded(
                           child: filtered.isEmpty
                               ? const Center(child: Text('No buyers found'))
@@ -271,26 +436,44 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
                                     return Card(
                                       child: ListTile(
+                                        selected: b.id == selectedBuyerId,
+                                        onTap: () => selectBuyer(b),
                                         title: Text(b.name),
                                         subtitle: Text(
-                                          b.gstNumber.trim().isEmpty
-                                              ? 'PAN: ${b.pan}'
-                                              : 'PAN: ${b.pan}\nGST: ${b.gstNumber}',
+                                          [
+                                            b.pan.trim().isEmpty
+                                                ? 'PAN: Not available'
+                                                : 'PAN: ${b.pan}',
+                                            if (b.gstNumber.trim().isNotEmpty)
+                                              'GST: ${b.gstNumber}',
+                                          ].join('\n'),
                                         ),
-                                        isThreeLine: b.gstNumber
-                                            .trim()
-                                            .isNotEmpty,
+                                        isThreeLine:
+                                            b.gstNumber.trim().isNotEmpty ||
+                                            b.pan.trim().isEmpty,
                                         trailing: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
+                                            if (b.workspaceRelativePath
+                                                .trim()
+                                                .isNotEmpty)
+                                              IconButton(
+                                                tooltip: 'Open folder',
+                                                icon: const Icon(
+                                                  Icons.folder_open,
+                                                ),
+                                                onPressed: () =>
+                                                    openBuyerFolder(b),
+                                              ),
                                             IconButton(
                                               icon: const Icon(Icons.edit),
                                               onPressed: () => editBuyer(b),
                                             ),
                                             IconButton(
-                                              icon: const Icon(Icons.delete),
+                                              tooltip: 'Archive buyer',
+                                              icon: const Icon(Icons.archive),
                                               onPressed: () =>
-                                                  deleteBuyer(b.id),
+                                                  archiveBuyer(b.id),
                                             ),
                                           ],
                                         ),
@@ -304,6 +487,113 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+class _FinancialYearPanel extends StatelessWidget {
+  final Buyer buyer;
+  final List<BuyerFinancialYear> financialYears;
+  final bool isLoading;
+  final bool isSaving;
+  final VoidCallback onAdd;
+  final ValueChanged<BuyerFinancialYear> onOpenFolder;
+  final ValueChanged<BuyerFinancialYear> onArchive;
+
+  const _FinancialYearPanel({
+    required this.buyer,
+    required this.financialYears,
+    required this.isLoading,
+    required this.isSaving,
+    required this.onAdd,
+    required this.onOpenFolder,
+    required this.onArchive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Financial Years - ${buyer.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: isSaving ? null : onAdd,
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add, size: 18),
+                label: Text(isSaving ? 'Adding...' : 'Add FY'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            )
+          else if (financialYears.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('No financial years added yet'),
+            )
+          else
+            SizedBox(
+              height: 150,
+              child: ListView.builder(
+                itemCount: financialYears.length,
+                itemBuilder: (context, index) {
+                  final financialYear = financialYears[index];
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(financialYear.fyLabel),
+                    subtitle: Text(financialYear.status),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (financialYear.workspaceRelativePath
+                            .trim()
+                            .isNotEmpty)
+                          IconButton(
+                            tooltip: 'Open FY folder',
+                            icon: const Icon(Icons.folder_open),
+                            onPressed: () => onOpenFolder(financialYear),
+                          ),
+                        IconButton(
+                          tooltip: 'Archive FY',
+                          icon: const Icon(Icons.archive),
+                          onPressed: () => onArchive(financialYear),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }

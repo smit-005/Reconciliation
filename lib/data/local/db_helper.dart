@@ -5,7 +5,7 @@ import '../../core/utils/normalize_utils.dart';
 class DBHelper {
   static Database? _database;
   static const String _dbName = 'tds_reconciliation.db';
-  static const int _dbVersion = 7;
+  static const int _dbVersion = 10;
   static String? _dbNameOverrideForTest;
 
   static Future<Database> get database async {
@@ -66,6 +66,16 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
     if (oldVersion < 7) {
       await _createStagingTables(db);
     }
+    if (oldVersion < 8) {
+      await _migrateBuyersTable(db);
+      await _createAppSettingsTable(db);
+    }
+    if (oldVersion < 9) {
+      await _migrateBuyersTable(db);
+    }
+    if (oldVersion < 10) {
+      await _createBuyerFinancialYearsTable(db);
+    }
   }
 
   static Future<void> debugResetForTest({String? databaseName}) async {
@@ -89,12 +99,16 @@ CREATE TABLE IF NOT EXISTS import_format_profiles (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         pan TEXT NOT NULL UNIQUE,
-        gst_number TEXT NOT NULL DEFAULT ''
+        gst_number TEXT NOT NULL DEFAULT '',
+        archived_at TEXT,
+        workspace_relative_path TEXT
       )
     ''');
     await _createSellerMappingsTable(db);
     await _createImportFormatProfilesTable(db);
     await _createStagingTables(db);
+    await _createAppSettingsTable(db);
+    await _createBuyerFinancialYearsTable(db);
   }
 
   static Future<void> _createSellerMappingsTable(DatabaseExecutor db) async {
@@ -196,6 +210,37 @@ ON staged_26q_rows(created_at)
 ''');
   }
 
+  static Future<void> _createAppSettingsTable(DatabaseExecutor db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+)
+''');
+    await db.insert('app_settings', const {
+      'key': 'workspace_root_path',
+      'value': '',
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  static Future<void> _createBuyerFinancialYearsTable(
+    DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS buyer_financial_years (
+  id TEXT PRIMARY KEY,
+  buyer_id TEXT NOT NULL,
+  fy_label TEXT NOT NULL,
+  workspace_relative_path TEXT,
+  status TEXT NOT NULL DEFAULT 'not_started',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  archived_at TEXT,
+  UNIQUE(buyer_id, fy_label)
+)
+''');
+  }
+
   static Future<void> _migrateBuyersTable(Database db) async {
     if (!await _tableExists(db, 'buyers')) {
       await db.execute('''
@@ -203,7 +248,9 @@ ON staged_26q_rows(created_at)
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         pan TEXT NOT NULL UNIQUE,
-        gst_number TEXT NOT NULL DEFAULT ''
+        gst_number TEXT NOT NULL DEFAULT '',
+        archived_at TEXT,
+        workspace_relative_path TEXT
       )
     ''');
       return;
@@ -213,10 +260,26 @@ ON staged_26q_rows(created_at)
     final hasGstNumber = columns.any(
       (row) => (row['name'] ?? '').toString().toLowerCase() == 'gst_number',
     );
+    final hasArchivedAt = columns.any(
+      (row) => (row['name'] ?? '').toString().toLowerCase() == 'archived_at',
+    );
+    final hasWorkspaceRelativePath = columns.any(
+      (row) =>
+          (row['name'] ?? '').toString().toLowerCase() ==
+          'workspace_relative_path',
+    );
 
     if (!hasGstNumber) {
       await db.execute(
         "ALTER TABLE buyers ADD COLUMN gst_number TEXT NOT NULL DEFAULT ''",
+      );
+    }
+    if (!hasArchivedAt) {
+      await db.execute("ALTER TABLE buyers ADD COLUMN archived_at TEXT");
+    }
+    if (!hasWorkspaceRelativePath) {
+      await db.execute(
+        "ALTER TABLE buyers ADD COLUMN workspace_relative_path TEXT",
       );
     }
   }

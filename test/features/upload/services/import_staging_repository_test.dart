@@ -31,44 +31,69 @@ void main() {
   });
 
   group('ImportStagingRepository', () {
-    test('opens v7 database with staging tables and indexes', () async {
-      final db = await DBHelper.database;
+    test(
+      'opens v10 database with staging tables, settings, FYs, and indexes',
+      () async {
+        final db = await DBHelper.database;
 
-      expect(await db.getVersion(), 7);
+        expect(await db.getVersion(), 10);
 
-      final tableRows = await db.query(
-        'sqlite_master',
-        columns: ['name'],
-        where: 'type = ? AND name IN (?, ?)',
-        whereArgs: ['table', 'staged_purchase_rows', 'staged_26q_rows'],
-      );
-      final indexRows = await db.query(
-        'sqlite_master',
-        columns: ['name'],
-        where: 'type = ? AND name IN (?, ?, ?, ?)',
-        whereArgs: [
-          'index',
-          'idx_staged_purchase_import_row',
-          'idx_staged_purchase_created_at',
-          'idx_staged_26q_import_row',
-          'idx_staged_26q_created_at',
-        ],
-      );
+        final tableRows = await db.query(
+          'sqlite_master',
+          columns: ['name'],
+          where: 'type = ? AND name IN (?, ?, ?, ?)',
+          whereArgs: [
+            'table',
+            'staged_purchase_rows',
+            'staged_26q_rows',
+            'app_settings',
+            'buyer_financial_years',
+          ],
+        );
+        final buyerColumns = await db.rawQuery('PRAGMA table_info(buyers)');
+        final settingsRows = await db.query(
+          'app_settings',
+          where: 'key = ?',
+          whereArgs: ['workspace_root_path'],
+        );
+        final indexRows = await db.query(
+          'sqlite_master',
+          columns: ['name'],
+          where: 'type = ? AND name IN (?, ?, ?, ?)',
+          whereArgs: [
+            'index',
+            'idx_staged_purchase_import_row',
+            'idx_staged_purchase_created_at',
+            'idx_staged_26q_import_row',
+            'idx_staged_26q_created_at',
+          ],
+        );
 
-      expect(
-        tableRows.map((row) => row['name']).toSet(),
-        containsAll(<String>{'staged_purchase_rows', 'staged_26q_rows'}),
-      );
-      expect(
-        indexRows.map((row) => row['name']).toSet(),
-        containsAll(<String>{
-          'idx_staged_purchase_import_row',
-          'idx_staged_purchase_created_at',
-          'idx_staged_26q_import_row',
-          'idx_staged_26q_created_at',
-        }),
-      );
-    });
+        expect(
+          tableRows.map((row) => row['name']).toSet(),
+          containsAll(<String>{
+            'staged_purchase_rows',
+            'staged_26q_rows',
+            'app_settings',
+            'buyer_financial_years',
+          }),
+        );
+        expect(
+          buyerColumns.map((row) => row['name']).toSet(),
+          containsAll(<String>{'archived_at', 'workspace_relative_path'}),
+        );
+        expect(settingsRows, isNotEmpty);
+        expect(
+          indexRows.map((row) => row['name']).toSet(),
+          containsAll(<String>{
+            'idx_staged_purchase_import_row',
+            'idx_staged_purchase_created_at',
+            'idx_staged_26q_import_row',
+            'idx_staged_26q_created_at',
+          }),
+        );
+      },
+    );
 
     test('stages, loads, and deletes rows in chunks', () async {
       final repository = ImportStagingRepository();

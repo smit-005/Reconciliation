@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/app/routes.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/widgets/app_metric_card.dart';
@@ -11,6 +12,7 @@ import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
 import 'package:reconciliation_app/features/buyers/presentation/screens/buyer_management_screen.dart';
 import 'package:reconciliation_app/features/upload/presentation/screens/excel_upload_screen.dart';
+import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +22,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static bool _workspaceWarningShown = false;
+
+  final WorkspaceService workspaceService = WorkspaceService();
   final searchController = TextEditingController();
   String? selectedBuyerId;
   bool isLoading = true;
@@ -28,6 +33,27 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadBuyers();
+    _showWorkspaceWarningIfNeeded();
+  }
+
+  Future<void> _showWorkspaceWarningIfNeeded() async {
+    if (_workspaceWarningShown) {
+      return;
+    }
+
+    final status = await workspaceService.getWorkspaceStatus();
+    if (!mounted || status != WorkspaceStatus.invalid) {
+      return;
+    }
+
+    _workspaceWarningShown = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Workspace not found. Please select it again in Settings.',
+        ),
+      ),
+    );
   }
 
   Future<void> _loadBuyers() async {
@@ -103,6 +129,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   selectedBuyerId = buyerId;
                                 });
                               },
+                              onOpenSettings: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.settings,
+                                );
+                              },
                             ),
                           )
                         : SizedBox(
@@ -127,6 +159,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   selectedBuyerId = buyerId;
                                 });
                               },
+                              onOpenSettings: () {
+                                Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.settings,
+                                );
+                              },
                             ),
                           );
 
@@ -139,7 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? null
                           : () {
                               final buyer = selectedBuyerValue;
-                              if (buyer == null) return;
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -189,6 +226,7 @@ class _HomeBuyerSidebar extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onManageBuyers;
   final ValueChanged<String> onBuyerSelected;
+  final VoidCallback onOpenSettings;
 
   const _HomeBuyerSidebar({
     required this.searchController,
@@ -198,6 +236,7 @@ class _HomeBuyerSidebar extends StatelessWidget {
     required this.onSearchChanged,
     required this.onManageBuyers,
     required this.onBuyerSelected,
+    required this.onOpenSettings,
   });
 
   @override
@@ -272,6 +311,12 @@ class _HomeBuyerSidebar extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  IconButton(
+                    tooltip: 'Settings',
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: onOpenSettings,
                   ),
                 ],
               ),
