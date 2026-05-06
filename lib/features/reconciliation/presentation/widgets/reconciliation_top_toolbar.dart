@@ -13,6 +13,7 @@ class ReconciliationTopToolbar extends StatelessWidget {
   final String buyerName;
   final String buyerPan;
   final String gstNo;
+  final String financialYearLabel;
   final Widget sectionTabs;
   final Widget filters;
   final ReconciliationViewMode viewMode;
@@ -27,6 +28,7 @@ class ReconciliationTopToolbar extends StatelessWidget {
     required this.buyerName,
     required this.buyerPan,
     required this.gstNo,
+    this.financialYearLabel = '',
     required this.sectionTabs,
     required this.filters,
     required this.viewMode,
@@ -143,6 +145,8 @@ class ReconciliationTopToolbar extends StatelessWidget {
       children: [
         _metaText('PAN', buyerPan.isEmpty ? '-' : buyerPan),
         _metaText('GST', gstNo.isEmpty ? '-' : gstNo),
+        if (financialYearLabel.trim().isNotEmpty)
+          _metaText('FY', financialYearLabel.trim()),
       ],
     );
   }

@@ -115,6 +115,8 @@ class ReconciliationScreen extends StatefulWidget {
 
   final String buyerName;
   final String buyerPan;
+  final String? selectedFinancialYearId;
+  final String? selectedFinancialYearLabel;
   final String gstNo;
   final bool sellerMappingConfirmed;
 
@@ -125,6 +127,8 @@ class ReconciliationScreen extends StatefulWidget {
     required this.tdsRows,
     this.buyerName = '',
     this.buyerPan = '',
+    this.selectedFinancialYearId,
+    this.selectedFinancialYearLabel,
     this.gstNo = '',
     this.sellerMappingConfirmed = false,
   });
@@ -1775,6 +1779,15 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return '$hiddenRows non-actionable rows are hidden in Summary View.';
   }
 
+  String _workflowFinancialYearLabel() {
+    final label = widget.selectedFinancialYearLabel?.trim() ?? '';
+    if (label.isEmpty) {
+      return '';
+    }
+
+    return label.replaceFirst(RegExp(r'^fy\s*', caseSensitive: false), '');
+  }
+
   Widget _buildSectionTabs() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -2412,6 +2425,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           width: useSplitView ? null : double.infinity,
           child: ReconciliationAnalysisPanel(
             activeSectionTab: activeSectionTab,
+            financialYearLabel: _workflowFinancialYearLabel(),
             sourceFileCount: _activeSourceFileCount(),
             sourceRowCount: _activeSourceRowCount(),
             totalSellers: _totalSellers(),
@@ -2482,6 +2496,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
             buyerName: widget.buyerName,
             buyerPan: widget.buyerPan,
             gstNo: widget.gstNo,
+            financialYearLabel: _workflowFinancialYearLabel(),
             sectionTabs: _buildSectionTabs(),
             filters: _buildFilters(),
             viewMode: _viewMode,
@@ -2498,7 +2513,13 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
-      appBar: AppBar(title: const Text('Reconciliation')),
+      appBar: AppBar(
+        title: Text(
+          _workflowFinancialYearLabel().isEmpty
+              ? 'Reconciliation'
+              : 'Reconciliation - FY ${_workflowFinancialYearLabel()}',
+        ),
+      ),
       bottomNavigationBar: ReconciliationBottomActionBar(
         onExportCurrentSection: filteredRows.isEmpty
             ? null

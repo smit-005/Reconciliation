@@ -51,6 +51,31 @@ void main() {
     },
   );
 
+  testWidgets('upload screen shows selected financial year when provided', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ExcelUploadScreen(
+          selectedBuyerId: 'buyer-1',
+          selectedBuyerName: 'Buyer One',
+          selectedBuyerPan: 'ABCDE1234F',
+          selectedFinancialYearId: 'fy-1',
+          selectedFinancialYearLabel: '2024-25',
+        ),
+      ),
+    );
+
+    expect(find.text('FY 2024-25'), findsOneWidget);
+  });
+
   testWidgets(
     'Open Reconciliation stays disabled until seller mapping review is safe',
     (tester) async {

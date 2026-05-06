@@ -3,6 +3,7 @@ import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_sto
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer_financial_year.dart';
+import 'package:reconciliation_app/features/upload/presentation/screens/excel_upload_screen.dart';
 import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
 
 class BuyerManagementScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
   String? editingId;
   String? selectedBuyerId;
+  String? selectedFinancialYearId;
   List<BuyerFinancialYear> selectedFinancialYears = [];
   bool isLoading = true;
   bool isSaving = false;
@@ -144,6 +146,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   Future<void> selectBuyer(Buyer buyer) async {
     setState(() {
       selectedBuyerId = buyer.id;
+      selectedFinancialYearId = null;
       isLoadingFinancialYears = true;
     });
 
@@ -160,6 +163,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     if (!mounted) return;
     if (selectedBuyerId == id) {
       selectedBuyerId = null;
+      selectedFinancialYearId = null;
       selectedFinancialYears = [];
     }
     setState(() {});
@@ -248,6 +252,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   ) async {
     await BuyerFinancialYearStore.archive(financialYear.id);
     if (!mounted) return;
+    if (selectedFinancialYearId == financialYear.id) {
+      selectedFinancialYearId = null;
+    }
     await selectBuyer(buyer);
   }
 
@@ -275,6 +282,46 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     gstController.clear();
     editingId = null;
     setState(() {});
+  }
+
+  BuyerFinancialYear? _selectedFinancialYearFrom(
+    List<BuyerFinancialYear> source,
+  ) {
+    final id = selectedFinancialYearId;
+    if (id == null) {
+      return null;
+    }
+
+    for (final financialYear in source) {
+      if (financialYear.id == id) {
+        return financialYear;
+      }
+    }
+
+    return null;
+  }
+
+  void _startReconciliation(Buyer buyer) {
+    final financialYear = _selectedFinancialYearFrom(selectedFinancialYears);
+    if (financialYear == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a financial year to continue')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExcelUploadScreen(
+          selectedBuyerId: buyer.id,
+          selectedBuyerName: buyer.name,
+          selectedBuyerPan: buyer.pan,
+          selectedFinancialYearId: financialYear.id,
+          selectedFinancialYearLabel: financialYear.fyLabel,
+        ),
+      ),
+    );
   }
 
   @override
@@ -415,9 +462,16 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                           _FinancialYearPanel(
                             buyer: selectedBuyer,
                             financialYears: selectedFinancialYears,
+                            selectedFinancialYearId: selectedFinancialYearId,
                             isLoading: isLoadingFinancialYears,
                             isSaving: isSavingFinancialYear,
                             onAdd: () => addFinancialYear(selectedBuyer),
+                            onSelect: (financialYear) {
+                              setState(() {
+                                selectedFinancialYearId = financialYear.id;
+                              });
+                            },
+                            onStart: () => _startReconciliation(selectedBuyer),
                             onOpenFolder: openFinancialYearFolder,
                             onArchive: (financialYear) => archiveFinancialYear(
                               selectedBuyer,
@@ -495,18 +549,24 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 class _FinancialYearPanel extends StatelessWidget {
   final Buyer buyer;
   final List<BuyerFinancialYear> financialYears;
+  final String? selectedFinancialYearId;
   final bool isLoading;
   final bool isSaving;
   final VoidCallback onAdd;
+  final ValueChanged<BuyerFinancialYear> onSelect;
+  final VoidCallback onStart;
   final ValueChanged<BuyerFinancialYear> onOpenFolder;
   final ValueChanged<BuyerFinancialYear> onArchive;
 
   const _FinancialYearPanel({
     required this.buyer,
     required this.financialYears,
+    required this.selectedFinancialYearId,
     required this.isLoading,
     required this.isSaving,
     required this.onAdd,
+    required this.onSelect,
+    required this.onStart,
     required this.onOpenFolder,
     required this.onArchive,
   });
@@ -566,9 +626,21 @@ class _FinancialYearPanel extends StatelessWidget {
                 itemCount: financialYears.length,
                 itemBuilder: (context, index) {
                   final financialYear = financialYears[index];
+                  final isSelected =
+                      financialYear.id == selectedFinancialYearId;
                   return ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
+                    selected: isSelected,
+                    leading: Icon(
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    onTap: () => onSelect(financialYear),
                     title: Text(financialYear.fyLabel),
                     subtitle: Text(financialYear.status),
                     trailing: Row(
@@ -593,6 +665,15 @@ class _FinancialYearPanel extends StatelessWidget {
                 },
               ),
             ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: isLoading || isSaving ? null : onStart,
+              icon: const Icon(Icons.play_arrow_rounded, size: 18),
+              label: const Text('Start Reconciliation'),
+            ),
+          ),
         ],
       ),
     );

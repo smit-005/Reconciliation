@@ -86,12 +86,16 @@ class ExcelUploadScreen extends StatefulWidget {
   final String selectedBuyerId;
   final String selectedBuyerName;
   final String selectedBuyerPan;
+  final String? selectedFinancialYearId;
+  final String? selectedFinancialYearLabel;
 
   const ExcelUploadScreen({
     super.key,
     required this.selectedBuyerId,
     required this.selectedBuyerName,
     required this.selectedBuyerPan,
+    this.selectedFinancialYearId,
+    this.selectedFinancialYearLabel,
   });
 
   @override
@@ -890,6 +894,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           tdsRows: tdsRows,
           buyerName: widget.selectedBuyerName,
           buyerPan: widget.selectedBuyerPan,
+          selectedFinancialYearId: widget.selectedFinancialYearId,
+          selectedFinancialYearLabel: widget.selectedFinancialYearLabel,
           gstNo: detectedGstNo ?? '',
           sellerMappingConfirmed: _isSellerMappingConfirmed,
         ),
@@ -935,7 +941,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       if (!mounted) return;
 
-      final fyLabel = _buildSellerMappingFinancialYearLabel();
+      final fyLabel =
+          _selectedFinancialYearDisplayLabel() ??
+          _buildSellerMappingFinancialYearLabel();
 
       final totalSourceRows = sourceRowsBySection.values.fold<int>(
         0,
@@ -1060,6 +1068,28 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   String? _normalizeFinancialYearValue(String? value) {
     return _normalizeSellerMappingFinancialYearValue(value);
+  }
+
+  String? _selectedFinancialYearValue() {
+    final label = widget.selectedFinancialYearLabel?.trim();
+    if (label == null || label.isEmpty) {
+      return null;
+    }
+
+    return _normalizeFinancialYearValue(label) ?? label;
+  }
+
+  String? _selectedFinancialYearDisplayLabel() {
+    final value = _selectedFinancialYearValue();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    final stripped = value.replaceFirst(
+      RegExp(r'^fy\s*', caseSensitive: false),
+      '',
+    );
+    return 'FY $stripped';
   }
 
   Future<void> _persistSellerMappingResult(
@@ -1593,6 +1623,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 label: 'PAN ${widget.selectedBuyerPan}',
                 icon: Icons.badge_outlined,
               ),
+              if (_selectedFinancialYearValue() != null)
+                _buildHeaderChip(
+                  label: 'FY ${_selectedFinancialYearValue()}',
+                  icon: Icons.calendar_month_outlined,
+                ),
               _buildHeaderChip(
                 label: _workspaceStatusLabel,
                 icon: canOpenReconciliation
@@ -1981,6 +2016,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         children: [
           _buildSummaryTile('Buyer', widget.selectedBuyerName),
           _buildSummaryTile('Buyer PAN', widget.selectedBuyerPan),
+          if (_selectedFinancialYearValue() != null)
+            _buildSummaryTile('FY', _selectedFinancialYearValue()!),
           _buildSummaryTile('26Q Rows', tdsRows.length.toString()),
           _buildSummaryTile('Section Files', _totalSectionFiles.toString()),
           _buildSummaryTile('Source Rows', _totalLedgerRows.toString()),

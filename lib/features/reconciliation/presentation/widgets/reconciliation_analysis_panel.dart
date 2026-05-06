@@ -9,6 +9,7 @@ import 'reconciliation_summary_header.dart';
 
 class ReconciliationAnalysisPanel extends StatelessWidget {
   final String activeSectionTab;
+  final String financialYearLabel;
   final int sourceFileCount;
   final int sourceRowCount;
   final int totalSellers;
@@ -32,6 +33,7 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
   const ReconciliationAnalysisPanel({
     super.key,
     required this.activeSectionTab,
+    this.financialYearLabel = '',
     required this.sourceFileCount,
     required this.sourceRowCount,
     required this.totalSellers,
@@ -56,6 +58,9 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sellerExceptions = _buildSellerExceptions();
+    final financialYearSubtitle = financialYearLabel.trim().isEmpty
+        ? ''
+        : ' | FY ${financialYearLabel.trim()}';
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -100,7 +105,7 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
                   ReconciliationSummaryHeader(
                     title: 'Exception Summary',
                     subtitle:
-                        '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)',
+                        '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)$financialYearSubtitle',
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Row(
