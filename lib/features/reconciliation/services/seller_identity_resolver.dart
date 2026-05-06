@@ -337,8 +337,32 @@ class SellerIdentityResolver {
         : (_legalNameToPans[legalNameKey] ?? const <String>{});
     if (!looksLikePan(normalizedPan) && legalNamePans.length == 1) {
       final matchedPan = legalNamePans.first;
+      final observationCount =
+          _namePanObservationCounts['$normalizedName|$matchedPan'] ?? 0;
+      final isRepeatedEvidence = observationCount >= 2;
       flags.add('legal_name_match');
       flags.add('pan_inferred');
+      if (!isRepeatedEvidence) {
+        flags.add('unresolved_identity');
+        return ResolvedSellerIdentity(
+          resolvedSellerId: 'NAME:$normalizedName',
+          resolvedSellerName: _displayNameForName(normalizedName, originalName),
+          resolvedPan: '',
+          identitySource: 'legal_name_suggestion',
+          identityConfidence: 0.45,
+          identityNotes: [
+            'Weak legal-name match found against PAN $matchedPan. Review and save mapping before using this PAN.',
+            extraNotes,
+          ].where((value) => value.trim().isNotEmpty).join(', '),
+          mappingAttempted: mappingAttempted,
+          mappingSectionUsed: mappingSectionUsed,
+          mappingHit: mappingHit,
+          identityFlags: flags.toList()..sort(),
+          originalSellerName: originalName.trim(),
+          normalizedSellerName: normalizedName,
+          originalPan: '',
+        );
+      }
       return ResolvedSellerIdentity(
         resolvedSellerId: 'PAN:$matchedPan',
         resolvedSellerName: _displayNameForPan(

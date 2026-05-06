@@ -26,13 +26,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Review').first);
+      expect(find.text('Alias Vendor'), findsOneWidget);
+      expect(find.text('Unresolved Identity'), findsWidgets);
+
+      await tester.tap(find.text('Alias Vendor'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      await tester.tap(find.text('Use Suggested Match'));
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Keep Separate'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      await tester.tap(find.widgetWithText(FilledButton, 'Save Review'));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -56,6 +61,7 @@ void main() {
           purchasePartyDisplayName: 'Seller $sellerNumber',
           normalizedAlias: 'Seller $sellerNumber',
           sectionCode: '194C',
+          tdsDisplayName: 'Seller $sellerNumber',
           purchasePan: '',
           resolvedSuggestion: SellerMappingResolvedSuggestion(
             mappedName: 'Mapped Seller $sellerNumber',
@@ -100,14 +106,17 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('Showing 100 of 150 seller rows.'), findsOneWidget);
-      expect(find.textContaining('Load More'), findsOneWidget);
+      final loadMoreButton = find.widgetWithText(
+        FilledButton,
+        'Load More (50)',
+      );
+      expect(loadMoreButton, findsOneWidget);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Load More (50)'));
+      await tester.tap(loadMoreButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('Showing all 150 seller rows.'), findsOneWidget);
+      expect(find.textContaining('Load More'), findsNothing);
     },
   );
 
@@ -125,6 +134,7 @@ void main() {
           purchasePartyDisplayName: 'Seller $sellerNumber',
           normalizedAlias: 'Seller $sellerNumber',
           sectionCode: '194C',
+          tdsDisplayName: 'Seller $sellerNumber',
           purchasePan: '',
           resolvedSuggestion: SellerMappingResolvedSuggestion(
             mappedName: 'Mapped Seller $sellerNumber',
@@ -169,12 +179,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(find.text('Showing 100 of 130 seller rows.'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Load More (30)'),
+        findsOneWidget,
+      );
 
       await tester.enterText(find.byType(TextField), 'Seller 129');
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Showing 1 of 130 seller rows.'), findsOneWidget);
       expect(find.text('Seller 129'), findsWidgets);
       expect(find.text('Seller 128'), findsNothing);
       expect(find.textContaining('Load More'), findsNothing);
@@ -208,6 +220,7 @@ class _SellerMappingLaunchHarness extends StatelessWidget {
                           purchasePartyDisplayName: 'Alias Vendor',
                           normalizedAlias: 'Alias Vendor',
                           sectionCode: '194C',
+                          tdsDisplayName: 'Alias Vendor',
                           purchasePan: '',
                           resolvedSuggestion: SellerMappingResolvedSuggestion(
                             mappedName: 'Mapped Vendor',

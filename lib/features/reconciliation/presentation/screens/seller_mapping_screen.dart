@@ -932,7 +932,11 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   bool _is26QAuditRow(SellerMappingRowVm row) {
-    return row.tdsRowCount > 0 || row.is26QUnmatched;
+    return row.tdsRowCount > 0 ||
+        row.is26QUnmatched ||
+        (_isPreflightMode &&
+            row.requiresDangerousReview &&
+            !row.isPurchaseOnly);
   }
 
   List<SellerMappingRowVm> _rowsForCurrentViewScope() =>
