@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
@@ -2318,17 +2320,29 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   Future<void> _exportCurrentSectionExcel() async {
     try {
+      final workingDirectory = await _resolveWorkspaceExportDirectory(
+        exportType: 'current_section',
+        resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
+          buyerId: widget.selectedBuyerId,
+          financialYearId: widget.selectedFinancialYearId,
+        ),
+      );
       final filePath = await ExcelExportService.exportReconciliationExcel(
         rows: filteredRows,
         buyerName: widget.buyerName,
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
+        outputFolderPath: workingDirectory?.path,
         financialYear: selectedFinancialYear,
         sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
-      _showSnackBar('Exported to: $filePath');
+      _showSnackBar(
+        workingDirectory == null
+            ? 'Workspace unavailable. Exported to Downloads: $filePath'
+            : 'Current section export saved to workspace: $filePath',
+      );
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Export failed: $e');
@@ -2338,17 +2352,29 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   Future<void> _exportAllSectionsExcel() async {
     final rows = _rowsForAllSectionsExport();
     try {
+      final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
+        exportType: 'all_sections',
+        resolve: () => _workspaceExportPathService.resolveFinalExportsDirectory(
+          buyerId: widget.selectedBuyerId,
+          financialYearId: widget.selectedFinancialYearId,
+        ),
+      );
       final filePath = await ExcelExportService.exportReconciliationExcel(
         rows: rows,
         buyerName: widget.buyerName,
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
+        outputFolderPath: finalExportsDirectory?.path,
         financialYear: selectedFinancialYear,
         sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
-      _showSnackBar('Exported to: $filePath');
+      _showSnackBar(
+        finalExportsDirectory == null
+            ? 'Workspace unavailable. Exported to Downloads: $filePath'
+            : 'All sections export saved to workspace: $filePath',
+      );
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Export failed: $e');
@@ -2357,11 +2383,13 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   Future<void> _exportPivotExcel() async {
     try {
-      final workingDirectory = await _workspaceExportPathService
-          .resolveWorkingDirectory(
-            buyerId: widget.selectedBuyerId,
-            financialYearId: widget.selectedFinancialYearId,
-          );
+      final workingDirectory = await _resolveWorkspaceExportDirectory(
+        exportType: 'pivot',
+        resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
+          buyerId: widget.selectedBuyerId,
+          financialYearId: widget.selectedFinancialYearId,
+        ),
+      );
       final filePath = await ExcelExportService.exportPivotSummaryExcel(
         rows: filteredRows,
         buyerName: widget.buyerName,
@@ -2381,6 +2409,31 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Pivot export failed: $e');
+    }
+  }
+
+  Future<Directory?> _resolveWorkspaceExportDirectory({
+    required String exportType,
+    required Future<Directory?> Function() resolve,
+  }) async {
+    try {
+      final directory = await resolve();
+      if (directory == null) {
+        debugPrint(
+          'WORKSPACE EXPORT => fallback=downloads reason=${exportType}_workspace_unavailable',
+        );
+        return null;
+      }
+
+      debugPrint(
+        'WORKSPACE EXPORT => type=$exportType destination=${directory.path}',
+      );
+      return directory;
+    } catch (e) {
+      debugPrint(
+        'WORKSPACE EXPORT => fallback=downloads reason=${exportType}_resolver_error error=$e',
+      );
+      return null;
     }
   }
 
