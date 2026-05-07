@@ -4,6 +4,7 @@ import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/widgets/app_metric_card.dart';
 import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
+import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
 import 'package:reconciliation_app/core/widgets/app_search_field.dart';
 import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
@@ -24,6 +25,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static bool _workspaceWarningShown = false;
+  static const Duration _snackBarDuration = Duration(seconds: 4);
 
   final WorkspaceService workspaceService = WorkspaceService();
   final searchController = TextEditingController();
@@ -48,12 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     _workspaceWarningShown = true;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Workspace not found. Please select it again in Settings.',
-        ),
-      ),
+    AppRectSnackBar.show(
+      context,
+      'Workspace not found. Please select it again in Settings.',
+      icon: Icons.info_rounded,
+      duration: _snackBarDuration,
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
@@ -16,6 +17,8 @@ class BuyerManagementScreen extends StatefulWidget {
 }
 
 class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
+  static const Duration _snackBarDuration = Duration(seconds: 4);
+
   final nameController = TextEditingController();
   final panController = TextEditingController();
   final gstController = TextEditingController();
@@ -73,6 +76,15 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     return regex.hasMatch(pan);
   }
 
+  void _showSnackBar(String message, {IconData icon = Icons.info_rounded}) {
+    AppRectSnackBar.show(
+      context,
+      message,
+      icon: icon,
+      duration: _snackBarDuration,
+    );
+  }
+
   Future<void> saveBuyer() async {
     final name = nameController.text.trim();
     final pan = panController.text.trim().toUpperCase();
@@ -80,16 +92,12 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     final wasEditing = editingId != null;
 
     if (name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter buyer name')));
+      _showSnackBar('Enter buyer name');
       return;
     }
 
     if (pan.isNotEmpty && !_isValidPan(pan)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter valid PAN format')));
+      _showSnackBar('Enter valid PAN format');
       return;
     }
 
@@ -112,9 +120,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     });
 
     if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error)));
+      _showSnackBar(error);
       return;
     }
 
@@ -125,14 +131,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
     setState(() {});
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          wasEditing
-              ? 'Buyer updated successfully'
-              : 'Buyer added successfully',
-        ),
-      ),
+    _showSnackBar(
+      wasEditing ? 'Buyer updated successfully' : 'Buyer added successfully',
+      icon: Icons.check_circle_rounded,
     );
   }
 
@@ -182,9 +183,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
   Future<void> openBuyerFolder(Buyer buyer) async {
     if (buyer.workspaceRelativePath.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No workspace folder is linked yet')),
-      );
+      _showSnackBar('No workspace folder is linked yet');
       return;
     }
 
@@ -193,11 +192,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     );
     if (!mounted || opened) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Buyer folder was not found. Check workspace settings.'),
-      ),
-    );
+    _showSnackBar('Buyer folder was not found. Check workspace settings.');
   }
 
   Future<void> addFinancialYear(Buyer buyer) async {
@@ -244,17 +239,13 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
     setState(() => isSavingFinancialYear = false);
     if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error)));
+      _showSnackBar(error);
       return;
     }
 
     await selectBuyer(buyer);
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Financial year added')));
+    _showSnackBar('Financial year added', icon: Icons.check_circle_rounded);
   }
 
   Future<void> archiveFinancialYear(
@@ -290,9 +281,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
 
   Future<void> openFinancialYearFolder(BuyerFinancialYear financialYear) async {
     if (financialYear.workspaceRelativePath.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No FY folder is linked yet')),
-      );
+      _showSnackBar('No FY folder is linked yet');
       return;
     }
 
@@ -301,9 +290,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     );
     if (!mounted || opened) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('FY folder was not found')));
+    _showSnackBar('FY folder was not found');
   }
 
   void clearForm() {
@@ -334,9 +321,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   void _startReconciliation(Buyer buyer) {
     final financialYear = _selectedFinancialYearFrom(selectedFinancialYears);
     if (financialYear == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a financial year to continue')),
-      );
+      _showSnackBar('Select a financial year to continue');
       return;
     }
 
@@ -363,9 +348,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     setState(() {
       selectedFinancialYearId = financialYear.id;
     });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Default FY updated')));
+    _showSnackBar('Default FY updated', icon: Icons.check_circle_rounded);
   }
 
   @override
