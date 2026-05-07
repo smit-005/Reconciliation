@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 import 'package:reconciliation_app/core/widgets/app_page_scaffold.dart';
 import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
 import 'package:path/path.dart' as p;
@@ -1751,21 +1752,43 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildHeaderChip(
-                label: 'PAN ${widget.selectedBuyerPan}',
+              AppInfoChip(
+                label: 'PAN',
+                value: 'PAN ${widget.selectedBuyerPan}',
                 icon: Icons.badge_outlined,
+                compact: true,
+                showLabel: false,
+                backgroundColor: const Color(0xFFF8FAFC),
+                borderColor: const Color(0xFFCBD5E1),
+                iconColor: const Color(0xFF475569),
+                valueColor: const Color(0xFF475569),
+                fontSize: 12,
               ),
               if (_selectedFinancialYearValue() != null)
-                _buildHeaderChip(
-                  label: 'FY ${_selectedFinancialYearValue()}',
+                AppInfoChip(
+                  label: 'FY',
+                  value: 'FY ${_selectedFinancialYearValue()}',
                   icon: Icons.calendar_month_outlined,
+                  compact: true,
+                  showLabel: false,
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  borderColor: const Color(0xFFCBD5E1),
+                  iconColor: const Color(0xFF475569),
+                  valueColor: const Color(0xFF475569),
+                  fontSize: 12,
                 ),
-              _buildHeaderChip(
-                label: _workspaceStatusLabel,
+              AppInfoChip(
+                label: 'Status',
+                value: _workspaceStatusLabel,
                 icon: canOpenReconciliation
                     ? Icons.check_circle_rounded
                     : Icons.hourglass_bottom_rounded,
-                foregroundColor: canOpenReconciliation
+                compact: true,
+                showLabel: false,
+                iconColor: canOpenReconciliation
+                    ? const Color(0xFF047857)
+                    : const Color(0xFF475569),
+                valueColor: canOpenReconciliation
                     ? const Color(0xFF047857)
                     : const Color(0xFF475569),
                 backgroundColor: canOpenReconciliation
@@ -1774,51 +1797,36 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 borderColor: canOpenReconciliation
                     ? const Color(0xFF10B981)
                     : const Color(0xFFCBD5E1),
+                fontSize: 12,
               ),
-              _buildHeaderChip(
-                label: '$_totalSectionFiles source file(s)',
+              AppInfoChip(
+                label: 'Source files',
+                value: '$_totalSectionFiles source file(s)',
                 icon: Icons.folder_copy_rounded,
+                compact: true,
+                showLabel: false,
+                backgroundColor: const Color(0xFFF8FAFC),
+                borderColor: const Color(0xFFCBD5E1),
+                iconColor: const Color(0xFF475569),
+                valueColor: const Color(0xFF475569),
+                fontSize: 12,
               ),
-              _buildHeaderChip(
-                label: '$_totalLedgerRows source rows',
+              AppInfoChip(
+                label: 'Source rows',
+                value: '$_totalLedgerRows source rows',
                 icon: Icons.table_rows_rounded,
+                compact: true,
+                showLabel: false,
+                backgroundColor: const Color(0xFFF8FAFC),
+                borderColor: const Color(0xFFCBD5E1),
+                iconColor: const Color(0xFF475569),
+                valueColor: const Color(0xFF475569),
+                fontSize: 12,
               ),
             ],
           ),
           const SizedBox(height: 14),
           _buildSectionSelector(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderChip({
-    required String label,
-    required IconData icon,
-    Color foregroundColor = const Color(0xFF475569),
-    Color backgroundColor = const Color(0xFFF8FAFC),
-    Color borderColor = const Color(0xFFCBD5E1),
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: foregroundColor),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: foregroundColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
         ],
       ),
     );

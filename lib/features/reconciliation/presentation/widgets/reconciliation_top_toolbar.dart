@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
@@ -143,10 +144,10 @@ class ReconciliationTopToolbar extends StatelessWidget {
       runSpacing: AppSpacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _metaText('PAN', buyerPan.isEmpty ? '-' : buyerPan),
-        _metaText('GST', gstNo.isEmpty ? '-' : gstNo),
+        AppInfoChip(label: 'PAN', value: buyerPan.isEmpty ? '-' : buyerPan),
+        AppInfoChip(label: 'GST', value: gstNo.isEmpty ? '-' : gstNo),
         if (financialYearLabel.trim().isNotEmpty)
-          _metaText('FY', financialYearLabel.trim()),
+          AppInfoChip(label: 'FY', value: financialYearLabel.trim()),
       ],
     );
   }
@@ -177,44 +178,6 @@ class ReconciliationTopToolbar extends StatelessWidget {
         border: Border.all(color: AppColorScheme.divider),
       ),
       child: sectionTabs,
-    );
-  }
-
-  Widget _metaText(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColorScheme.divider),
-      ),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            fontSize: 11.5,
-            color: AppColorScheme.textSecondary,
-          ),
-          children: [
-            TextSpan(
-              text: '$label ',
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppColorScheme.textMuted,
-              ),
-            ),
-            TextSpan(
-              text: value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppColorScheme.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
