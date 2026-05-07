@@ -5,6 +5,7 @@ import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
+import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/skipped_row_summary.dart';
@@ -132,9 +133,10 @@ class _ReconciliationTableSectionState
         ),
         child: const Padding(
           padding: EdgeInsets.all(AppSpacing.xl),
-          child: Text(
-            'No rows found for selected filters.',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          child: AppEmptyState(
+            icon: Icons.table_rows_rounded,
+            title: 'No rows found',
+            message: 'No rows found for selected filters.',
           ),
         ),
       );

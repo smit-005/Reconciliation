@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
+import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/core/widgets/app_sticky_action_bar.dart';
@@ -271,18 +272,10 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
 
   Widget _buildTableCard() {
     if (_items.isEmpty) {
-      return const AppSectionCard(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.xl),
-          child: Text(
-            'No uploaded files are available for mapping review yet.',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColorScheme.textSecondary,
-            ),
-          ),
-        ),
+      return const AppEmptyState(
+        icon: Icons.fact_check_outlined,
+        title: 'No pending mappings',
+        message: 'No uploaded files are available for mapping review yet.',
       );
     }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
@@ -532,7 +533,14 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                         ],
                         Expanded(
                           child: filtered.isEmpty
-                              ? const Center(child: Text('No buyers found'))
+                              ? const Center(
+                                  child: AppEmptyState(
+                                    icon: Icons.people_outline_rounded,
+                                    title: 'No buyers found',
+                                    message:
+                                        'No buyers match the current search.',
+                                  ),
+                                )
                               : ListView.builder(
                                   itemCount: filtered.length,
                                   itemBuilder: (context, index) {
@@ -672,7 +680,11 @@ class _FinancialYearPanel extends StatelessWidget {
           else if (financialYears.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No financial years added yet'),
+              child: AppEmptyState(
+                icon: Icons.calendar_today_outlined,
+                title: 'No financial years',
+                message: 'No financial years added yet',
+              ),
             )
           else
             SizedBox(
