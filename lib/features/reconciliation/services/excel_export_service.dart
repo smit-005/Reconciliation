@@ -143,7 +143,7 @@ class ExcelExportService {
       );
 
       final folderPath = outputFolderPath ?? _getDownloadsPath();
-      final fullPath = p.join(folderPath, fileName);
+      final fullPath = await _resolveAvailableFilePath(folderPath, fileName);
 
       final file = File(fullPath);
       final fileWriteWatch = Stopwatch()..start();
@@ -1281,9 +1281,12 @@ class ExcelExportService {
     String folderPath,
     String fileName,
   ) async {
-    var fullPath = p.join(folderPath, fileName);
-    if (!await File(fullPath).exists()) {
-      return fullPath;
+    final requestedPath = p.join(folderPath, fileName);
+    if (!await File(requestedPath).exists()) {
+      debugPrint(
+        'EXPORT PATH => requested=$requestedPath resolved=$requestedPath',
+      );
+      return requestedPath;
     }
 
     final extension = p.extension(fileName);
@@ -1292,6 +1295,9 @@ class ExcelExportService {
     while (true) {
       final candidate = p.join(folderPath, '${baseName}_$index$extension');
       if (!await File(candidate).exists()) {
+        debugPrint(
+          'EXPORT PATH => requested=$requestedPath resolved=$candidate',
+        );
         return candidate;
       }
       index++;
