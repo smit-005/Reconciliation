@@ -133,12 +133,17 @@ class WorkspaceService {
     final fyFolderName = 'FY_${_sanitizeFolderPart(fyLabel, fallback: 'FY')}';
     final fyRelativePath = p.join(buyerRelativePath, fyFolderName);
     final fyFolder = Directory(p.join(rootPath, fyRelativePath));
-    await Directory(
-      p.join(fyFolder.path, WorkspaceFolderNames.working),
-    ).create(recursive: true);
-    await Directory(
-      p.join(fyFolder.path, WorkspaceFolderNames.finalExports),
-    ).create(recursive: true);
+    for (final folderName in const [
+      WorkspaceFolderNames.working,
+      WorkspaceFolderNames.finalExports,
+      WorkspaceFolderNames.sourceFiles,
+      WorkspaceFolderNames.exceptionReports,
+      WorkspaceFolderNames.sourceSnapshots,
+    ]) {
+      await Directory(
+        p.join(fyFolder.path, folderName),
+      ).create(recursive: true);
+    }
 
     return fyRelativePath;
   }

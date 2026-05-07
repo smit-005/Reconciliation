@@ -63,8 +63,15 @@ void main() {
       workspaceRoot.path,
       financialYears.single.workspaceRelativePath,
     );
-    expect(await Directory(p.join(fyPath, 'Working')).exists(), isTrue);
-    expect(await Directory(p.join(fyPath, 'Final_Exports')).exists(), isTrue);
+    for (final folderName in const [
+      WorkspaceFolderNames.working,
+      WorkspaceFolderNames.finalExports,
+      WorkspaceFolderNames.sourceFiles,
+      WorkspaceFolderNames.exceptionReports,
+      WorkspaceFolderNames.sourceSnapshots,
+    ]) {
+      expect(await Directory(p.join(fyPath, folderName)).exists(), isTrue);
+    }
   });
 
   test('prevents duplicate FY rows for buyer', () async {
