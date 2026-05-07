@@ -144,6 +144,106 @@ void main() {
           },
         );
 
+        final purchaseOnly = rows.rows.singleWhere(
+          (row) =>
+              row.purchasePresent &&
+              !row.tdsPresent &&
+              row.sellerName == 'Correct Contract Vendor',
+        );
+        expect(purchaseOnly.section, '194C');
+        expect(purchaseOnly.sellerPan, isEmpty);
+        expect(
+          purchaseOnly.identitySource,
+          anyOf('legal_name_suggestion', 'name_suggestion'),
+        );
+        expect(
+          purchaseOnly.debugInfo.identityFlags,
+          contains('unresolved_identity'),
+        );
+
+        expect(
+          rows.rows.any(
+            (row) =>
+                row.purchasePresent &&
+                row.sellerName == 'Wrong Fallback Vendor',
+          ),
+          isFalse,
+        );
+        expect(
+          rows.rows.any(
+            (row) =>
+                row.purchasePresent &&
+                row.tdsPresent &&
+                row.sellerName == 'Correct Contract Vendor',
+          ),
+          isFalse,
+        );
+        expect(
+          rows.rows.any(
+            (row) =>
+                !row.purchasePresent &&
+                row.tdsPresent &&
+                row.sellerName == 'Correct Contract Vendor' &&
+                row.sellerPan == 'AAAAA1111A',
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'saved section seller mapping with PAN safely reconciles no-PAN source',
+      () async {
+        const buyerPan = 'SECTM3333C';
+        await _clearMappings(buyerPan);
+        await SellerMappingService.saveMappings(<SellerMapping>[
+          SellerMapping(
+            buyerName: 'Test Buyer',
+            buyerPan: buyerPan,
+            aliasName: 'Shared Alias Vendor',
+            sectionCode: 'ALL',
+            mappedPan: 'BBBBB2222B',
+            mappedName: 'Wrong Fallback Vendor',
+          ),
+          SellerMapping(
+            buyerName: 'Test Buyer',
+            buyerPan: buyerPan,
+            aliasName: 'Shared Alias Vendor',
+            sectionCode: '194C',
+            mappedPan: 'AAAAA1111A',
+            mappedName: 'Correct Contract Vendor',
+          ),
+        ]);
+
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          sourceRows: [
+            _sourceRow(
+              section: '194C',
+              amount: 50000,
+              partyName: 'Shared Alias Vendor',
+              panNumber: '',
+            ),
+          ],
+          tdsRows: [
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 50000,
+              tds: 500,
+              deducteeName: 'Correct Contract Vendor',
+              panNumber: 'AAAAA1111A',
+            ),
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 75000,
+              tds: 750,
+              deducteeName: 'Wrong Fallback Vendor',
+              panNumber: 'BBBBB2222B',
+            ),
+          ],
+        );
+
         final matched = rows.rows.singleWhere(
           (row) =>
               row.purchasePresent &&
@@ -152,8 +252,8 @@ void main() {
         );
         expect(matched.section, '194C');
         expect(matched.sellerPan, 'AAAAA1111A');
-        expect(matched.purchasePresent, isTrue);
-        expect(matched.tdsPresent, isTrue);
+        expect(matched.identitySource, 'mapping_exact');
+        expect(matched.debugInfo.mappingHit, 'exact');
       },
     );
 
