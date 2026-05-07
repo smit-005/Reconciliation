@@ -7,6 +7,14 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 enum WorkspaceStatus { notConfigured, valid, invalid }
 
+abstract final class WorkspaceFolderNames {
+  static const String working = 'Working';
+  static const String finalExports = 'Final_Exports';
+  static const String sourceFiles = 'Source_Files';
+  static const String exceptionReports = 'Exception_Reports';
+  static const String sourceSnapshots = 'Source_Snapshots';
+}
+
 class WorkspaceService {
   static const String manifestFileName = 'ledgermatch_workspace.json';
   static const int manifestVersion = 1;
@@ -125,9 +133,11 @@ class WorkspaceService {
     final fyFolderName = 'FY_${_sanitizeFolderPart(fyLabel, fallback: 'FY')}';
     final fyRelativePath = p.join(buyerRelativePath, fyFolderName);
     final fyFolder = Directory(p.join(rootPath, fyRelativePath));
-    await Directory(p.join(fyFolder.path, 'Working')).create(recursive: true);
     await Directory(
-      p.join(fyFolder.path, 'Final_Exports'),
+      p.join(fyFolder.path, WorkspaceFolderNames.working),
+    ).create(recursive: true);
+    await Directory(
+      p.join(fyFolder.path, WorkspaceFolderNames.finalExports),
     ).create(recursive: true);
 
     return fyRelativePath;

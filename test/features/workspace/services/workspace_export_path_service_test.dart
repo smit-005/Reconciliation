@@ -63,6 +63,56 @@ void main() {
     expect(await workingDirectory.exists(), isTrue);
   });
 
+  test('resolves all standard FY workspace folders', () async {
+    final context = await _createBuyerWithActiveFy();
+
+    final finalExportsDirectory = await exportPathService
+        .resolveFinalExportsDirectory(
+          buyerId: context.buyer.id,
+          financialYearId: context.financialYear.id,
+        );
+    final sourceFilesDirectory = await exportPathService
+        .resolveSourceFilesDirectory(
+          buyerId: context.buyer.id,
+          financialYearId: context.financialYear.id,
+        );
+    final exceptionReportsDirectory = await exportPathService
+        .resolveExceptionReportsDirectory(
+          buyerId: context.buyer.id,
+          financialYearId: context.financialYear.id,
+        );
+    final sourceSnapshotsDirectory = await exportPathService
+        .resolveSourceSnapshotsDirectory(
+          buyerId: context.buyer.id,
+          financialYearId: context.financialYear.id,
+        );
+
+    final fyPath = p.join(
+      workspaceRoot.path,
+      context.financialYear.workspaceRelativePath,
+    );
+    expect(
+      p.normalize(finalExportsDirectory!.path),
+      p.normalize(p.join(fyPath, 'Final_Exports')),
+    );
+    expect(
+      p.normalize(sourceFilesDirectory!.path),
+      p.normalize(p.join(fyPath, 'Source_Files')),
+    );
+    expect(
+      p.normalize(exceptionReportsDirectory!.path),
+      p.normalize(p.join(fyPath, 'Exception_Reports')),
+    );
+    expect(
+      p.normalize(sourceSnapshotsDirectory!.path),
+      p.normalize(p.join(fyPath, 'Source_Snapshots')),
+    );
+    expect(await finalExportsDirectory.exists(), isTrue);
+    expect(await sourceFilesDirectory.exists(), isTrue);
+    expect(await exceptionReportsDirectory.exists(), isTrue);
+    expect(await sourceSnapshotsDirectory.exists(), isTrue);
+  });
+
   test('creates source snapshot folders and copies files', () async {
     final context = await _createBuyerWithActiveFy();
 
@@ -89,33 +139,36 @@ void main() {
     expect(await File(ledgerPath).readAsBytes(), [4, 5, 6]);
   });
 
-  test('adds timestamp suffix instead of overwriting source snapshots', () async {
-    final context = await _createBuyerWithActiveFy();
-    final now = DateTime(2026, 5, 6, 18, 44, 55);
+  test(
+    'adds timestamp suffix instead of overwriting source snapshots',
+    () async {
+      final context = await _createBuyerWithActiveFy();
+      final now = DateTime(2026, 5, 6, 18, 44, 55);
 
-    final firstPath = await exportPathService.copySourceFileSnapshot(
-      buyerId: context.buyer.id,
-      financialYearId: context.financialYear.id,
-      originalFileName: 'ledger.xlsx',
-      bytes: [1],
-      type: SourceFileSnapshotType.ledger,
-      now: now,
-    );
-    final secondPath = await exportPathService.copySourceFileSnapshot(
-      buyerId: context.buyer.id,
-      financialYearId: context.financialYear.id,
-      originalFileName: 'ledger.xlsx',
-      bytes: [2],
-      type: SourceFileSnapshotType.ledger,
-      now: now,
-    );
+      final firstPath = await exportPathService.copySourceFileSnapshot(
+        buyerId: context.buyer.id,
+        financialYearId: context.financialYear.id,
+        originalFileName: 'ledger.xlsx',
+        bytes: [1],
+        type: SourceFileSnapshotType.ledger,
+        now: now,
+      );
+      final secondPath = await exportPathService.copySourceFileSnapshot(
+        buyerId: context.buyer.id,
+        financialYearId: context.financialYear.id,
+        originalFileName: 'ledger.xlsx',
+        bytes: [2],
+        type: SourceFileSnapshotType.ledger,
+        now: now,
+      );
 
-    expect(firstPath, isNot(secondPath));
-    expect(p.basename(firstPath!), 'ledger.xlsx');
-    expect(p.basename(secondPath!), 'ledger_20260506_184455.xlsx');
-    expect(await File(firstPath).readAsBytes(), [1]);
-    expect(await File(secondPath).readAsBytes(), [2]);
-  });
+      expect(firstPath, isNot(secondPath));
+      expect(p.basename(firstPath!), 'ledger.xlsx');
+      expect(p.basename(secondPath!), 'ledger_20260506_184455.xlsx');
+      expect(await File(firstPath).readAsBytes(), [1]);
+      expect(await File(secondPath).readAsBytes(), [2]);
+    },
+  );
 
   test('returns null safely when workspace or FY path is missing', () async {
     await DBHelper.debugResetForTest(databaseName: 'workspace_missing_test.db');
@@ -155,10 +208,7 @@ class _BuyerFyContext {
   final Buyer buyer;
   final BuyerFinancialYear financialYear;
 
-  const _BuyerFyContext({
-    required this.buyer,
-    required this.financialYear,
-  });
+  const _BuyerFyContext({required this.buyer, required this.financialYear});
 }
 
 Future<_BuyerFyContext> _createBuyerWithActiveFy() async {

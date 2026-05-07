@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_repository.dart';
@@ -22,23 +23,65 @@ class WorkspaceExportPathService {
     required String? buyerId,
     required String? financialYearId,
   }) async {
-    final fyPath = await _resolveFinancialYearPath(
+    return _resolveFinancialYearSubdirectory(
       buyerId: buyerId,
       financialYearId: financialYearId,
+      folderSegments: const [WorkspaceFolderNames.working],
     );
-    if (fyPath == null) {
-      return null;
-    }
+  }
 
-    final directory = Directory(p.join(fyPath, 'Working'));
-    await directory.create(recursive: true);
-    return directory;
+  Future<Directory?> resolveFinalExportsDirectory({
+    required String? buyerId,
+    required String? financialYearId,
+  }) async {
+    return _resolveFinancialYearSubdirectory(
+      buyerId: buyerId,
+      financialYearId: financialYearId,
+      folderSegments: const [WorkspaceFolderNames.finalExports],
+    );
   }
 
   Future<Directory?> resolveSourceFilesDirectory({
     required String? buyerId,
     required String? financialYearId,
-    required SourceFileSnapshotType type,
+    SourceFileSnapshotType? type,
+  }) async {
+    return _resolveFinancialYearSubdirectory(
+      buyerId: buyerId,
+      financialYearId: financialYearId,
+      folderSegments: [
+        WorkspaceFolderNames.sourceFiles,
+        if (type != null) _sourceFolderName(type),
+      ],
+    );
+  }
+
+  Future<Directory?> resolveExceptionReportsDirectory({
+    required String? buyerId,
+    required String? financialYearId,
+  }) async {
+    return _resolveFinancialYearSubdirectory(
+      buyerId: buyerId,
+      financialYearId: financialYearId,
+      folderSegments: const [WorkspaceFolderNames.exceptionReports],
+    );
+  }
+
+  Future<Directory?> resolveSourceSnapshotsDirectory({
+    required String? buyerId,
+    required String? financialYearId,
+  }) async {
+    return _resolveFinancialYearSubdirectory(
+      buyerId: buyerId,
+      financialYearId: financialYearId,
+      folderSegments: const [WorkspaceFolderNames.sourceSnapshots],
+    );
+  }
+
+  Future<Directory?> _resolveFinancialYearSubdirectory({
+    required String? buyerId,
+    required String? financialYearId,
+    required List<String> folderSegments,
   }) async {
     final fyPath = await _resolveFinancialYearPath(
       buyerId: buyerId,
@@ -48,10 +91,9 @@ class WorkspaceExportPathService {
       return null;
     }
 
-    final directory = Directory(
-      p.join(fyPath, 'Source_Files', _sourceFolderName(type)),
-    );
+    final directory = Directory(p.joinAll([fyPath, ...folderSegments]));
     await directory.create(recursive: true);
+    debugPrint('WORKSPACE PATH => ${directory.path}');
     return directory;
   }
 
