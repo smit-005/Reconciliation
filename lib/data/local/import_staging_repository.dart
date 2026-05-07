@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
@@ -5,6 +6,27 @@ import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 
 class ImportStagingRepository {
   static const int defaultChunkSize = 1000;
+  static const int tds26QChunkSize = 5000;
+  static const String _stage26QInsertSql = '''
+INSERT INTO staged_26q_rows (
+  import_id,
+  source_file_name,
+  buyer_id,
+  sheet_name,
+  header_row_index,
+  headers_trusted,
+  row_number,
+  date_month,
+  financial_year,
+  party_name,
+  pan_number,
+  amount_paid,
+  tds_amount,
+  section,
+  nature_of_payment,
+  created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+''';
 
   Future<void> stagePurchaseRows({
     required String importId,
@@ -67,14 +89,21 @@ class ImportStagingRepository {
     String? sheetName,
     int? headerRowIndex,
     bool? headersTrusted,
-    int chunkSize = defaultChunkSize,
+    int chunkSize = tds26QChunkSize,
   }) async {
+    final dbWatch = Stopwatch()..start();
     final db = await DBHelper.database;
+    dbWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=tds_stage_db_open ms=${dbWatch.elapsedMilliseconds} rows=${rows.length}',
+    );
     final createdAt = DateTime.now().toIso8601String();
     final normalizedChunkSize = chunkSize <= 0 ? defaultChunkSize : chunkSize;
 
+    final transactionWatch = Stopwatch()..start();
     await db.transaction((txn) async {
       for (int start = 0; start < rows.length; start += normalizedChunkSize) {
+        final chunkWatch = Stopwatch()..start();
         final end = (start + normalizedChunkSize) > rows.length
             ? rows.length
             : (start + normalizedChunkSize);
@@ -82,30 +111,37 @@ class ImportStagingRepository {
 
         for (int index = start; index < end; index++) {
           final row = rows[index];
-          final map = ExcelService.tds26QRowToStagingMap(row);
-          batch.insert('staged_26q_rows', <String, dynamic>{
-            'import_id': importId,
-            'source_file_name': sourceFileName,
-            'buyer_id': buyerId,
-            'sheet_name': sheetName,
-            'header_row_index': headerRowIndex,
-            'headers_trusted': headersTrusted == true ? 1 : 0,
-            'row_number': index + 1,
-            'date_month': map['date_month'],
-            'financial_year': map['financial_year'],
-            'party_name': map['party_name'],
-            'pan_number': map['pan_number'],
-            'amount_paid': map['amount_paid'],
-            'tds_amount': map['tds_amount'],
-            'section': map['section'],
-            'nature_of_payment': map['nature_of_payment'],
-            'created_at': createdAt,
-          });
+          batch.rawInsert(_stage26QInsertSql, <Object?>[
+            importId,
+            sourceFileName,
+            buyerId,
+            sheetName,
+            headerRowIndex,
+            headersTrusted == true ? 1 : 0,
+            index + 1,
+            row.month,
+            row.financialYear,
+            row.deducteeName,
+            row.panNumber,
+            row.deductedAmount,
+            row.tds,
+            row.section,
+            '',
+            createdAt,
+          ]);
         }
 
         await batch.commit(noResult: true);
+        chunkWatch.stop();
+        debugPrint(
+          'UPLOAD FREEZE PERF => step=tds_stage_chunk ms=${chunkWatch.elapsedMilliseconds} startRow=${start + 1} endRow=$end rows=${end - start}',
+        );
       }
     });
+    transactionWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=tds_stage_transaction ms=${transactionWatch.elapsedMilliseconds} rows=${rows.length} chunkSize=$normalizedChunkSize',
+    );
   }
 
   Future<List<PurchaseRow>> loadPurchaseRows(String importId) async {

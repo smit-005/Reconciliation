@@ -175,6 +175,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   _SellerExceptionFilter? _activeSellerExceptionFilter;
 
   bool _isRecalculating = false;
+  bool _hasCompletedInitialLoad = false;
+  bool _hasCurrentSectionExportRows = false;
+  bool _hasAllSectionExportRows = false;
+  int _currentSectionExportRowCount = 0;
+  int _allSectionExportRowCount = 0;
   String _processingMessage = 'Processing reconciliation...';
   final Map<String, List<ReconciliationRow>> _filterRowsCache = {};
   final Map<String, List<String>> _sectionOptionsCache = {};
@@ -194,6 +199,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     CalculationService.sellerStatusOnly26Q,
     ReconciliationStatus.reviewRequired,
   ];
+
+  bool get _canExportCurrentSection =>
+      _hasCurrentSectionExportRows && _currentSectionExportRowCount > 0;
+
+  bool get _canExportAllSections =>
+      _hasAllSectionExportRows && _allSectionExportRowCount > 0;
 
   @override
   void initState() {
@@ -642,6 +653,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     try {
       debugPrint('RECON PERF => heavy work started');
       final totalWatch = Stopwatch()..start();
+      final isInitialLoad = !_hasCompletedInitialLoad;
+      debugPrint(
+        'RECON PERF => ${isInitialLoad ? 'initial load' : 'reconciliation refresh'} started',
+      );
       final prevSeller = selectedSeller;
       final prevFY = selectedFinancialYear;
       final prevSection = selectedSection;
@@ -896,10 +911,32 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
             'summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length} activeTab=${nextSelectedSection == 'All Sections' ? 'All' : nextSelectedSection}',
       );
 
+      final metricsWatch = Stopwatch()..start();
+      final nextFilteredMetrics = _buildFilteredMetrics(
+        rows: nextFilteredRows,
+        activeTab: nextSelectedSection == 'All Sections'
+            ? 'All'
+            : nextSelectedSection,
+      );
+      metricsWatch.stop();
+      _logPerformance(
+        'metric calculation',
+        metricsWatch,
+        details:
+            'summaryRows=${nextFilteredRows.length} matched=${nextFilteredMetrics.matchedCount} mismatches=${nextFilteredMetrics.mismatchRowsCount}',
+      );
+
       if (!mounted) return;
 
       _filterRowsCache.clear();
       _sectionOptionsCache.clear();
+      final exportAvailability = _buildExportAvailabilitySnapshot(
+        rows: freshRows,
+        currentFilteredRows: nextFilteredRows,
+        selectedSellerValue: nextSelectedSeller,
+        selectedFinancialYearValue: nextSelectedFinancialYear,
+        selectedStatusValue: nextSelectedStatus,
+      );
       setState(() {
         _sectionResultCache = sectionResult;
         allRows = freshRows;
@@ -920,20 +957,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         activeSectionTab = nextSelectedSection == 'All Sections'
             ? 'All'
             : nextSelectedSection;
-        _filteredMetrics = _buildFilteredMetrics(
-          rows: nextFilteredRows,
-          activeTab: nextSelectedSection == 'All Sections'
-              ? 'All'
-              : nextSelectedSection,
-        );
+        _filteredMetrics = nextFilteredMetrics;
+        _applyExportAvailabilitySnapshot(exportAvailability);
       });
       totalWatch.stop();
       _logPerformance(
-        'reconciliation screen total refresh',
+        isInitialLoad ? 'initial load' : 'reconciliation refresh',
         totalWatch,
         details:
             'allRows=${freshRows.length} summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length}',
       );
+      _hasCompletedInitialLoad = true;
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Recalculation failed: $e');
@@ -1004,6 +1038,27 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         ? 'All'
         : nextSelectedSection;
 
+    final metricsWatch = Stopwatch()..start();
+    final nextFilteredMetrics = _buildFilteredMetrics(
+      rows: nextFilteredRows,
+      activeTab: nextActiveTab,
+    );
+    metricsWatch.stop();
+    _logPerformance(
+      'metric calculation',
+      metricsWatch,
+      details:
+          'summaryRows=${nextFilteredRows.length} matched=${nextFilteredMetrics.matchedCount} mismatches=${nextFilteredMetrics.mismatchRowsCount}',
+    );
+
+    final exportAvailability = _buildExportAvailabilitySnapshot(
+      rows: allRows,
+      currentFilteredRows: nextFilteredRows,
+      selectedSellerValue: nextSelectedSeller,
+      selectedFinancialYearValue: nextSelectedFinancialYear,
+      selectedStatusValue: selectedStatus,
+    );
+
     setState(() {
       sellerOptions = nextSellerOptions;
       financialYearOptions = nextFinancialYearOptions;
@@ -1014,10 +1069,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       activeSectionTab = nextActiveTab;
       filteredRows = nextFilteredRows;
       tableRows = nextTableRows;
-      _filteredMetrics = _buildFilteredMetrics(
-        rows: nextFilteredRows,
-        activeTab: nextActiveTab,
-      );
+      _filteredMetrics = nextFilteredMetrics;
+      _applyExportAvailabilitySnapshot(exportAvailability);
     });
     filterWatch.stop();
     _logPerformance(
@@ -2213,6 +2266,56 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     );
   }
 
+  ({
+    bool hasCurrentSectionExportRows,
+    bool hasAllSectionExportRows,
+    int currentSectionExportRowCount,
+    int allSectionExportRowCount,
+  })
+  _buildExportAvailabilitySnapshot({
+    required List<ReconciliationRow> rows,
+    required List<ReconciliationRow> currentFilteredRows,
+    required String selectedSellerValue,
+    required String selectedFinancialYearValue,
+    required String selectedStatusValue,
+  }) {
+    final watch = Stopwatch()..start();
+    final allSectionRows = _filterRows(
+      rows: rows,
+      selectedSellerValue: selectedSellerValue,
+      selectedFinancialYearValue: selectedFinancialYearValue,
+      selectedSectionValue: 'All Sections',
+      selectedStatusValue: selectedStatusValue,
+    );
+    watch.stop();
+    debugPrint(
+      'RECON PERF => export availability cache rebuild ms=${watch.elapsedMilliseconds} '
+      'currentRows=${currentFilteredRows.length} allRows=${allSectionRows.length}',
+    );
+
+    return (
+      hasCurrentSectionExportRows: currentFilteredRows.isNotEmpty,
+      hasAllSectionExportRows: allSectionRows.isNotEmpty,
+      currentSectionExportRowCount: currentFilteredRows.length,
+      allSectionExportRowCount: allSectionRows.length,
+    );
+  }
+
+  void _applyExportAvailabilitySnapshot(
+    ({
+      bool hasCurrentSectionExportRows,
+      bool hasAllSectionExportRows,
+      int currentSectionExportRowCount,
+      int allSectionExportRowCount,
+    })
+    snapshot,
+  ) {
+    _hasCurrentSectionExportRows = snapshot.hasCurrentSectionExportRows;
+    _hasAllSectionExportRows = snapshot.hasAllSectionExportRows;
+    _currentSectionExportRowCount = snapshot.currentSectionExportRowCount;
+    _allSectionExportRowCount = snapshot.allSectionExportRowCount;
+  }
+
   Future<void> _exportCurrentSectionExcel() async {
     try {
       final filePath = await ExcelExportService.exportReconciliationExcel(
@@ -2512,7 +2615,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allSectionExportRows = _rowsForAllSectionsExport();
     final body = Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
@@ -2546,13 +2648,13 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         ),
       ),
       bottomNavigationBar: ReconciliationBottomActionBar(
-        onExportCurrentSection: filteredRows.isEmpty
+        onExportCurrentSection: !_canExportCurrentSection
             ? null
             : _exportCurrentSectionExcel,
-        onExportAllSections: allSectionExportRows.isEmpty
+        onExportAllSections: !_canExportAllSections
             ? null
             : _exportAllSectionsExcel,
-        onExportPivot: filteredRows.isEmpty ? null : _exportPivotExcel,
+        onExportPivot: !_canExportCurrentSection ? null : _exportPivotExcel,
       ),
       body: Stack(
         children: [

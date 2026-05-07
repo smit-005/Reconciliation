@@ -622,6 +622,7 @@ class ImportUploadFlowService {
           return const ImportWorkflowResponse.cancelled();
         }
 
+        final parseWatch = Stopwatch()..start();
         final parsedRows = await _parseTdsRowsWithProfileInBackground(
           bytes: bytes,
           sheetName: columnMappingResult.sheetName,
@@ -629,6 +630,13 @@ class ImportUploadFlowService {
           headersTrusted: columnMappingResult.headersTrusted,
           columnMapping: columnMappingResult.columnMapping,
         );
+        parseWatch.stop();
+        _logUploadFreezePerformance(
+          'tds_parse_total',
+          parseWatch,
+          details: 'rows=${parsedRows.length} mode=profile',
+        );
+        final stageWatch = Stopwatch()..start();
         final stagingImportId = await _stage26QRows(
           sourceFileName: fileName,
           buyerId: null,
@@ -636,6 +644,12 @@ class ImportUploadFlowService {
           headerRowIndex: columnMappingResult.headerRowIndex,
           headersTrusted: columnMappingResult.headersTrusted,
           rows: parsedRows,
+        );
+        stageWatch.stop();
+        _logUploadFreezePerformance(
+          'tds_stage_rows',
+          stageWatch,
+          details: 'rows=${parsedRows.length} mode=profile',
         );
 
         return ImportWorkflowResponse.success(
@@ -659,10 +673,18 @@ class ImportUploadFlowService {
         return ImportWorkflowResponse.failure(effectiveValidation.message);
       }
 
+      final parseWatch = Stopwatch()..start();
       final parsedRows = await ExcelService.parseTds26QRowsInBackground(
         sessionCache?.bytes ?? Uint8List.fromList(bytes),
         sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
       );
+      parseWatch.stop();
+      _logUploadFreezePerformance(
+        'tds_parse_total',
+        parseWatch,
+        details: 'rows=${parsedRows.length} mode=auto',
+      );
+      final stageWatch = Stopwatch()..start();
       final stagingImportId = await _stage26QRows(
         sourceFileName: fileName,
         buyerId: null,
@@ -670,6 +692,12 @@ class ImportUploadFlowService {
         headerRowIndex: effectiveValidation.headerRowIndex,
         headersTrusted: null,
         rows: parsedRows,
+      );
+      stageWatch.stop();
+      _logUploadFreezePerformance(
+        'tds_stage_rows',
+        stageWatch,
+        details: 'rows=${parsedRows.length} mode=auto',
       );
 
       return ImportWorkflowResponse.success(
@@ -945,6 +973,17 @@ String _readFailureMessage({
   return defaultMessage;
 }
 
+void _logUploadFreezePerformance(
+  String step,
+  Stopwatch watch, {
+  String details = '',
+}) {
+  final suffix = details.trim().isEmpty ? '' : ' | $details';
+  debugPrint(
+    'UPLOAD FREEZE PERF => step=$step ms=${watch.elapsedMilliseconds}$suffix',
+  );
+}
+
 class _PurchaseUploadPreparation {
   final _PurchaseInspectionResult inspection;
   final ExcelValidationResult validation;
@@ -975,40 +1014,80 @@ Future<_PurchaseInspectionResult?> _inspectPurchaseFileInBackground({
   required List<int> bytes,
   required String preferredSheetName,
 }) async {
+  final computeWatch = Stopwatch()..start();
   final payload = await compute(
     _computePurchaseInspectionPayload,
     <String, dynamic>{'bytes': bytes, 'preferredSheetName': preferredSheetName},
   );
+  computeWatch.stop();
   if (payload == null) {
+    _logUploadFreezePerformance(
+      'parser_compute_inspect_purchase',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} result=null',
+    );
     return null;
   }
-  return _deserializePurchaseInspectionResult(
+  final result = _deserializePurchaseInspectionResult(
     Map<String, dynamic>.from(payload as Map),
   );
+  _logUploadFreezePerformance(
+    'parser_compute_inspect_purchase',
+    computeWatch,
+    details: 'sizeBytes=${bytes.length} sheet=${result.sheetName}',
+  );
+  return result;
 }
 
 Future<_PurchaseInspectionResult?> _inspectGenericLedgerFileInBackground({
   required List<int> bytes,
 }) async {
+  final computeWatch = Stopwatch()..start();
   final payload = await compute(_computeGenericLedgerInspectionPayload, bytes);
+  computeWatch.stop();
   if (payload == null) {
+    _logUploadFreezePerformance(
+      'parser_compute_inspect_generic_ledger',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} result=null',
+    );
     return null;
   }
-  return _deserializePurchaseInspectionResult(
+  final result = _deserializePurchaseInspectionResult(
     Map<String, dynamic>.from(payload as Map),
   );
+  _logUploadFreezePerformance(
+    'parser_compute_inspect_generic_ledger',
+    computeWatch,
+    details: 'sizeBytes=${bytes.length} sheet=${result.sheetName}',
+  );
+  return result;
 }
 
 Future<_PurchaseUploadPreparation?> _preparePurchaseUploadInBackground({
   required List<int> bytes,
 }) async {
+  final computeWatch = Stopwatch()..start();
   final payload = await compute(_computePurchaseUploadPayload, bytes);
+  computeWatch.stop();
   if (payload == null) {
+    _logUploadFreezePerformance(
+      'parser_compute_prepare_purchase_upload',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} result=null',
+    );
     return null;
   }
 
   final mapPayload = Map<String, dynamic>.from(payload);
-  return _deserializePurchaseUploadPreparation(mapPayload);
+  final result = _deserializePurchaseUploadPreparation(mapPayload);
+  _logUploadFreezePerformance(
+    'parser_compute_prepare_purchase_upload',
+    computeWatch,
+    details:
+        'sizeBytes=${bytes.length} rows=${result.parsedRows?.length ?? 0} valid=${result.validation.isValid}',
+  );
+  return result;
 }
 
 Future<List<PurchaseRow>> _parsePurchaseRowsWithProfileInBackground({
@@ -1018,6 +1097,7 @@ Future<List<PurchaseRow>> _parsePurchaseRowsWithProfileInBackground({
   required bool headersTrusted,
   required Map<String, String> columnMapping,
 }) async {
+  final computeWatch = Stopwatch()..start();
   final response =
       await compute(_computePurchaseProfileParsePayload, <String, dynamic>{
         'bytes': bytes,
@@ -1027,7 +1107,14 @@ Future<List<PurchaseRow>> _parsePurchaseRowsWithProfileInBackground({
         'columnMapping': columnMapping,
       });
 
-  return _deserializePurchaseRows(response);
+  computeWatch.stop();
+  final rows = _deserializePurchaseRows(response);
+  _logUploadFreezePerformance(
+    'parser_compute_purchase_with_profile',
+    computeWatch,
+    details: 'sizeBytes=${bytes.length} rows=${rows.length}',
+  );
+  return rows;
 }
 
 Future<List<Tds26QRow>> _parseTdsRowsWithProfileInBackground({
@@ -1037,6 +1124,7 @@ Future<List<Tds26QRow>> _parseTdsRowsWithProfileInBackground({
   required bool headersTrusted,
   required Map<String, String> columnMapping,
 }) async {
+  final computeWatch = Stopwatch()..start();
   final response =
       await compute(_computeTdsProfileParsePayload, <String, dynamic>{
         'bytes': bytes,
@@ -1046,7 +1134,14 @@ Future<List<Tds26QRow>> _parseTdsRowsWithProfileInBackground({
         'columnMapping': columnMapping,
       });
 
-  return _deserializeTdsRows(response);
+  computeWatch.stop();
+  final rows = _deserializeTdsRows(response);
+  _logUploadFreezePerformance(
+    'parser_compute_tds26q_with_profile',
+    computeWatch,
+    details: 'sizeBytes=${bytes.length} rows=${rows.length}',
+  );
+  return rows;
 }
 
 Map<String, dynamic>? _computePurchaseUploadPayload(List<int> bytes) {

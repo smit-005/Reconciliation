@@ -68,3 +68,6 @@ LedgerMatch/
 .ledgermatch/
 *.db-shm
 *.db-wal
+
+.tmp_*
+*_harness_test.dart

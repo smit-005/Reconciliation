@@ -28,21 +28,44 @@ ExcelPreviewData? _buildPreviewData(
   String? preferredSheetName,
   ImportSessionCache? sessionCache,
 }) {
+  final previewWatch = Stopwatch()..start();
+  ExcelPreviewData? finish(
+    ExcelPreviewData? data, {
+    String sheetName = '',
+    int sourceRows = 0,
+  }) {
+    previewWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=preview_build ms=${previewWatch.elapsedMilliseconds} '
+      'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} '
+      'sheet=$sheetName sourceRows=$sourceRows result=${data == null ? 'null' : 'ok'}',
+    );
+    return data;
+  }
+
+  final decodeWatch = Stopwatch()..start();
   final decoder = ExcelService._decoderFromCache(
     bytes,
     sessionCache: sessionCache,
   );
-  if (decoder.tables.isEmpty) return null;
+  decodeWatch.stop();
+  debugPrint(
+    'UPLOAD FREEZE PERF => step=preview_decode ms=${decodeWatch.elapsedMilliseconds} '
+    'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} cache=${sessionCache != null}',
+  );
+  if (decoder.tables.isEmpty) return finish(null);
 
   final sheetInfo = ExcelService._findBestSheetAndHeader(
     decoder,
     forcedType: fileType,
     preferredSheetName: preferredSheetName,
   );
-  if (sheetInfo == null) return null;
+  if (sheetInfo == null) return finish(null);
 
   final table = decoder.tables[sheetInfo.sheetName];
-  if (table == null || table.rows.isEmpty) return null;
+  if (table == null || table.rows.isEmpty) {
+    return finish(null, sheetName: sheetInfo.sheetName);
+  }
   final previewRows = _previewScanRows(
     table.rows,
     headerRowIndex: sheetInfo.headerRowIndex,
@@ -69,7 +92,13 @@ ExcelPreviewData? _buildPreviewData(
     detectionScore: selectedStructuredCandidate?.score ?? 0,
     matchedFields: selectedStructuredCandidate?.matchedFields ?? const [],
   );
-  if (primaryCandidate == null) return null;
+  if (primaryCandidate == null) {
+    return finish(
+      null,
+      sheetName: sheetInfo.sheetName,
+      sourceRows: table.rows.length,
+    );
+  }
 
   final headerRowCandidates = _buildManualHeaderRowCandidates(
     rows: previewRows,
@@ -81,21 +110,25 @@ ExcelPreviewData? _buildPreviewData(
 
   ExcelService._flushForcedNumericDateAvoidanceSummary('build_preview');
 
-  return ExcelPreviewData(
-    fileType: fileType.name,
-    fileName: fileName,
+  return finish(
+    ExcelPreviewData(
+      fileType: fileType.name,
+      fileName: fileName,
+      sheetName: sheetInfo.sheetName,
+      headerRowIndex: primaryCandidate.headerRowIndex,
+      headersTrusted: primaryCandidate.headersTrusted,
+      confidenceScore: primaryCandidate.confidenceScore,
+      warnings: warnings,
+      unmappedRawHeaders: primaryCandidate.unmappedRawHeaders,
+      columnKeys: primaryCandidate.columnKeys,
+      columnLabels: primaryCandidate.columnLabels,
+      suggestedMappings: primaryCandidate.suggestedMappings,
+      rawSampleRows: primaryCandidate.rawSampleRows,
+      sampleRows: primaryCandidate.sampleRows,
+      headerRowCandidates: headerRowCandidates,
+    ),
     sheetName: sheetInfo.sheetName,
-    headerRowIndex: primaryCandidate.headerRowIndex,
-    headersTrusted: primaryCandidate.headersTrusted,
-    confidenceScore: primaryCandidate.confidenceScore,
-    warnings: warnings,
-    unmappedRawHeaders: primaryCandidate.unmappedRawHeaders,
-    columnKeys: primaryCandidate.columnKeys,
-    columnLabels: primaryCandidate.columnLabels,
-    suggestedMappings: primaryCandidate.suggestedMappings,
-    rawSampleRows: primaryCandidate.rawSampleRows,
-    sampleRows: primaryCandidate.sampleRows,
-    headerRowCandidates: headerRowCandidates,
+    sourceRows: table.rows.length,
   );
 }
 
@@ -111,13 +144,30 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   double? confidenceScore,
   ImportSessionCache? sessionCache,
 }) {
+  final previewWatch = Stopwatch()..start();
+  ExcelPreviewData? finish(ExcelPreviewData? data, {int sourceRows = 0}) {
+    previewWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=preview_build_with_profile ms=${previewWatch.elapsedMilliseconds} '
+      'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} '
+      'sheet=$sheetName sourceRows=$sourceRows result=${data == null ? 'null' : 'ok'}',
+    );
+    return data;
+  }
+
+  final decodeWatch = Stopwatch()..start();
   final decoder = ExcelService._decoderFromCache(
     bytes,
     sessionCache: sessionCache,
   );
-  if (sheetName.isEmpty) return null;
+  decodeWatch.stop();
+  debugPrint(
+    'UPLOAD FREEZE PERF => step=preview_decode_with_profile ms=${decodeWatch.elapsedMilliseconds} '
+    'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} cache=${sessionCache != null}',
+  );
+  if (sheetName.isEmpty) return finish(null);
   final table = decoder.tables[sheetName];
-  if (table == null || table.rows.isEmpty) return null;
+  if (table == null || table.rows.isEmpty) return finish(null);
   final previewRows = _previewScanRows(
     table.rows,
     headerRowIndex: headerRowIndex,
@@ -145,7 +195,9 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
     detectionScore: selectedStructuredCandidate?.score ?? 0,
     matchedFields: selectedStructuredCandidate?.matchedFields ?? const [],
   );
-  if (primaryCandidate == null) return null;
+  if (primaryCandidate == null) {
+    return finish(null, sourceRows: table.rows.length);
+  }
 
   final headerRowCandidates = _buildManualHeaderRowCandidates(
     rows: previewRows,
@@ -159,21 +211,24 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
     'build_preview_with_profile',
   );
 
-  return ExcelPreviewData(
-    fileType: fileType.name,
-    fileName: fileName,
-    sheetName: sheetName,
-    headerRowIndex: primaryCandidate.headerRowIndex,
-    headersTrusted: primaryCandidate.headersTrusted,
-    confidenceScore: primaryCandidate.confidenceScore,
-    warnings: warnings,
-    unmappedRawHeaders: primaryCandidate.unmappedRawHeaders,
-    columnKeys: primaryCandidate.columnKeys,
-    columnLabels: primaryCandidate.columnLabels,
-    suggestedMappings: primaryCandidate.suggestedMappings,
-    rawSampleRows: primaryCandidate.rawSampleRows,
-    sampleRows: primaryCandidate.sampleRows,
-    headerRowCandidates: headerRowCandidates,
+  return finish(
+    ExcelPreviewData(
+      fileType: fileType.name,
+      fileName: fileName,
+      sheetName: sheetName,
+      headerRowIndex: primaryCandidate.headerRowIndex,
+      headersTrusted: primaryCandidate.headersTrusted,
+      confidenceScore: primaryCandidate.confidenceScore,
+      warnings: warnings,
+      unmappedRawHeaders: primaryCandidate.unmappedRawHeaders,
+      columnKeys: primaryCandidate.columnKeys,
+      columnLabels: primaryCandidate.columnLabels,
+      suggestedMappings: primaryCandidate.suggestedMappings,
+      rawSampleRows: primaryCandidate.rawSampleRows,
+      sampleRows: primaryCandidate.sampleRows,
+      headerRowCandidates: headerRowCandidates,
+    ),
+    sourceRows: table.rows.length,
   );
 }
 

@@ -354,6 +354,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
 
     final file = result.files.single;
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=file_selected file=${file.name} sizeBytes=${file.size}',
+    );
     final normalizedExtension = p.extension(file.name).toLowerCase();
     if (normalizedExtension == '.csv') {
       _showUploadSnackBar(
@@ -391,9 +394,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   void _setSectionLoading(String sectionCode, bool isLoading) {
+    final setStateWatch = Stopwatch()..start();
     setState(() {
       sectionLoading[sectionCode] = isLoading;
     });
+    setStateWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=set_section_loading_setState ms=${setStateWatch.elapsedMilliseconds} section=$sectionCode loading=$isLoading',
+    );
   }
 
   void _rebuildPurchaseState() {
@@ -435,6 +443,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     bool forceColumnMapping = false,
   }) async {
     final parseWatch = Stopwatch()..start();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=purchase_file_size file=${pickedFile.name} sizeBytes=${bytes.length}',
+    );
     final response = await ImportUploadFlowService.preparePurchaseImport(
       buyerId: widget.selectedBuyerId,
       bytes: bytes,
@@ -509,6 +520,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     bool forceColumnMapping = false,
   }) async {
     final parseWatch = Stopwatch()..start();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=generic_file_size section=$sectionCode file=${pickedFile.name} sizeBytes=${bytes.length}',
+    );
     final response = await ImportUploadFlowService.prepareGenericLedgerImport(
       buyerId: widget.selectedBuyerId,
       sectionCode: sectionCode,
@@ -653,12 +667,17 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
+      final setStateWatch = Stopwatch()..start();
       setState(() {
         _markSellerPreflightDirty();
         sectionFiles['194Q'] = [...sectionFiles['194Q']!, uploadFile];
         _rebuildPurchaseState();
         sectionLoading['194Q'] = false;
       });
+      setStateWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=purchase_upload_setState ms=${setStateWatch.elapsedMilliseconds} rows=${uploadFile.rowCount}',
+      );
 
       unawaited(
         _snapshotSourceFile(
@@ -701,6 +720,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return;
       }
 
+      final setStateWatch = Stopwatch()..start();
       setState(() {
         _markSellerPreflightDirty();
         sectionFiles[sectionCode] = [...sectionFiles[sectionCode]!, uploadFile];
@@ -709,6 +729,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             .toList();
         sectionLoading[sectionCode] = false;
       });
+      setStateWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=generic_upload_setState ms=${setStateWatch.elapsedMilliseconds} section=$sectionCode rows=${uploadFile.rowCount}',
+      );
 
       unawaited(
         _snapshotSourceFile(
@@ -725,14 +749,24 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   Future<void> uploadTds26QFile() async {
+    final initialSetStateWatch = Stopwatch()..start();
     setState(() {
       isLoadingTds = true;
     });
+    initialSetStateWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=tds_loading_setState ms=${initialSetStateWatch.elapsedMilliseconds} loading=true',
+    );
     await WidgetsBinding.instance.endOfFrame;
 
     try {
       final uploadWatch = Stopwatch()..start();
+      final pickWatch = Stopwatch()..start();
       final pickedFile = await _pickExcelFile();
+      pickWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=tds_pick_file ms=${pickWatch.elapsedMilliseconds} selected=${pickedFile != null}',
+      );
       if (pickedFile == null) {
         setState(() => isLoadingTds = false);
         return;
@@ -744,18 +778,32 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         _showUploadSnackBar('Could not read 26Q file');
         return;
       }
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=tds_file_size file=${pickedFile.name} sizeBytes=${bytes.length}',
+      );
 
+      final validationWatch = Stopwatch()..start();
       final validation = await ImportUploadFlowService.validateTds26QImport(
         bytes,
+      );
+      validationWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=tds_validation_total ms=${validationWatch.elapsedMilliseconds} valid=${validation.isValid} requiresSelection=${validation.requiresUserSelection}',
       );
       String? preferredSheetName;
 
       if (validation.requiresUserSelection) {
+        final sheetSelectionWatch = Stopwatch()..start();
         setState(() => isLoadingTds = false);
+        final selectableSheets = validation.candidateSheets.isNotEmpty
+            ? validation.candidateSheets
+            : await ExcelService.list26QSelectableSheetsInBackground(bytes);
         preferredSheetName = await _show26QSheetSelectionDialog(
-          validation.candidateSheets.isNotEmpty
-              ? validation.candidateSheets
-              : await ExcelService.list26QSelectableSheetsInBackground(bytes),
+          selectableSheets,
+        );
+        sheetSelectionWatch.stop();
+        debugPrint(
+          'UPLOAD FREEZE PERF => step=tds_sheet_selection_dialog ms=${sheetSelectionWatch.elapsedMilliseconds} sheets=${selectableSheets.length} selected=${preferredSheetName != null}',
         );
         if (preferredSheetName == null || preferredSheetName.trim().isEmpty) {
           return;
@@ -770,12 +818,17 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         setState(() => isLoadingTds = false);
       }
 
+      final prepareWatch = Stopwatch()..start();
       final response = await ImportUploadFlowService.prepareTds26QImport(
         bytes: bytes,
         fileName: pickedFile.name,
         validation: validation,
         openColumnMapping: _openImportColumnMapping,
         preferredSheetName: preferredSheetName,
+      );
+      prepareWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=tds_prepare_import_total ms=${prepareWatch.elapsedMilliseconds} success=${response.isSuccess}',
       );
 
       if (response.isFailure) {
@@ -794,6 +847,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         setState(() => isLoadingTds = true);
       }
 
+      final setStateWatch = Stopwatch()..start();
       setState(() {
         _markSellerPreflightDirty();
         tdsUploadFile = Tds26QUploadFile(
@@ -815,9 +869,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             .toList();
         isLoadingTds = false;
       });
+      setStateWatch.stop();
+      debugPrint(
+        'UPLOAD FREEZE PERF => step=tds_upload_setState ms=${setStateWatch.elapsedMilliseconds} rows=${result.parsedRows.length}',
+      );
       uploadWatch.stop();
       debugPrint(
-        'UPLOAD PERF => 26Q parse ${uploadWatch.elapsedMilliseconds} ms | '
+        'UPLOAD PERF => 26Q upload total ${uploadWatch.elapsedMilliseconds} ms | '
         'file=${pickedFile.name} rows=${result.parsedRows.length} '
         'sheet=${validation.detectedSheet ?? 'manual'}',
       );
@@ -1148,6 +1206,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<void> _persistSellerMappingResult(
     SellerMappingScreenResult result,
   ) async {
+    final totalWatch = Stopwatch()..start();
+    final deleteWatch = Stopwatch()..start();
     for (final item in result.deleted) {
       await SellerMappingService.deleteMapping(
         buyerPan: widget.selectedBuyerPan,
@@ -1155,7 +1215,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionCode: item['sectionCode'] ?? 'ALL',
       );
     }
+    deleteWatch.stop();
+    debugPrint(
+      'SELLER DB PERF => step=delete_mappings ms=${deleteWatch.elapsedMilliseconds} count=${result.deleted.length}',
+    );
 
+    final upsertWatch = Stopwatch()..start();
     for (final item in result.upserts) {
       await SellerMappingService.saveMapping(
         SellerMapping(
@@ -1168,6 +1233,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         ),
       );
     }
+    upsertWatch.stop();
+    totalWatch.stop();
+    debugPrint(
+      'SELLER DB PERF => step=upsert_mappings ms=${upsertWatch.elapsedMilliseconds} count=${result.upserts.length}',
+    );
+    debugPrint(
+      'SELLER DB PERF => step=total_db_save ms=${totalWatch.elapsedMilliseconds} deletes=${result.deleted.length} upserts=${result.upserts.length}',
+    );
   }
 
   void _storeSellerMappingDraft(SellerMappingScreenResult result) {

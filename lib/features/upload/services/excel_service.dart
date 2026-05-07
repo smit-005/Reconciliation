@@ -25,10 +25,13 @@ class ImportSessionCache {
     final bytes = sourceBytes is Uint8List
         ? sourceBytes
         : Uint8List.fromList(sourceBytes);
-    return ImportSessionCache._(
-      bytes: bytes,
-      decoder: SpreadsheetDecoder.decodeBytes(bytes, update: false),
+    final decodeWatch = Stopwatch()..start();
+    final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
+    decodeWatch.stop();
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=session_cache_decode ms=${decodeWatch.elapsedMilliseconds} sizeBytes=${bytes.length}',
     );
+    return ImportSessionCache._(bytes: bytes, decoder: decoder);
   }
 }
 
@@ -68,6 +71,17 @@ class ExcelService {
   static void _debugVerbose(String message) {
     if (!_enableVerboseImportLogs) return;
     debugPrint(message);
+  }
+
+  static void _logUploadFreezePerformance(
+    String step,
+    Stopwatch watch, {
+    String details = '',
+  }) {
+    final suffix = details.trim().isEmpty ? '' : ' | $details';
+    debugPrint(
+      'UPLOAD FREEZE PERF => step=$step ms=${watch.elapsedMilliseconds}$suffix',
+    );
   }
 
   static void _recordForcedNumericDateAvoidance(String field) {
@@ -183,32 +197,57 @@ class ExcelService {
   static Future<List<PurchaseRow>> parsePurchaseRowsInBackground(
     Uint8List bytes,
   ) async {
+    final computeWatch = Stopwatch()..start();
     final payload = await compute(_parsePurchaseRowsInIsolate, bytes);
-    return _deserializePurchaseRowsForIsolate(payload);
+    computeWatch.stop();
+    final rows = _deserializePurchaseRowsForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_purchase',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} rows=${rows.length}',
+    );
+    return rows;
   }
 
   static Future<List<Tds26QRow>> parseTds26QRowsInBackground(
     Uint8List bytes, {
     String? sheetName,
   }) async {
+    final computeWatch = Stopwatch()..start();
     final payload = await compute(_parseTds26QRowsInIsolate, <String, dynamic>{
       'bytes': bytes,
       'sheetName': sheetName,
     });
-    return _deserializeTdsRowsForIsolate(payload);
+    computeWatch.stop();
+    final rows = _deserializeTdsRowsForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_tds26q',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} rows=${rows.length}',
+    );
+    return rows;
   }
 
   static Future<ExcelValidationResult> validatePurchaseFileInBackground(
     Uint8List bytes,
   ) async {
+    final computeWatch = Stopwatch()..start();
     final payload = await compute(_validatePurchaseFileInIsolate, bytes);
-    return _deserializeValidationForIsolate(payload);
+    computeWatch.stop();
+    final result = _deserializeValidationForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_validate_purchase',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} valid=${result.isValid}',
+    );
+    return result;
   }
 
   static Future<ExcelValidationResult> validateTds26QFileInBackground(
     Uint8List bytes, {
     String? preferredSheetName,
   }) async {
+    final computeWatch = Stopwatch()..start();
     final payload = await compute(
       _validateTds26QFileInIsolate,
       <String, dynamic>{
@@ -216,20 +255,43 @@ class ExcelService {
         'preferredSheetName': preferredSheetName,
       },
     );
-    return _deserializeValidationForIsolate(payload);
+    computeWatch.stop();
+    final result = _deserializeValidationForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_validate_tds26q',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} valid=${result.isValid}',
+    );
+    return result;
   }
 
   static Future<ExcelValidationResult> validateGenericLedgerFileInBackground(
     Uint8List bytes,
   ) async {
+    final computeWatch = Stopwatch()..start();
     final payload = await compute(_validateGenericLedgerFileInIsolate, bytes);
-    return _deserializeValidationForIsolate(payload);
+    computeWatch.stop();
+    final result = _deserializeValidationForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_validate_generic_ledger',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} valid=${result.isValid}',
+    );
+    return result;
   }
 
   static Future<List<String>> list26QSelectableSheetsInBackground(
     Uint8List bytes,
-  ) {
-    return compute(_list26QSelectableSheetsInIsolate, bytes);
+  ) async {
+    final computeWatch = Stopwatch()..start();
+    final sheets = await compute(_list26QSelectableSheetsInIsolate, bytes);
+    computeWatch.stop();
+    _logUploadFreezePerformance(
+      'parser_compute_list_26q_sheets',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} sheets=${sheets.length}',
+    );
+    return sheets;
   }
 
   static Future<List<NormalizedLedgerRow>> parseGenericLedgerRowsInBackground(
@@ -237,13 +299,21 @@ class ExcelService {
     required String defaultSection,
     String sourceFileName = '',
   }) async {
+    final computeWatch = Stopwatch()..start();
     final payload =
         await compute(_parseGenericLedgerRowsInIsolate, <String, dynamic>{
           'bytes': bytes,
           'defaultSection': defaultSection,
           'sourceFileName': sourceFileName,
         });
-    return _deserializeNormalizedLedgerRowsForIsolate(payload);
+    computeWatch.stop();
+    final rows = _deserializeNormalizedLedgerRowsForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_generic_ledger',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} rows=${rows.length}',
+    );
+    return rows;
   }
 
   static Future<List<NormalizedLedgerRow>>
@@ -256,6 +326,7 @@ class ExcelService {
     required String defaultSection,
     String sourceFileName = '',
   }) async {
+    final computeWatch = Stopwatch()..start();
     final payload = await compute(
       _parseGenericLedgerRowsWithProfileInIsolate,
       <String, dynamic>{
@@ -268,7 +339,14 @@ class ExcelService {
         'sourceFileName': sourceFileName,
       },
     );
-    return _deserializeNormalizedLedgerRowsForIsolate(payload);
+    computeWatch.stop();
+    final rows = _deserializeNormalizedLedgerRowsForIsolate(payload);
+    _logUploadFreezePerformance(
+      'parser_compute_generic_ledger_with_profile',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} rows=${rows.length}',
+    );
+    return rows;
   }
 
   static SpreadsheetDecoder _decoderFromCache(

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
@@ -10,6 +11,17 @@ import 'reconciliation_orchestrator.dart';
 class ExcelExportService {
   static const double _thresholdAmount = 5000000;
 
+  static void _logPerformance(
+    String step,
+    Stopwatch watch, {
+    String details = '',
+  }) {
+    final suffix = details.trim().isEmpty ? '' : ' | $details';
+    debugPrint(
+      'EXPORT PERF => step=$step ms=${watch.elapsedMilliseconds}$suffix',
+    );
+  }
+
   static Future<String> exportReconciliationExcel({
     required List<ReconciliationRow> rows,
     required String buyerName,
@@ -19,7 +31,11 @@ class ExcelExportService {
     String? financialYear,
     String? sellerName,
   }) async {
+    debugPrint('EXPORT PERF => step=rows_count rows=${rows.length}');
+    final workbookWatch = Stopwatch()..start();
     final workbook = xlsio.Workbook();
+    workbookWatch.stop();
+    _logPerformance('workbook_creation', workbookWatch);
 
     try {
       final detailSheet = workbook.worksheets[0];
@@ -38,7 +54,14 @@ class ExcelExportService {
         gstNo: gstNo,
       );
 
+      final detailWatch = Stopwatch()..start();
       _writeDetailTable(detailSheet, rows: rows, startRow: 8);
+      detailWatch.stop();
+      _logPerformance(
+        'detail_sheet_writing',
+        detailWatch,
+        details: 'sheet=Reconciliation rows=${rows.length}',
+      );
 
       final summarySheet = workbook.worksheets.addWithName('Summary');
       _writeCompactSummarySheet(
@@ -50,7 +73,14 @@ class ExcelExportService {
       );
 
       final pivotSheet = workbook.worksheets.addWithName('Pivot Summary');
+      final pivotWatch = Stopwatch()..start();
       _writePivotSummarySheet(pivotSheet, rows: rows);
+      pivotWatch.stop();
+      _logPerformance(
+        'pivot_writing',
+        pivotWatch,
+        details: 'sheet=Pivot Summary rows=${rows.length}',
+      );
 
       final sectionGrouped = _groupBySection(rows);
 
@@ -84,13 +114,27 @@ class ExcelExportService {
           buyerPan: buyerPan,
           gstNo: gstNo,
         );
+        final sectionDetailWatch = Stopwatch()..start();
         _writeDetailTable(sheet, rows: sectionRows, startRow: 8);
+        sectionDetailWatch.stop();
+        _logPerformance(
+          'detail_sheet_writing',
+          sectionDetailWatch,
+          details: 'sheet=$safeName rows=${sectionRows.length}',
+        );
       }
 
       final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
       _writeTdsSectionInfoSheet(infoSheet);
 
+      final saveStreamWatch = Stopwatch()..start();
       final bytes = workbook.saveAsStream();
+      saveStreamWatch.stop();
+      _logPerformance(
+        'saveAsStream',
+        saveStreamWatch,
+        details: 'bytes=${bytes.length}',
+      );
       final fileName = _buildExportFileName(
         buyerName: buyerName,
         sellerName: sellerName,
@@ -102,7 +146,14 @@ class ExcelExportService {
       final fullPath = p.join(folderPath, fileName);
 
       final file = File(fullPath);
+      final fileWriteWatch = Stopwatch()..start();
       await file.writeAsBytes(bytes, flush: true);
+      fileWriteWatch.stop();
+      _logPerformance(
+        'file_write',
+        fileWriteWatch,
+        details: 'bytes=${bytes.length} path=$fullPath',
+      );
 
       return fullPath;
     } finally {
@@ -119,16 +170,27 @@ class ExcelExportService {
     String? financialYear,
     String? sellerName,
   }) async {
+    debugPrint('EXPORT PERF => step=rows_count rows=${rows.length}');
+    final workbookWatch = Stopwatch()..start();
     final workbook = xlsio.Workbook();
+    workbookWatch.stop();
+    _logPerformance('workbook_creation', workbookWatch);
 
     try {
       final pivotSheet = workbook.worksheets[0];
       pivotSheet.name = 'Pivot Summary';
 
+      final pivotWatch = Stopwatch()..start();
       _writePivotSummarySheet(
         pivotSheet,
         rows: rows,
         title: 'PIVOT SUMMARY: ${buyerName.toUpperCase()}',
+      );
+      pivotWatch.stop();
+      _logPerformance(
+        'pivot_writing',
+        pivotWatch,
+        details: 'sheet=Pivot Summary rows=${rows.length}',
       );
 
       final sectionGrouped = _groupBySection(rows);
@@ -145,10 +207,17 @@ class ExcelExportService {
 
         final sheet = workbook.worksheets.addWithName(safeName);
 
+        final sectionPivotWatch = Stopwatch()..start();
         _writePivotSummarySheet(
           sheet,
           rows: sectionRows,
           title: 'SECTION $cleanSection - ${buyerName.toUpperCase()}',
+        );
+        sectionPivotWatch.stop();
+        _logPerformance(
+          'pivot_writing',
+          sectionPivotWatch,
+          details: 'sheet=$safeName rows=${sectionRows.length}',
         );
       }
 
@@ -167,7 +236,14 @@ class ExcelExportService {
       final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
       _writeTdsSectionInfoSheet(infoSheet);
 
+      final saveStreamWatch = Stopwatch()..start();
       final bytes = workbook.saveAsStream();
+      saveStreamWatch.stop();
+      _logPerformance(
+        'saveAsStream',
+        saveStreamWatch,
+        details: 'bytes=${bytes.length}',
+      );
       final fileName = buildPivotReportFileName(
         buyerName: buyerName,
         sellerName: sellerName,
@@ -179,7 +255,14 @@ class ExcelExportService {
       final fullPath = await _resolveAvailableFilePath(folderPath, fileName);
 
       final file = File(fullPath);
+      final fileWriteWatch = Stopwatch()..start();
       await file.writeAsBytes(bytes, flush: true);
+      fileWriteWatch.stop();
+      _logPerformance(
+        'file_write',
+        fileWriteWatch,
+        details: 'bytes=${bytes.length} path=$fullPath',
+      );
 
       return fullPath;
     } finally {
@@ -1062,9 +1145,16 @@ class ExcelExportService {
   }
 
   static void _autoFitUsefulColumns(xlsio.Worksheet sheet, int totalColumns) {
+    final autoFitWatch = Stopwatch()..start();
     for (int col = 1; col <= totalColumns; col++) {
       sheet.autoFitColumn(col);
     }
+    autoFitWatch.stop();
+    _logPerformance(
+      'autoFitColumn',
+      autoFitWatch,
+      details: 'columns=$totalColumns',
+    );
   }
 
   static String _safeSheetName(String value) {
@@ -1171,9 +1261,10 @@ class ExcelExportService {
   }
 
   static String _financialYearFileSegment(String financialYear) {
-    final stripped = financialYear
-        .trim()
-        .replaceFirst(RegExp(r'^fy\s*', caseSensitive: false), '');
+    final stripped = financialYear.trim().replaceFirst(
+      RegExp(r'^fy\s*', caseSensitive: false),
+      '',
+    );
     return 'FY_${_safeFileName(stripped)}';
   }
 

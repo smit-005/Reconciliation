@@ -1145,6 +1145,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _rebuildDerivedRowStateCache() {
+    final stopwatch = Stopwatch()..start();
     final nextState = <String, _SellerFilterRowState>{};
     final seenRowKeys = <String>{};
 
@@ -1158,6 +1159,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
 
     _rowStateByKey = nextState;
+    stopwatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => derived_cache_rebuild ms=${stopwatch.elapsedMilliseconds} rows=${nextState.length}',
+    );
   }
 
   List<SellerMappingRowVm> _filteredRows() {
@@ -1365,11 +1370,17 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final preparedState = _prepareInitialState();
     prepareWatch.stop();
     debugPrint(
-      'SELLER SCREEN PERF => prepareInput ms=${prepareWatch.elapsedMilliseconds}',
+      'SELLER SCREEN PERF => prepare_initial_state ms=${prepareWatch.elapsedMilliseconds}',
+    );
+
+    final serializeWatch = Stopwatch()..start();
+    final isolatePayload = preparedState.toIsolatePayload();
+    serializeWatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => isolate_payload_serialization ms=${serializeWatch.elapsedMilliseconds}',
     );
 
     final buildWatch = Stopwatch()..start();
-    final isolatePayload = preparedState.toIsolatePayload();
     final payload = _shouldUseComputeForViewModels
         ? await compute(_buildSellerScreenViewModelsInIsolate, isolatePayload)
         : _buildSellerScreenViewModelsInIsolate(isolatePayload);
@@ -1380,6 +1391,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     if (!mounted) return;
 
+    final hydrationWatch = Stopwatch()..start();
     final readyState = _SellerMappingScreenReadyState.fromIsolatePayload(
       Map<String, dynamic>.from(payload),
     );
@@ -1406,6 +1418,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       hydratedSelectedMappings,
       readyState.mappingRowsBySection.values.expand((rows) => rows),
     );
+    hydrationWatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => vm_hydration ms=${hydrationWatch.elapsedMilliseconds} sections=${readyState.mappingRowsBySection.length}',
+    );
 
     setState(() {
       uniqueTdsParties = preparedState.uniqueTdsParties;
@@ -1430,7 +1446,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     _filteredRows();
     filterWatch.stop();
     debugPrint(
-      'SELLER SCREEN PERF => applyFilters ms=${filterWatch.elapsedMilliseconds}',
+      'SELLER SCREEN PERF => initial_filtering ms=${filterWatch.elapsedMilliseconds}',
     );
   }
 
@@ -1497,6 +1513,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _saveMappings() {
+    final saveBuildWatch = Stopwatch()..start();
     final upserts = <Map<String, String>>[];
     final deleted = <Map<String, String>>[];
     final deletedKeys = <String>{};
@@ -1693,6 +1710,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       if (normalizedAlias.isEmpty) continue;
       dedupedUpsertsByKey['$normalizedAlias|$normalizedSection'] = upsert;
     }
+    saveBuildWatch.stop();
+    debugPrint(
+      'SELLER SCREEN PERF => save_result_build ms=${saveBuildWatch.elapsedMilliseconds} '
+      'upserts=${dedupedUpsertsByKey.length} deleted=${deleted.length} '
+      'dangerousRemaining=$dangerousRemaining unreviewedExceptionCount=$unreviewedExceptionCount',
+    );
 
     Navigator.pop(
       context,
