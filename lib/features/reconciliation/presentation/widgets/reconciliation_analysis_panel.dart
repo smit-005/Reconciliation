@@ -4,7 +4,6 @@ import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 
-import 'reconciliation_reason_chip.dart';
 import 'reconciliation_summary_header.dart';
 
 class ReconciliationAnalysisPanel extends StatelessWidget {
@@ -79,185 +78,214 @@ class ReconciliationAnalysisPanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.xl),
           border: Border.all(color: AppColorScheme.border),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFF9FBFD), Color(0xFFF3F7FB)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.xl),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ReconciliationSummaryHeader(
-                    title: 'Exception Summary',
-                    subtitle:
-                        '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)$financialYearSubtitle',
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _topMetricTile(
-                          icon: Icons.apartment_rounded,
-                          value: totalSellers.toString(),
-                          label: 'Sellers',
-                          emphasize: true,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: _topMetricTile(
-                          icon: Icons.link_rounded,
-                          value: manualMappingsCount.toString(),
-                          label: 'Mappings',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _topMetricTile(
-                          icon: Icons.grid_view_rounded,
-                          value: totalSections.toString(),
-                          label: 'Sections',
-                        ),
-                      ),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.md),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final useWholePanelScroll =
+                constraints.hasBoundedHeight && constraints.maxHeight < 320;
+            final header = _buildHeader(financialYearSubtitle);
+            final body = _buildAnalysisBody(sellerExceptions);
+
+            if (useWholePanelScroll) {
+              return SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _sectionTitle('Mismatch Reasons'),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.xs,
-                      runSpacing: AppSpacing.xs,
-                      children: [
-                        ReconciliationReasonChip(
-                          label: 'No 26Q entry',
-                          count: mismatchReasonCounts['No 26Q entry'] ?? 0,
-                          color: const Color(0xFFB45309),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'Amount mismatch',
-                          count: mismatchReasonCounts['Amount mismatch'] ?? 0,
-                          color: const Color(0xFFDC2626),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'TDS mismatch',
-                          count: mismatchReasonCounts['TDS mismatch'] ?? 0,
-                          color: const Color(0xFF7C3AED),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'Timing difference',
-                          count: mismatchReasonCounts['Timing difference'] ?? 0,
-                          color: const Color(0xFF0F766E),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'PAN/name mismatch',
-                          count: mismatchReasonCounts['PAN/name mismatch'] ?? 0,
-                          color: const Color(0xFF1D4ED8),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
+                    header,
                     const Divider(height: 1),
-                    const SizedBox(height: AppSpacing.md),
-                    _sectionTitle('Seller Exceptions'),
-                    const SizedBox(height: AppSpacing.xxs),
-                    const Text(
-                      'Click controls to filter sellers',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColorScheme.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (sellerExceptions.isEmpty)
-                      const Text(
-                        'No active seller exceptions in the current scope.',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColorScheme.textMuted,
-                        ),
-                      )
-                    else
-                      Column(
-                        children: sellerExceptions
-                            .map(
-                              (item) => Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpacing.xs,
-                                ),
-                                child: _SellerExceptionActionCard(item: item),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    const SizedBox(height: AppSpacing.sm),
-                    const Divider(height: 1),
-                    const SizedBox(height: AppSpacing.md),
-                    _sectionTitle('Seller Outcomes'),
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.xs,
-                      runSpacing: AppSpacing.xs,
-                      children: [
-                        ReconciliationReasonChip(
-                          label: 'Matched sellers',
-                          count: matchedSellersCount,
-                          color: const Color(0xFF15803D),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'Mismatch sellers',
-                          count: mismatchSellersCount,
-                          color: const Color(0xFFDC2626),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'Only 26Q sellers',
-                          count: only26QSellersCount,
-                          color: const Color(0xFF6D28D9),
-                        ),
-                        ReconciliationReasonChip(
-                          label: 'Below-threshold only',
-                          count: belowThresholdOnlySellersCount,
-                          color: const Color(0xFF475467),
-                        ),
-                      ],
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: body,
                     ),
                   ],
                 ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                header,
+                const Divider(height: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: body,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(String financialYearSubtitle) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFF9FBFD), Color(0xFFF3F7FB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ReconciliationSummaryHeader(
+            title: 'Exception Summary',
+            subtitle:
+                '${activeSectionTab == 'All' ? 'Combined' : activeSectionTab} scope | $sourceFileCount file(s) | $sourceRowCount row(s)$financialYearSubtitle',
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: _topMetricTile(
+                  icon: Icons.apartment_rounded,
+                  value: totalSellers.toString(),
+                  label: 'Sellers',
+                  emphasize: true,
+                ),
               ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _topMetricTile(
+                  icon: Icons.link_rounded,
+                  value: manualMappingsCount.toString(),
+                  label: 'Mappings',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: _topMetricTile(
+                  icon: Icons.grid_view_rounded,
+                  value: totalSections.toString(),
+                  label: 'Sections',
+                ),
+              ),
+              const Expanded(child: SizedBox.shrink()),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalysisBody(List<_SellerExceptionItem> sellerExceptions) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Mismatch Reasons'),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: [
+            _AnalysisReasonChip(
+              label: 'No 26Q entry',
+              count: mismatchReasonCounts['No 26Q entry'] ?? 0,
+              color: const Color(0xFFB45309),
+            ),
+            _AnalysisReasonChip(
+              label: 'Amount mismatch',
+              count: mismatchReasonCounts['Amount mismatch'] ?? 0,
+              color: const Color(0xFFDC2626),
+            ),
+            _AnalysisReasonChip(
+              label: 'TDS mismatch',
+              count: mismatchReasonCounts['TDS mismatch'] ?? 0,
+              color: const Color(0xFF7C3AED),
+            ),
+            _AnalysisReasonChip(
+              label: 'Timing difference',
+              count: mismatchReasonCounts['Timing difference'] ?? 0,
+              color: const Color(0xFF0F766E),
+            ),
+            _AnalysisReasonChip(
+              label: 'PAN/name mismatch',
+              count: mismatchReasonCounts['PAN/name mismatch'] ?? 0,
+              color: const Color(0xFF1D4ED8),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: AppSpacing.md),
+        const Divider(height: 1),
+        const SizedBox(height: AppSpacing.md),
+        _sectionTitle('Seller Exceptions'),
+        const SizedBox(height: AppSpacing.xxs),
+        const Text(
+          'Click controls to filter sellers',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: AppColorScheme.textMuted,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (sellerExceptions.isEmpty)
+          const Text(
+            'No active seller exceptions in the current scope.',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: AppColorScheme.textMuted,
+            ),
+          )
+        else
+          Column(
+            children: sellerExceptions
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: _SellerExceptionActionCard(item: item),
+                  ),
+                )
+                .toList(),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        const Divider(height: 1),
+        const SizedBox(height: AppSpacing.md),
+        _sectionTitle('Seller Outcomes'),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: [
+            _AnalysisReasonChip(
+              label: 'Matched sellers',
+              count: matchedSellersCount,
+              color: const Color(0xFF15803D),
+            ),
+            _AnalysisReasonChip(
+              label: 'Mismatch sellers',
+              count: mismatchSellersCount,
+              color: const Color(0xFFDC2626),
+            ),
+            _AnalysisReasonChip(
+              label: 'Only 26Q sellers',
+              count: only26QSellersCount,
+              color: const Color(0xFF6D28D9),
+            ),
+            _AnalysisReasonChip(
+              label: 'Below-threshold only',
+              count: belowThresholdOnlySellersCount,
+              color: const Color(0xFF475467),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -417,6 +445,82 @@ class _SellerExceptionItem {
   });
 }
 
+class _AnalysisReasonChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _AnalysisReasonChip({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 180),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1.05,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xs,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                '$count',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColorScheme.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SellerExceptionActionCard extends StatefulWidget {
   final _SellerExceptionItem item;
 
@@ -494,85 +598,95 @@ class _SellerExceptionActionCardState
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(color: borderColor, width: 1.15),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: item.toneColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.filter_alt_rounded,
-                      size: 14,
-                      color: item.toneColor,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Icon(item.icon, size: 15, color: item.toneColor),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: item.isActive
-                            ? item.toneColor
-                            : AppColorScheme.textPrimary,
-                        height: 1.05,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final useCompactControls = constraints.maxWidth < 180;
+
+                  return Row(
+                    children: [
+                      if (!useCompactControls) ...[
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: item.toneColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.filter_alt_rounded,
+                            size: 14,
+                            color: item.toneColor,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
+                      Icon(item.icon, size: 15, color: item.toneColor),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          item.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: item.isActive
+                                ? item.toneColor
+                                : AppColorScheme.textPrimary,
+                            height: 1.05,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xs,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: item.toneColor.withValues(
-                        alpha: item.isActive ? 0.16 : 0.08,
+                      const SizedBox(width: AppSpacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: item.toneColor.withValues(
+                            alpha: item.isActive ? 0.16 : 0.08,
+                          ),
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                          border: Border.all(
+                            color: item.toneColor.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Text(
+                          '${item.count}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: item.toneColor,
+                          ),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      border: Border.all(
-                        color: item.toneColor.withValues(alpha: 0.18),
+                      const SizedBox(width: 6),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: item.isActive
+                              ? item.toneColor
+                              : item.toneColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          item.isActive
+                              ? Icons.check_rounded
+                              : Icons.chevron_right_rounded,
+                          size: 14,
+                          color: item.isActive ? Colors.white : item.toneColor,
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      '${item.count}',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        color: item.toneColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 140),
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: item.isActive
-                          ? item.toneColor
-                          : item.toneColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      item.isActive
-                          ? Icons.check_rounded
-                          : Icons.chevron_right_rounded,
-                      size: 14,
-                      color: item.isActive ? Colors.white : item.toneColor,
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
           ),

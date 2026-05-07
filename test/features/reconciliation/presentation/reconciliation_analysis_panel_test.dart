@@ -58,4 +58,47 @@ void main() {
       expect(find.text('Sellers missing 26Q deductions'), findsNothing);
     },
   );
+
+  testWidgets('analysis panel stays inside compact desktop constraints', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 220,
+            height: 260,
+            child: ReconciliationAnalysisPanel(
+              activeSectionTab: 'All',
+              financialYearLabel: '2024-25',
+              sourceFileCount: 12,
+              sourceRowCount: 180000,
+              totalSellers: 240000,
+              totalSections: 30,
+              manualMappingsCount: 60000,
+              matchedSellersCount: 120000,
+              mismatchSellersCount: 50000,
+              only26QSellersCount: 20000,
+              belowThresholdOnlySellersCount: 10000,
+              mismatchReasonCounts: const {
+                'No 26Q entry': 40000,
+                'Amount mismatch': 30000,
+                'TDS mismatch': 20000,
+                'Timing difference': 10000,
+                'PAN/name mismatch': 10000,
+              },
+              unsupportedSections: const ['194C', '194J', 'UNKNOWN SECTION'],
+              skippedSellerCount: 30000,
+              skippedRowsCount: 80000,
+              applicableButNo26QSellerCount: 20000,
+              applicableButNo26QRowCount: 50000,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Exception Summary'), findsOneWidget);
+  });
 }
