@@ -488,10 +488,10 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: SellerMappingTheme.borderColor),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
+        child: _ActionColumnLayout(
+          compactHeightBreakpoint: 250,
+          controls: [
+            const Text(
               'Actions',
               style: TextStyle(
                 fontSize: 15,
@@ -499,42 +499,41 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
                 color: SellerMappingTheme.titleTextColor,
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: null,
-              icon: Icon(Icons.link_rounded, size: 18),
-              label: Text('Link Seller'),
+              icon: const Icon(Icons.link_rounded, size: 18),
+              label: const Text('Link Seller'),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: null,
-              icon: Icon(Icons.auto_awesome_rounded, size: 18),
-              label: Text('Accept Suggestion'),
+              icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+              label: const Text('Accept Suggestion'),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: null,
-              icon: Icon(Icons.call_split_rounded, size: 18),
-              label: Text('Keep Separate'),
+              icon: const Icon(Icons.call_split_rounded, size: 18),
+              label: const Text('Keep Separate'),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: null,
-              icon: Icon(Icons.close_rounded, size: 18),
-              label: Text('Clear'),
-            ),
-            Spacer(),
-            Text(
-              'Select a seller to enable actions.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-                color: SellerMappingTheme.mutedTextColor,
-              ),
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: const Text('Clear'),
             ),
           ],
+          footer: const Text(
+            'Select a seller to enable actions.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.35,
+              fontWeight: FontWeight.w700,
+              color: SellerMappingTheme.mutedTextColor,
+            ),
+          ),
         ),
       );
     }
@@ -570,9 +569,9 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: SellerMappingTheme.borderColor),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: _ActionColumnLayout(
+        compactHeightBreakpoint: canShowExceptionActions ? 360 : 280,
+        controls: [
           const Text(
             'Actions',
             style: TextStyle(
@@ -634,26 +633,26 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
               label: const Text('Missing in Books'),
             ),
           ],
-          const Spacer(),
-          if (helperMessages.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: SellerMappingTheme.borderColor),
-              ),
-              child: Text(
-                helperMessages.join(' '),
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.35,
-                  fontWeight: FontWeight.w600,
-                  color: SellerMappingTheme.mutedTextColor,
+        ],
+        footer: helperMessages.isEmpty
+            ? null
+            : Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: SellerMappingTheme.borderColor),
+                ),
+                child: Text(
+                  helperMessages.join(' '),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    color: SellerMappingTheme.mutedTextColor,
+                  ),
                 ),
               ),
-            ),
-        ],
       ),
     );
   }
@@ -1219,6 +1218,50 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       return SellerMappingTheme.warningColor;
     }
     return SellerMappingTheme.primaryColor;
+  }
+}
+
+class _ActionColumnLayout extends StatelessWidget {
+  final List<Widget> controls;
+  final Widget? footer;
+  final double compactHeightBreakpoint;
+
+  const _ActionColumnLayout({
+    required this.controls,
+    required this.compactHeightBreakpoint,
+    this.footer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shouldScroll =
+            constraints.hasBoundedHeight &&
+            constraints.maxHeight < compactHeightBreakpoint;
+        final footer = this.footer;
+
+        if (shouldScroll) {
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...controls,
+                if (footer != null) ...[const SizedBox(height: 12), footer],
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ...controls,
+            if (footer != null) ...[const Spacer(), footer],
+          ],
+        );
+      },
+    );
   }
 }
 

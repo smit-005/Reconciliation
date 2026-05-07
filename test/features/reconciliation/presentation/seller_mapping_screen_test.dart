@@ -256,6 +256,56 @@ void main() {
 
     expect(find.text('Multiple PANs: 2'), findsOneWidget);
   });
+
+  testWidgets('seller mapping action column avoids compact height overflow', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 260));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const leftRow = SellerMappingRowVm(
+      purchasePartyDisplayName: '',
+      normalizedAlias: 'Vendor From 26Q',
+      sectionCode: '194C',
+      rowIndex: 0,
+      tdsDisplayName: 'Vendor From 26Q',
+      tdsPan: 'AAAAA1111A',
+      purchasePan: '',
+      purchaseGstNo: '',
+      tdsRowCount: 1,
+      is26QUnmatched: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SellerMappingTwoPanelBody(
+            visibleRows: const <SellerMappingRowVm>[leftRow],
+            ledgerCandidateRows: const <SellerMappingRowVm>[],
+            tdsParties: const <String>['Vendor From 26Q'],
+            tdsPartyPans: const <String, List<String>>{
+              'Vendor From 26Q': <String>['AAAAA1111A'],
+            },
+            selectedValueForRow: (_) => null,
+            selectedPanForRow: (_) => '',
+            statusForRow: (_) => '26Q Unmatched',
+            helperMessagesForRow: (_) => const <String>[],
+            canAcceptSuggestion: (_) => false,
+            onAcceptSuggestion: (_) {},
+            onLinkToTds: (row, tdsParty) {},
+            onLinkToLedgerRow: (row, ledgerRow) {},
+            onKeepSeparate: (_) {},
+            onClear: (_) {},
+            onMarkTimingDifference: (_) {},
+            onMarkMissingInBooks: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Select a seller to enable actions.'), findsOneWidget);
+  });
 }
 
 class _SellerMappingLaunchHarness extends StatelessWidget {
