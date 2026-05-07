@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
+import 'package:reconciliation_app/core/widgets/app_compact_metric_card.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
 import 'package:reconciliation_app/core/widgets/app_loading.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
@@ -209,62 +210,24 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
         spacing: AppSpacing.md,
         runSpacing: AppSpacing.md,
         children: [
-          _buildSummaryMetric(
+          AppCompactMetricCard(
             label: 'Uploaded Files',
             value: _items.length.toString(),
           ),
-          _buildSummaryMetric(
+          AppCompactMetricCard(
             label: 'Confirmed',
             value: _confirmedCount.toString(),
           ),
-          _buildSummaryMetric(
+          AppCompactMetricCard(
             label: 'Safe to Confirm',
             value: _safePendingCount.toString(),
           ),
-          _buildSummaryMetric(
+          AppCompactMetricCard(
             label: 'Need Review',
             value: _needsReviewCount.toString(),
-            emphasisColor: _needsReviewCount > 0
+            valueColor: _needsReviewCount > 0
                 ? AppColorScheme.warning
                 : AppColorScheme.success,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryMetric({
-    required String label,
-    required String value,
-    Color? emphasisColor,
-  }) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 160),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColorScheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: AppColorScheme.textMuted,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: emphasisColor ?? AppColorScheme.textPrimary,
-            ),
           ),
         ],
       ),

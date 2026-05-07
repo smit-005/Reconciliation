@@ -1,3 +1,4 @@
+export 'app_compact_metric_card.dart';
 export 'app_empty_state.dart';
 export 'app_file_summary_card.dart';
 export 'app_info_chip.dart';
