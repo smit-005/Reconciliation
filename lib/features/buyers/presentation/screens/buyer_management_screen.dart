@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_section_card.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
@@ -397,12 +398,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
             : Row(
                 children: [
                   Expanded(
-                    child: Container(
+                    child: AppSectionCard(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
+                      borderColor: Colors.grey.shade300,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -635,13 +633,9 @@ class _FinancialYearPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AppSectionCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
+      borderColor: Colors.grey.shade300,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
