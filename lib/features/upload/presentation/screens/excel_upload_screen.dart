@@ -1977,6 +1977,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
+                      key: const ValueKey('upload_26q_button'),
                       onPressed: isLoadingTds ? null : uploadTds26QFile,
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF2563EB),
@@ -2296,6 +2297,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
               const Spacer(),
               FilledButton.icon(
+                key: const ValueKey('add_source_file_button'),
                 onPressed: isLoading
                     ? null
                     : () => sectionCode == '194Q'
@@ -2478,6 +2480,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         child: Row(
           children: [
             OutlinedButton.icon(
+              key: const ValueKey('review_mapping_button'),
               onPressed: _hasWorkspaceContent ? _reviewWorkspaceStatus : null,
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
@@ -2538,6 +2541,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               ),
             const SizedBox(width: 12),
             FilledButton.icon(
+              key: const ValueKey('open_reconciliation_button'),
               onPressed: canOpenReconciliation
                   ? openReconciliationScreen
                   : null,

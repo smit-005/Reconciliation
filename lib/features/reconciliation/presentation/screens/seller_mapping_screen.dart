@@ -2177,6 +2177,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         children: [
           Expanded(
             child: TextField(
+              key: const ValueKey('seller_mapping_search_field'),
               controller: _searchController,
               onChanged: (value) {
                 if (_searchDebounce?.isActive ?? false) {
@@ -2237,6 +2238,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           SizedBox(
             width: 270,
             child: SegmentedButton<SellerMappingWorkspaceView>(
+              key: const ValueKey('seller_mapping_view_toggle'),
               showSelectedIcon: false,
               segments: const [
                 ButtonSegment(
@@ -2519,6 +2521,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             ),
             const SizedBox(width: 16),
             FilledButton.icon(
+              key: const ValueKey('seller_mapping_save_button'),
               onPressed: canContinue ? _saveMappings : null,
               style: FilledButton.styleFrom(
                 minimumSize: const Size(0, 46),

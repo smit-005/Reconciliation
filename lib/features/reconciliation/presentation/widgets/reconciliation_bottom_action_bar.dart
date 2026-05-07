@@ -34,6 +34,7 @@ class ReconciliationBottomActionBar extends StatelessWidget {
           final actions = [
             _ActionButtonSlot(
               child: AppPrimaryButton(
+                key: const ValueKey('export_current_button'),
                 onPressed: onExportCurrentSection,
                 icon: Icons.download_rounded,
                 label: 'Export Current Section',
@@ -41,6 +42,7 @@ class ReconciliationBottomActionBar extends StatelessWidget {
             ),
             _ActionButtonSlot(
               child: AppSecondaryButton(
+                key: const ValueKey('export_all_sections_button'),
                 onPressed: onExportAllSections,
                 icon: Icons.download_for_offline_rounded,
                 label: 'Export All Sections',
@@ -48,6 +50,7 @@ class ReconciliationBottomActionBar extends StatelessWidget {
             ),
             _ActionButtonSlot(
               child: AppSecondaryButton(
+                key: const ValueKey('export_pivot_button'),
                 onPressed: onExportPivot,
                 icon: Icons.table_chart_rounded,
                 label: 'Export Pivot',

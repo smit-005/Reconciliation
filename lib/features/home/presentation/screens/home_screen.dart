@@ -664,6 +664,7 @@ class _CtaBanner extends StatelessWidget {
             runSpacing: AppSpacing.sm,
             children: [
               AppPrimaryButton(
+                key: const ValueKey('start_reconciliation_button'),
                 label: 'Start New Reconciliation',
                 icon: Icons.play_arrow_rounded,
                 onPressed: onStartReconciliation,

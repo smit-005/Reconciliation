@@ -445,6 +445,7 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
                             children: [
                               Expanded(
                                 child: ElevatedButton(
+                                  key: const ValueKey('add_buyer_button'),
                                   onPressed: isSaving ? null : saveBuyer,
                                   child: Text(
                                     isSaving
@@ -649,6 +650,7 @@ class _FinancialYearPanel extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               OutlinedButton.icon(
+                key: const ValueKey('add_financial_year_button'),
                 onPressed: isSaving ? null : onAdd,
                 icon: isSaving
                     ? const SizedBox(
@@ -721,6 +723,9 @@ class _FinancialYearPanel extends StatelessWidget {
                       children: [
                         if (!isDefault)
                           IconButton(
+                            key: ValueKey(
+                              'make_default_financial_year_button_${financialYear.id}',
+                            ),
                             tooltip: 'Make default FY',
                             icon: const Icon(Icons.star_border_rounded),
                             onPressed: () => onMakeDefault(financialYear),
