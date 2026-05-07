@@ -3,41 +3,60 @@ import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 
 class SellerMappingService {
+  static const int _batchChunkSize = 250;
+
   /// SAVE mapping (called when user manually maps)
   static Future<void> saveMapping(SellerMapping mapping) async {
+    await saveMappings(<SellerMapping>[mapping]);
+  }
+
+  /// SAVE mappings in one DB transaction, preserving single-row save behavior.
+  static Future<void> saveMappings(List<SellerMapping> mappings) async {
+    if (mappings.isEmpty) return;
+
     final db = await DBHelper.database;
-    final normalizedMap = mapping.toMap();
-    final normalizedBuyerPan = (normalizedMap['buyer_pan'] ?? '').toString();
-    final normalizedAlias = (normalizedMap['alias_name'] ?? '').toString();
-    final normalizedSection = (normalizedMap['section_code'] ?? 'ALL')
-        .toString();
+    await db.transaction((txn) async {
+      for (var start = 0; start < mappings.length; start += _batchChunkSize) {
+        final end = (start + _batchChunkSize < mappings.length)
+            ? start + _batchChunkSize
+            : mappings.length;
+        final batch = txn.batch();
 
-    final existing = await db.query(
-      'seller_mappings',
-      columns: ['id', 'created_at'],
-      where: 'buyer_pan = ? AND alias_name = ? AND section_code = ?',
-      whereArgs: [normalizedBuyerPan, normalizedAlias, normalizedSection],
-      limit: 1,
-    );
+        for (final mapping in mappings.sublist(start, end)) {
+          final normalizedMap = mapping.toMap();
+          batch.rawInsert(
+            '''
+INSERT INTO seller_mappings (
+  id,
+  buyer_name,
+  buyer_pan,
+  alias_name,
+  section_code,
+  mapped_pan,
+  mapped_name,
+  created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(buyer_pan, alias_name, section_code) DO UPDATE SET
+  buyer_name = excluded.buyer_name,
+  mapped_pan = excluded.mapped_pan,
+  mapped_name = excluded.mapped_name
+''',
+            [
+              normalizedMap['id'],
+              normalizedMap['buyer_name'],
+              normalizedMap['buyer_pan'],
+              normalizedMap['alias_name'],
+              normalizedMap['section_code'],
+              normalizedMap['mapped_pan'],
+              normalizedMap['mapped_name'],
+              normalizedMap['created_at'],
+            ],
+          );
+        }
 
-    if (existing.isNotEmpty) {
-      final existingRow = existing.first;
-      final updateMap = Map<String, dynamic>.from(normalizedMap)
-        ..remove('id')
-        ..['created_at'] =
-            (existingRow['created_at'] ?? normalizedMap['created_at'])
-                .toString();
-
-      await db.update(
-        'seller_mappings',
-        updateMap,
-        where: 'id = ?',
-        whereArgs: [existingRow['id']],
-      );
-      return;
-    }
-
-    await db.insert('seller_mappings', normalizedMap);
+        await batch.commit(noResult: true);
+      }
+    });
   }
 
   /// GET single mapping using alias + buyer + section, with ALL fallback
@@ -95,16 +114,47 @@ class SellerMappingService {
     required String aliasName,
     String sectionCode = 'ALL',
   }) async {
+    await deleteMappings(<Map<String, String>>[
+      {
+        'buyerPan': buyerPan,
+        'aliasName': aliasName,
+        'sectionCode': sectionCode,
+      },
+    ]);
+  }
+
+  /// DELETE mappings using the same buyer + alias + section criteria.
+  static Future<void> deleteMappings(List<Map<String, String>> mappings) async {
+    if (mappings.isEmpty) return;
+
     final db = await DBHelper.database;
+    await db.transaction((txn) async {
+      for (var start = 0; start < mappings.length; start += _batchChunkSize) {
+        final end = (start + _batchChunkSize < mappings.length)
+            ? start + _batchChunkSize
+            : mappings.length;
+        final batch = txn.batch();
 
-    final normalizedBuyerPan = buyerPan.trim().toUpperCase();
-    final normalizedAlias = normalizeName(aliasName.trim());
-    final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
+        for (final mapping in mappings.sublist(start, end)) {
+          final normalizedBuyerPan = (mapping['buyerPan'] ?? '')
+              .trim()
+              .toUpperCase();
+          final normalizedAlias = normalizeName(
+            (mapping['aliasName'] ?? '').trim(),
+          );
+          final normalizedSection = normalizeSellerMappingSectionCode(
+            mapping['sectionCode'] ?? 'ALL',
+          );
 
-    await db.delete(
-      'seller_mappings',
-      where: 'buyer_pan = ? AND alias_name = ? AND section_code = ?',
-      whereArgs: [normalizedBuyerPan, normalizedAlias, normalizedSection],
-    );
+          batch.delete(
+            'seller_mappings',
+            where: 'buyer_pan = ? AND alias_name = ? AND section_code = ?',
+            whereArgs: [normalizedBuyerPan, normalizedAlias, normalizedSection],
+          );
+        }
+
+        await batch.commit(noResult: true);
+      }
+    });
   }
 }

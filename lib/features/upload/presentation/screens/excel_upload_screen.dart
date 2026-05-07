@@ -1208,31 +1208,37 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   ) async {
     final totalWatch = Stopwatch()..start();
     final deleteWatch = Stopwatch()..start();
-    for (final item in result.deleted) {
-      await SellerMappingService.deleteMapping(
-        buyerPan: widget.selectedBuyerPan,
-        aliasName: item['aliasName'] ?? '',
-        sectionCode: item['sectionCode'] ?? 'ALL',
-      );
-    }
+    await SellerMappingService.deleteMappings(
+      result.deleted
+          .map(
+            (item) => <String, String>{
+              'buyerPan': widget.selectedBuyerPan,
+              'aliasName': item['aliasName'] ?? '',
+              'sectionCode': item['sectionCode'] ?? 'ALL',
+            },
+          )
+          .toList(growable: false),
+    );
     deleteWatch.stop();
     debugPrint(
       'SELLER DB PERF => step=delete_mappings ms=${deleteWatch.elapsedMilliseconds} count=${result.deleted.length}',
     );
 
     final upsertWatch = Stopwatch()..start();
-    for (final item in result.upserts) {
-      await SellerMappingService.saveMapping(
-        SellerMapping(
-          buyerName: widget.selectedBuyerName,
-          buyerPan: widget.selectedBuyerPan,
-          aliasName: item['aliasName'] ?? '',
-          sectionCode: item['sectionCode'] ?? 'ALL',
-          mappedPan: item['mappedPan'] ?? '',
-          mappedName: item['mappedName'] ?? '',
-        ),
-      );
-    }
+    await SellerMappingService.saveMappings(
+      result.upserts
+          .map(
+            (item) => SellerMapping(
+              buyerName: widget.selectedBuyerName,
+              buyerPan: widget.selectedBuyerPan,
+              aliasName: item['aliasName'] ?? '',
+              sectionCode: item['sectionCode'] ?? 'ALL',
+              mappedPan: item['mappedPan'] ?? '',
+              mappedName: item['mappedName'] ?? '',
+            ),
+          )
+          .toList(growable: false),
+    );
     upsertWatch.stop();
     totalWatch.stop();
     debugPrint(
