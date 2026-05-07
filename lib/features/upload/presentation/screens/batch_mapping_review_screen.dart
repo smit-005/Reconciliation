@@ -4,6 +4,7 @@ import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_loading.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/core/widgets/app_sticky_action_bar.dart';
@@ -187,7 +188,7 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppSectionLoadingView()
                   : ListView(
                       children: [
                         _buildHeaderCard(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_loading.dart';
 import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
@@ -638,11 +639,7 @@ class _FinancialYearPanel extends StatelessWidget {
                 key: const ValueKey('add_financial_year_button'),
                 onPressed: isSaving ? null : onAdd,
                 icon: isSaving
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const AppInlineLoadingIndicator(size: 14)
                     : const Icon(Icons.add, size: 18),
                 label: Text(isSaving ? 'Adding...' : 'Add FY'),
               ),

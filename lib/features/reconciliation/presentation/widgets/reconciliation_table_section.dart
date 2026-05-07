@@ -6,6 +6,7 @@ import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_loading.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/skipped_row_summary.dart';
@@ -103,14 +104,7 @@ class _ReconciliationTableSectionState
               ),
               if (widget.isRecalculating) ...[
                 const SizedBox(width: AppSpacing.sm),
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.indigo.shade700,
-                  ),
-                ),
+                AppInlineLoadingIndicator(color: Colors.indigo.shade700),
               ],
             ],
           ),

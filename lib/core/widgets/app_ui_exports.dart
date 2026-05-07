@@ -1,6 +1,7 @@
 export 'app_empty_state.dart';
 export 'app_file_summary_card.dart';
 export 'app_info_chip.dart';
+export 'app_loading.dart';
 export 'app_page_header.dart';
 export 'app_page_scaffold.dart';
 export 'app_section_card.dart';

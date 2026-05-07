@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_loading.dart';
+
 class AppPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -21,11 +23,7 @@ class AppPrimaryButton extends StatelessWidget {
     if (isLoading) {
       return FilledButton.icon(
         onPressed: resolvedOnPressed,
-        icon: const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        icon: const AppInlineLoadingIndicator(),
         label: Text(label),
       );
     }
