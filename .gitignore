@@ -1,73 +1,121 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-
+# =========================
+# Flutter / Dart
+# =========================
+.dart_tool/
 build/
 .packages
-.vscode/
-*.tmp
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
 .pub/
-/build/
-/coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
 
-# Symbolication related
-app.*.symbols
+# Generated plugin registrants
+**/generated_plugin_registrant.*
 
-# Obfuscation related
-app.*.map.json
+# =========================
+# Coverage / Testing
+# =========================
+coverage/
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# =========================
+# Logs
+# =========================
+*.log
+analysis_output.txt
+test_upload.err.log
+test_upload.out.log
+tmp_*.log
 
+# Flutter test/debug logs
+flutter_*.log
 
-# Graphify
-.graphify/
-graphify/
-*.graphify
-graphify-out/
-
-# Codex / local AI tooling
-AGENTS.md
-.codex/
-AGENTS.md
-.codex/hooks.json
-
+# =========================
+# Local Temp / Runtime Data
+# =========================
+.localappdata/
+.tmp_appdata/
+.tmp_debug_run*/
+.tmp_localappdata/
+.tmp_perf_exports/
+.tmp_verify_*/
+.tool_state/
 .toolstate/
 
-LedgerMatch/
-.ledgermatch/
-*.db-shm
-*.db-wal
+# =========================
+# Graphify
+# =========================
 
-.tmp_*
-*_harness_test.dart
+# Ignore heavy generated cache/output
+graphify-out/cache/
+graphify-out/*.json
+graphify-out/graph.html
+
+# Keep useful docs/reports
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/wiki/
+
+# =========================
+# IDE / Editor
+# =========================
+.idea/
+*.iml
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Excel / User Data / Exports
+# =========================
+*.xlsx
+*.xls
+*.csv
+
+Working/
+Source_Files/
+Exports/
+exports/
+
+# =========================
+# Release Builds
+# =========================
+release/
+dist/
+
+# =========================
+# Windows Build Artifacts
+# =========================
+windows/flutter/ephemeral/
+
+# =========================
+# SQLite / Runtime DB (optional)
+# Uncomment if local DB should not be committed
+# =========================
+# *.db
+# *.sqlite
+# *.sqlite3
+
+# Telemetry
+dart-flutter-telemetry*
+
+# Tool state
+.tool_state/
+.toolstate/
+.flutter_tool_state
+
+# Analysis output
+analysis_output.txt
+
+# Graphify cache/generated
+graphify-out/cache/
+graphify-out/*.json
+graphify-out/graph.html
+
+# Keep Graphify docs
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/wiki/
