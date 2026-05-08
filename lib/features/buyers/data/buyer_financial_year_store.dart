@@ -65,6 +65,37 @@ class BuyerFinancialYearStore {
     return null;
   }
 
+  static Future<BuyerFinancialYear?> ensureForBuyer({
+    required Buyer buyer,
+    required String fyLabel,
+  }) async {
+    final normalizedFyLabel = normalizeFinancialYearLabel(fyLabel);
+    if (normalizedFyLabel == null) {
+      return null;
+    }
+
+    final existing = await _repository.getByLabelForBuyer(
+      buyerId: buyer.id,
+      fyLabel: normalizedFyLabel,
+    );
+    if (existing != null) {
+      return existing;
+    }
+
+    final error = await create(buyer: buyer, fyLabel: normalizedFyLabel);
+    if (error != null) {
+      return _repository.getByLabelForBuyer(
+        buyerId: buyer.id,
+        fyLabel: normalizedFyLabel,
+      );
+    }
+
+    return _repository.getByLabelForBuyer(
+      buyerId: buyer.id,
+      fyLabel: normalizedFyLabel,
+    );
+  }
+
   static Future<BuyerFinancialYear?> ensureCurrentForBuyer({
     required Buyer buyer,
     DateTime? now,

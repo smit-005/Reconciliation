@@ -1,6 +1,5 @@
 import 'package:uuid/uuid.dart';
 
-import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/models/buyer.dart';
 import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
 import 'buyer_repository.dart';
@@ -23,12 +22,7 @@ class BuyerStore {
       ..addAll(buyers);
   }
 
-  static Future<String?> add(
-    String name,
-    String pan,
-    String gstNumber, {
-    DateTime? currentDateForTest,
-  }) async {
+  static Future<String?> add(String name, String pan, String gstNumber) async {
     final normalizedName = name.trim();
     final normalizedPan = pan.trim().toUpperCase();
     final normalizedGstNumber = gstNumber.trim().toUpperCase();
@@ -45,7 +39,7 @@ class BuyerStore {
       pan: normalizedPan,
     );
 
-    var buyer = Buyer(
+    final buyer = Buyer(
       id: buyerId,
       name: normalizedName,
       pan: normalizedPan,
@@ -54,18 +48,6 @@ class BuyerStore {
     );
 
     await _repository.addBuyer(buyer);
-    final currentFinancialYear =
-        await BuyerFinancialYearStore.ensureCurrentForBuyer(
-          buyer: buyer,
-          now: currentDateForTest,
-        );
-    if (currentFinancialYear != null) {
-      await _repository.updateActiveFinancialYearId(
-        buyer.id,
-        currentFinancialYear.id,
-      );
-      buyer = buyer.copyWith(activeFinancialYearId: currentFinancialYear.id);
-    }
 
     _buyers.add(buyer);
     _buyers.sort(

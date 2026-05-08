@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:reconciliation_app/data/local/db_helper.dart';
-import 'package:reconciliation_app/core/utils/financial_year_utils.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_store.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_store.dart';
 import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
@@ -36,27 +35,37 @@ void main() {
     }
   });
 
-  test('auto-creates current FY row and workspace folders for buyer', () async {
-    final now = DateTime(2026, 4, 1);
-    expect(
-      await BuyerStore.add(
-        'Acme Pvt Ltd',
-        'ABCDE1234F',
-        '',
-        currentDateForTest: now,
-      ),
-      isNull,
-    );
+  test('creating buyer does not auto-create current FY row', () async {
+    expect(await BuyerStore.add('Acme Pvt Ltd', 'ABCDE1234F', ''), isNull);
     final buyer = BuyerStore.getAll().single;
-    final expectedFyLabel = currentIndianFinancialYearLabel(now: now);
+
+    final financialYears = await BuyerFinancialYearStore.listActive(buyer.id);
+    expect(financialYears, isEmpty);
+    expect(buyer.activeFinancialYearId, isNull);
+
+    final unexpectedCurrentFyPath = Directory(
+      p.join(workspaceRoot.path, buyer.workspaceRelativePath, 'FY_2026-27'),
+    );
+    expect(await unexpectedCurrentFyPath.exists(), isFalse);
+  });
+
+  test('explicitly creates FY row and workspace folders for buyer', () async {
+    expect(await BuyerStore.add('Acme Pvt Ltd', 'ABCDE1234F', ''), isNull);
+    final buyer = BuyerStore.getAll().single;
+
+    final error = await BuyerFinancialYearStore.create(
+      buyer: buyer,
+      fyLabel: '2024-25',
+    );
+    expect(error, isNull);
+
     final financialYears = await BuyerFinancialYearStore.listActive(buyer.id);
     expect(financialYears, hasLength(1));
-    expect(financialYears.single.fyLabel, expectedFyLabel);
-    expect(buyer.activeFinancialYearId, financialYears.single.id);
+    expect(financialYears.single.fyLabel, '2024-25');
     expect(financialYears.single.status, 'not_started');
     expect(
       financialYears.single.workspaceRelativePath,
-      p.join(buyer.workspaceRelativePath, 'FY_$expectedFyLabel'),
+      p.join(buyer.workspaceRelativePath, 'FY_2024-25'),
     );
 
     final fyPath = p.join(
@@ -74,22 +83,38 @@ void main() {
     }
   });
 
-  test('prevents duplicate FY rows for buyer', () async {
-    final now = DateTime(2026, 4, 1);
+  test('ensures explicit default FY without creating current FY', () async {
+    expect(await BuyerStore.add('Default FY Ltd', 'FGHIJ4567K', ''), isNull);
+    final buyer = BuyerStore.getAll().single;
+
+    final financialYear = await BuyerFinancialYearStore.ensureForBuyer(
+      buyer: buyer,
+      fyLabel: '2024-25',
+    );
+
+    expect(financialYear, isNotNull);
+    expect(financialYear!.fyLabel, '2024-25');
+    expect(financialYear.workspaceRelativePath, contains('FY_2024-25'));
+    expect(await BuyerFinancialYearStore.listActive(buyer.id), hasLength(1));
     expect(
-      await BuyerStore.add(
-        'Duplicate FY Ltd',
-        'ABCDE1234F',
-        '',
-        currentDateForTest: now,
-      ),
+      await Directory(
+        p.join(workspaceRoot.path, buyer.workspaceRelativePath, 'FY_2026-27'),
+      ).exists(),
+      isFalse,
+    );
+  });
+
+  test('prevents duplicate FY rows for buyer', () async {
+    expect(await BuyerStore.add('Duplicate FY Ltd', 'ABCDE1234F', ''), isNull);
+    final buyer = BuyerStore.getAll().single;
+    expect(
+      await BuyerFinancialYearStore.create(buyer: buyer, fyLabel: '2024-25'),
       isNull,
     );
-    final buyer = BuyerStore.getAll().single;
 
     final error = await BuyerFinancialYearStore.create(
       buyer: buyer,
-      fyLabel: currentIndianFinancialYearLabel(now: now),
+      fyLabel: '2024-25',
     );
 
     expect(error, 'Financial year already exists for this buyer');
@@ -122,16 +147,12 @@ void main() {
   });
 
   test('archives FY without deleting folders', () async {
+    expect(await BuyerStore.add('Archive FY Ltd', 'BCDEF2345G', ''), isNull);
+    final buyer = BuyerStore.getAll().single;
     expect(
-      await BuyerStore.add(
-        'Archive FY Ltd',
-        'BCDEF2345G',
-        '',
-        currentDateForTest: DateTime(2026, 4, 1),
-      ),
+      await BuyerFinancialYearStore.create(buyer: buyer, fyLabel: '2024-25'),
       isNull,
     );
-    final buyer = BuyerStore.getAll().single;
     final financialYear = (await BuyerFinancialYearStore.listActive(
       buyer.id,
     )).single;
@@ -148,18 +169,18 @@ void main() {
 
   test('archives active FY and clears buyer default reference', () async {
     expect(
-      await BuyerStore.add(
-        'Clear Active FY Ltd',
-        'CDEFG3456H',
-        '',
-        currentDateForTest: DateTime(2026, 4, 1),
-      ),
+      await BuyerStore.add('Clear Active FY Ltd', 'CDEFG3456H', ''),
       isNull,
     );
     final buyer = BuyerStore.getAll().single;
+    expect(
+      await BuyerFinancialYearStore.create(buyer: buyer, fyLabel: '2024-25'),
+      isNull,
+    );
     final financialYear = (await BuyerFinancialYearStore.listActive(
       buyer.id,
     )).single;
+    await BuyerStore.setActiveFinancialYear(buyer.id, financialYear.id);
 
     await BuyerFinancialYearStore.archive(financialYear.id);
     await BuyerStore.load();

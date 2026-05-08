@@ -42,7 +42,7 @@ void main() {
   });
 
   test('resolves FY Working folder from stored FY relative path', () async {
-    final context = await _createBuyerWithActiveFy();
+    final context = await _createBuyerWithFy();
 
     final workingDirectory = await exportPathService.resolveWorkingDirectory(
       buyerId: context.buyer.id,
@@ -64,7 +64,7 @@ void main() {
   });
 
   test('resolves all standard FY workspace folders', () async {
-    final context = await _createBuyerWithActiveFy();
+    final context = await _createBuyerWithFy();
 
     final finalExportsDirectory = await exportPathService
         .resolveFinalExportsDirectory(
@@ -114,7 +114,7 @@ void main() {
   });
 
   test('creates source snapshot folders and copies files', () async {
-    final context = await _createBuyerWithActiveFy();
+    final context = await _createBuyerWithFy();
 
     final tdsPath = await exportPathService.copySourceFileSnapshot(
       buyerId: context.buyer.id,
@@ -142,7 +142,7 @@ void main() {
   test(
     'adds timestamp suffix instead of overwriting source snapshots',
     () async {
-      final context = await _createBuyerWithActiveFy();
+      final context = await _createBuyerWithFy();
       final now = DateTime(2026, 5, 6, 18, 44, 55);
 
       final firstPath = await exportPathService.copySourceFileSnapshot(
@@ -173,16 +173,12 @@ void main() {
   test('returns null safely when workspace or FY path is missing', () async {
     await DBHelper.debugResetForTest(databaseName: 'workspace_missing_test.db');
     await BuyerStore.load();
+    expect(await BuyerStore.add('No Workspace Ltd', 'NOPQR1234S', ''), isNull);
+    final buyer = BuyerStore.getAll().single;
     expect(
-      await BuyerStore.add(
-        'No Workspace Ltd',
-        'NOPQR1234S',
-        '',
-        currentDateForTest: DateTime(2026, 4, 1),
-      ),
+      await BuyerFinancialYearStore.create(buyer: buyer, fyLabel: '2024-25'),
       isNull,
     );
-    final buyer = BuyerStore.getAll().single;
     final financialYear = (await BuyerFinancialYearStore.listActive(
       buyer.id,
     )).single;
@@ -211,17 +207,13 @@ class _BuyerFyContext {
   const _BuyerFyContext({required this.buyer, required this.financialYear});
 }
 
-Future<_BuyerFyContext> _createBuyerWithActiveFy() async {
+Future<_BuyerFyContext> _createBuyerWithFy() async {
+  expect(await BuyerStore.add('Radha Industries', 'ABCDE1234F', ''), isNull);
+  final buyer = BuyerStore.getAll().single;
   expect(
-    await BuyerStore.add(
-      'Radha Industries',
-      'ABCDE1234F',
-      '',
-      currentDateForTest: DateTime(2026, 4, 1),
-    ),
+    await BuyerFinancialYearStore.create(buyer: buyer, fyLabel: '2024-25'),
     isNull,
   );
-  final buyer = BuyerStore.getAll().single;
   final financialYear = (await BuyerFinancialYearStore.listActive(
     buyer.id,
   )).single;

@@ -72,10 +72,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startReconciliation(Buyer buyer) async {
-    final activeFinancialYear = await BuyerFinancialYearStore.activeForBuyer(
-      buyer,
+    final defaultFinancialYearLabel = await workspaceService
+        .loadDefaultFinancialYearLabel();
+    final effectiveFinancialYearLabel = defaultFinancialYearLabel?.trim();
+    if (effectiveFinancialYearLabel == null ||
+        effectiveFinancialYearLabel.isEmpty) {
+      if (!mounted) return;
+      AppRectSnackBar.show(
+        context,
+        'Set a Global Default FY in Settings before starting reconciliation.',
+        icon: Icons.calendar_today_outlined,
+        duration: _snackBarDuration,
+      );
+      return;
+    }
+
+    final financialYear = await BuyerFinancialYearStore.ensureForBuyer(
+      buyer: buyer,
+      fyLabel: effectiveFinancialYearLabel,
     );
     if (!mounted) return;
+    if (financialYear == null) {
+      AppRectSnackBar.show(
+        context,
+        'Unable to create or select FY $effectiveFinancialYearLabel.',
+        icon: Icons.warning_amber_rounded,
+        duration: _snackBarDuration,
+      );
+      return;
+    }
 
     Navigator.push(
       context,
@@ -84,8 +109,8 @@ class _HomeScreenState extends State<HomeScreen> {
           selectedBuyerId: buyer.id,
           selectedBuyerName: buyer.name,
           selectedBuyerPan: buyer.pan,
-          selectedFinancialYearId: activeFinancialYear?.id,
-          selectedFinancialYearLabel: activeFinancialYear?.fyLabel,
+          selectedFinancialYearId: financialYear.id,
+          selectedFinancialYearLabel: financialYear.fyLabel,
         ),
       ),
     );

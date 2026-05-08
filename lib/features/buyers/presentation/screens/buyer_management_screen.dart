@@ -487,23 +487,39 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     return null;
   }
 
-  void _startReconciliation(Buyer buyer) {
+  Future<void> _startReconciliation(Buyer buyer) async {
     var financialYear = _selectedFinancialYearFrom(selectedFinancialYears);
+    final effectiveFinancialYearLabel =
+        financialYear?.fyLabel ?? defaultFinancialYearLabel?.trim();
+    final hasEffectiveFinancialYear =
+        effectiveFinancialYearLabel != null &&
+        effectiveFinancialYearLabel.isNotEmpty;
+
+    financialYear ??= hasEffectiveFinancialYear
+        ? await BuyerFinancialYearStore.ensureForBuyer(
+            buyer: buyer,
+            fyLabel: effectiveFinancialYearLabel,
+          )
+        : null;
+    if (!mounted) return;
+
     if (financialYear == null) {
-      final effectiveFinancialYearId = _effectiveFinancialYearIdForBuyer(
-        buyer.id,
-        selectedFinancialYears,
+      _showSnackBar(
+        hasEffectiveFinancialYear
+            ? 'Unable to create or select FY $effectiveFinancialYearLabel'
+            : 'Select or set a default financial year to continue',
       );
-      if (effectiveFinancialYearId != null) {
-        selectedFinancialYearId = effectiveFinancialYearId;
-        financialYear = _selectedFinancialYearFrom(selectedFinancialYears);
-      }
-    }
-    if (financialYear == null) {
-      _showSnackBar('Select a financial year to continue');
       return;
     }
     final resolvedFinancialYear = financialYear;
+    final refreshedFinancialYears = await BuyerFinancialYearStore.listActive(
+      buyer.id,
+    );
+    if (!mounted) return;
+    setState(() {
+      selectedFinancialYears = refreshedFinancialYears;
+      selectedFinancialYearId = resolvedFinancialYear.id;
+    });
 
     Navigator.push(
       context,
