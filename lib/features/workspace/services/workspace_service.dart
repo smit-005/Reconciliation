@@ -43,6 +43,24 @@ class WorkspaceService {
 
   Future<String?> loadWorkspaceRootPath() => _loadWorkspaceRootPath();
 
+  Future<String?> loadDefaultFinancialYearLabel() async {
+    final db = await DBHelper.database;
+    final rows = await db.query(
+      'app_settings',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['default_financial_year'],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    final value = (rows.first['value'] ?? '').toString().trim();
+    return value.isEmpty ? null : value;
+  }
+
   Future<WorkspaceStatus> getWorkspaceStatus() async {
     final rootPath = await _loadWorkspaceRootPath();
     if (rootPath == null) {
@@ -63,6 +81,14 @@ class WorkspaceService {
     await db.insert('app_settings', {
       'key': 'workspace_root_path',
       'value': normalizedRootPath,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> saveDefaultFinancialYearLabel(String? fyLabel) async {
+    final db = await DBHelper.database;
+    await db.insert('app_settings', {
+      'key': 'default_financial_year',
+      'value': fyLabel?.trim() ?? '',
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -149,13 +175,19 @@ class WorkspaceService {
   }
 
   Future<String?> resolveRelativePath(String relativePath) async {
+    return resolveWorkspacePath(relativePath);
+  }
+
+  Future<String?> resolveWorkspacePath(String path) async {
     final rootPath = await _loadWorkspaceRootPath();
-    if (rootPath == null || relativePath.trim().isEmpty) {
+    if (rootPath == null || path.trim().isEmpty) {
       return null;
     }
 
     final normalizedRoot = p.normalize(rootPath);
-    final resolved = p.normalize(p.join(normalizedRoot, relativePath.trim()));
+    final resolved = p.isAbsolute(path.trim())
+        ? p.normalize(path.trim())
+        : p.normalize(p.join(normalizedRoot, path.trim()));
     final rootWithSeparator = normalizedRoot.endsWith(p.separator)
         ? normalizedRoot
         : '$normalizedRoot${p.separator}';
@@ -168,16 +200,39 @@ class WorkspaceService {
   }
 
   Future<bool> openFolder(String path) async {
-    final targetPath = p.isAbsolute(path)
-        ? p.normalize(path)
-        : await resolveRelativePath(path);
+    final targetPath = await resolveWorkspacePath(path);
     if (targetPath == null || !await Directory(targetPath).exists()) {
       return false;
     }
 
+    return _openResolvedPath(targetPath);
+  }
+
+  Future<bool> openPath(String path) async {
+    final targetPath = await resolveWorkspacePath(path);
+    if (targetPath == null) {
+      return false;
+    }
+
+    final type = await FileSystemEntity.type(targetPath);
+    if (type == FileSystemEntityType.notFound) {
+      return false;
+    }
+
+    return _openResolvedPath(targetPath);
+  }
+
+  Future<bool> _openResolvedPath(String targetPath) async {
     try {
       if (Platform.isWindows) {
-        await Process.start('explorer.exe', [targetPath]);
+        if (await Directory(targetPath).exists()) {
+          await Process.start('explorer.exe', [targetPath]);
+        } else {
+          await Process.start('rundll32.exe', [
+            'url.dll,FileProtocolHandler',
+            targetPath,
+          ]);
+        }
         return true;
       }
       if (Platform.isMacOS) {

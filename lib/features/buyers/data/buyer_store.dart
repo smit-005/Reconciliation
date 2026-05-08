@@ -12,6 +12,10 @@ class BuyerStore {
 
   static List<Buyer> getAll() => List.unmodifiable(_buyers);
 
+  static Future<List<Buyer>> listArchived() {
+    return _repository.getArchivedBuyers();
+  }
+
   static Future<void> load() async {
     final buyers = await _repository.getAllBuyers();
     _buyers
@@ -136,5 +140,10 @@ class BuyerStore {
   static Future<void> archive(String id) async {
     await _repository.archiveBuyer(id);
     _buyers.removeWhere((b) => b.id == id);
+  }
+
+  static Future<void> restore(String id) async {
+    await _repository.restoreBuyer(id);
+    await load();
   }
 }

@@ -14,6 +14,18 @@ class BuyerRepository {
     return rows.map((e) => Buyer.fromMap(e)).toList();
   }
 
+  Future<List<Buyer>> getArchivedBuyers() async {
+    final db = await DBHelper.database;
+
+    final rows = await db.query(
+      'buyers',
+      where: 'archived_at IS NOT NULL',
+      orderBy: 'archived_at DESC, name COLLATE NOCASE ASC',
+    );
+
+    return rows.map((e) => Buyer.fromMap(e)).toList();
+  }
+
   Future<void> addBuyer(Buyer buyer) async {
     final db = await DBHelper.database;
     await db.insert('buyers', buyer.toMap());
@@ -58,6 +70,16 @@ class BuyerRepository {
       'buyers',
       {'archived_at': DateTime.now().toIso8601String()},
       where: 'id = ? AND archived_at IS NULL',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> restoreBuyer(String id) async {
+    final db = await DBHelper.database;
+    await db.update(
+      'buyers',
+      {'archived_at': null},
+      where: 'id = ? AND archived_at IS NOT NULL',
       whereArgs: [id],
     );
   }
