@@ -15,15 +15,11 @@ import 'package:reconciliation_app/features/reconciliation/models/result/reconci
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
-import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/utils/pan_propagation_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_view_visibility.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_analysis_panel.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_bottom_action_bar.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_filters.dart';
-import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_reason_chip.dart';
-import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_summary_header.dart';
-import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_summary_pill.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_table_section.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_top_toolbar.dart';
 import 'package:reconciliation_app/features/upload/services/auto_mapping_service.dart';
@@ -100,13 +96,6 @@ class _FilteredMetrics {
     required this.applicableButNo26QAmount,
     required this.applicableButNo26QTds,
   });
-}
-
-class _SellerMappingConflict {
-  final String aliasKey;
-  final String message;
-
-  const _SellerMappingConflict({required this.aliasKey, required this.message});
 }
 
 enum _SellerExceptionFilter { skippedRows, missing26Q }
@@ -387,207 +376,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   String _resolveSingleTargetPan(String mappedName) {
     final pans = _resolveTargetPans(mappedName);
     return pans.length == 1 ? pans.first : '';
-  }
-
-  Map<String, List<String>> _buildPurchaseSectionsByAlias(
-    List<NormalizedTransactionRow> sourceRows,
-  ) {
-    final sectionsByAlias = <String, Set<String>>{};
-
-    for (final row in sourceRows) {
-      final aliasKey = _normalizeAlias(row.partyName);
-      final section = normalizeSection(row.section).isNotEmpty
-          ? normalizeSection(row.section)
-          : normalizeSection(row.normalizedSection);
-
-      if (aliasKey.isEmpty || section.isEmpty) continue;
-      sectionsByAlias.putIfAbsent(aliasKey, () => <String>{});
-      sectionsByAlias[aliasKey]!.add(section);
-    }
-
-    return {
-      for (final entry in sectionsByAlias.entries)
-        entry.key: (entry.value.toList()..sort()),
-    };
-  }
-
-  String _resolveSuggestedTdsPartyName(ReconciliationRow row) {
-    final resolvedPan = normalizePan(row.resolvedPan);
-    final resolvedName = row.resolvedSellerName.trim();
-
-    if (resolvedPan.isNotEmpty) {
-      final panMatches =
-          widget.tdsRows
-              .where((tdsRow) => normalizePan(tdsRow.panNumber) == resolvedPan)
-              .map((tdsRow) => tdsRow.deducteeName.trim())
-              .where((name) => name.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
-
-      if (panMatches.length == 1) {
-        return panMatches.first;
-      }
-
-      final normalizedResolvedName = normalizeName(resolvedName);
-      if (normalizedResolvedName.isNotEmpty) {
-        for (final match in panMatches) {
-          if (normalizeName(match) == normalizedResolvedName) {
-            return match;
-          }
-        }
-      }
-    }
-
-    final normalizedResolvedName = normalizeName(resolvedName);
-    if (normalizedResolvedName.isEmpty) {
-      return resolvedName;
-    }
-
-    final nameMatches =
-        widget.tdsRows
-            .map((tdsRow) => tdsRow.deducteeName.trim())
-            .where((name) => name.isNotEmpty)
-            .where((name) => normalizeName(name) == normalizedResolvedName)
-            .toSet()
-            .toList()
-          ..sort();
-
-    if (nameMatches.isNotEmpty) {
-      return nameMatches.first;
-    }
-
-    return resolvedName;
-  }
-
-  String _resolvedSuggestionSource(ReconciliationRow row) {
-    switch (row.debugInfo.mappingHit.trim()) {
-      case 'exact':
-        return 'saved_exact';
-      case 'fallback':
-        return 'saved_fallback';
-      default:
-        return row.resolvedSellerName.trim().isEmpty &&
-                normalizePan(row.resolvedPan).isEmpty
-            ? 'none'
-            : 'backend_inferred';
-    }
-  }
-
-  String _resolvedSuggestionHelper(ReconciliationRow row, String source) {
-    switch (source) {
-      case 'saved_exact':
-        return 'Exact section mapping is already saved.';
-      case 'saved_fallback':
-        return 'Using global fallback in reconciliation; save to store as exact section mapping.';
-      case 'backend_inferred':
-        return 'Resolved in reconciliation only; not yet saved as exact section mapping.';
-      default:
-        return '';
-    }
-  }
-
-  int _resolvedSuggestionPriority(String source) {
-    switch (source) {
-      case 'saved_exact':
-        return 4;
-      case 'saved_fallback':
-        return 3;
-      case 'backend_inferred':
-        return 2;
-      default:
-        return 0;
-    }
-  }
-
-  Map<String, SellerMappingResolvedSuggestion> _buildResolvedSuggestions(
-    List<ReconciliationRow> rows,
-  ) {
-    final suggestions = <String, SellerMappingResolvedSuggestion>{};
-    final suggestionScores = <String, int>{};
-
-    for (final row in rows) {
-      if (!row.purchasePresent) continue;
-
-      final sectionCode = normalizeSellerMappingSectionCode(row.section);
-      final source = _resolvedSuggestionSource(row);
-      if (source == 'none') continue;
-
-      final mappedName = _resolveSuggestedTdsPartyName(row).trim();
-      final mappedPan = normalizePan(row.resolvedPan);
-      if (mappedName.isEmpty && mappedPan.isEmpty) continue;
-
-      final score =
-          (_resolvedSuggestionPriority(source) * 1000) +
-          (row.identityConfidence * 100).round() +
-          (mappedPan.isNotEmpty ? 10 : 0);
-
-      final suggestion = SellerMappingResolvedSuggestion(
-        mappedName: mappedName,
-        mappedPan: mappedPan,
-        source: source,
-        helperText: _resolvedSuggestionHelper(row, source),
-      );
-
-      final aliases = row.debugInfo.originalSellerNames
-          .map((name) => _normalizeAlias(name))
-          .where((name) => name.isNotEmpty)
-          .toSet();
-
-      for (final alias in aliases) {
-        final rowKey = '$alias|$sectionCode';
-        if (score < (suggestionScores[rowKey] ?? -1)) continue;
-        suggestionScores[rowKey] = score;
-        suggestions[rowKey] = suggestion;
-      }
-    }
-
-    return suggestions;
-  }
-
-  Map<String, List<String>> _buildTdsPartyPans() {
-    final pansByParty = <String, Set<String>>{};
-
-    for (final row in widget.tdsRows) {
-      final partyName = row.deducteeName.trim();
-      final pan = normalizePan(row.panNumber);
-      if (partyName.isEmpty || pan.isEmpty) continue;
-      pansByParty.putIfAbsent(partyName, () => <String>{});
-      pansByParty[partyName]!.add(pan);
-    }
-
-    return {
-      for (final entry in pansByParty.entries)
-        entry.key: (entry.value.toList()..sort()),
-    };
-  }
-
-  List<_SellerMappingConflict> _buildAliasPanConflicts({
-    required Map<String, String> mappings,
-    required Map<String, List<String>> purchaseSectionsByAlias,
-  }) {
-    final conflicts = <_SellerMappingConflict>[];
-
-    for (final entry in mappings.entries) {
-      final aliasKey = _normalizeAlias(entry.key);
-      final targetPans = _resolveTargetPans(entry.value);
-
-      if (aliasKey.isEmpty || targetPans.length <= 1) continue;
-
-      final sections = purchaseSectionsByAlias[aliasKey] ?? const <String>[];
-      final sectionSuffix = sections.isEmpty
-          ? ''
-          : ' Sections: ${sections.join(', ')}.';
-      conflicts.add(
-        _SellerMappingConflict(
-          aliasKey: aliasKey,
-          message:
-              'This seller maps to different PANs. Section-wise mapping is required.$sectionSuffix',
-        ),
-      );
-    }
-
-    return conflicts;
   }
 
   List<NormalizedTransactionRow> _applyPropagatedPanToSourceRows({
@@ -1673,75 +1461,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     );
   }
 
-  int _countByStatus(String status) {
-    switch (status) {
-      case ReconciliationStatus.matched:
-        return _filteredMetrics?.matchedCount ?? 0;
-      case ReconciliationStatus.timingDifference:
-        return _filteredMetrics?.timingDifferenceCount ?? 0;
-      case ReconciliationStatus.shortDeduction:
-        return _filteredMetrics?.shortDeductionCount ?? 0;
-      case ReconciliationStatus.excessDeduction:
-        return _filteredMetrics?.excessDeductionCount ?? 0;
-      case ReconciliationStatus.purchaseOnly:
-        return _filteredMetrics?.purchaseOnlyCount ?? 0;
-      case ReconciliationStatus.onlyIn26Q:
-        return _filteredMetrics?.only26QCount ?? 0;
-      default:
-        return filteredRows.where((e) => e.status == status).length;
-    }
-  }
-
   int _applicableButNo26QCount() {
     return _filteredMetrics?.applicableButNo26QCount ?? 0;
   }
 
-  double _applicableButNo26QAmount() {
-    return _filteredMetrics?.applicableButNo26QAmount ?? 0.0;
-  }
-
-  double _applicableButNo26QTds() {
-    return _filteredMetrics?.applicableButNo26QTds ?? 0.0;
-  }
-
-  double _shortDeductionAmount() {
-    return _filteredMetrics?.shortDeductionAmount ?? 0.0;
-  }
-
-  double _excessDeductionAmount() {
-    return _filteredMetrics?.excessDeductionAmount ?? 0.0;
-  }
-
-  double _timingDifferenceAmount() {
-    return _filteredMetrics?.timingDifferenceAmount ?? 0.0;
-  }
-
-  double _netMismatchAmount() {
-    return _filteredMetrics?.netMismatchAmount ?? 0.0;
-  }
-
   int _totalSellers() {
     return _filteredMetrics?.totalSellers ?? 0;
-  }
-
-  int _mismatchRowsCount() {
-    return _filteredMetrics?.mismatchRowsCount ?? 0;
-  }
-
-  double _matchedPercentage() {
-    return _filteredMetrics?.matchedPercentage ?? 0.0;
-  }
-
-  double _mismatchPercentage() {
-    return _filteredMetrics?.mismatchPercentage ?? 0.0;
-  }
-
-  ReconciliationSummary? _activeSummary() {
-    return _filteredMetrics?.summary;
-  }
-
-  int _mismatchCountForSection(String section) {
-    return _filteredMetrics?.sectionMismatchCounts[section] ?? 0;
   }
 
   List<ReconciliationRow> _stableSectionCountScope() {
@@ -1958,148 +1683,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     );
   }
 
-  Widget _buildSectionSummaryStrip() {
-    final summary = _activeSummary();
-    if (summary == null) return const SizedBox.shrink();
-    final activeSectionCode = activeSectionTab == 'All'
-        ? 'All Sections'
-        : activeSectionTab;
-    final sourceFileCount = activeSectionTab == 'All'
-        ? widget.sourceFileCountBySection.values.fold<int>(
-            0,
-            (sum, count) => sum + count,
-          )
-        : (widget.sourceFileCountBySection[activeSectionTab] ?? 0);
-    final sourceRowCount = activeSectionTab == 'All'
-        ? widget.sourceRowsBySection.values.fold<int>(
-            0,
-            (sum, rows) => sum + rows.length,
-          )
-        : (widget.sourceRowsBySection[activeSectionTab]?.length ?? 0);
-    final mismatchReasonCounts = _activeMismatchReasonCounts();
-    final unsupportedSections = _unsupportedSectionsInActiveScope();
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ReconciliationSummaryHeader(
-            title:
-                '${activeSectionTab == 'All' ? 'Combined' : sectionDisplayLabel(activeSectionTab)} Summary',
-            subtitle:
-                '$activeSectionCode  •  $sourceFileCount source file(s)  •  '
-                '$sourceRowCount source row(s)',
-          ),
-          if (activeSectionTab == 'All' && unsupportedSections.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF59E0B)),
-              ),
-              child: Text(
-                'All includes unsupported/unknown 26Q sections: '
-                '${unsupportedSections.join(', ')}. '
-                'These rows remain visible for review and are included in the combined All-sections summary. '
-                'Supported sections remain '
-                '${CalculationService.supportedSections.join(', ')}.',
-                style: const TextStyle(
-                  color: Color(0xFF9A3412),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ReconciliationReasonChip(
-                label: 'No 26Q entry',
-                count: mismatchReasonCounts['No 26Q entry'] ?? 0,
-                color: const Color(0xFFB45309),
-              ),
-              ReconciliationReasonChip(
-                label: 'Amount mismatch',
-                count: mismatchReasonCounts['Amount mismatch'] ?? 0,
-                color: const Color(0xFFDC2626),
-              ),
-              ReconciliationReasonChip(
-                label: 'TDS mismatch',
-                count: mismatchReasonCounts['TDS mismatch'] ?? 0,
-                color: const Color(0xFF7C3AED),
-              ),
-              ReconciliationReasonChip(
-                label: 'Timing difference',
-                count: mismatchReasonCounts['Timing difference'] ?? 0,
-                color: const Color(0xFF0F766E),
-              ),
-              ReconciliationReasonChip(
-                label: 'PAN/name mismatch',
-                count: mismatchReasonCounts['PAN/name mismatch'] ?? 0,
-                color: const Color(0xFF1D4ED8),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              ReconciliationSummaryPill(
-                label: 'Total Rows',
-                value: summary.totalRows.toString(),
-              ),
-              ReconciliationSummaryPill(
-                label: 'Mismatch Rows',
-                value: summary.mismatchRows.toString(),
-              ),
-              ReconciliationSummaryPill(
-                label: 'Source Amount',
-                value: _fmt(summary.sourceAmount),
-              ),
-              ReconciliationSummaryPill(
-                label: '26Q Amount',
-                value: _fmt(summary.tds26QAmount),
-              ),
-              ReconciliationSummaryPill(
-                label: 'Expected TDS',
-                value: _fmt(summary.expectedTds),
-              ),
-              ReconciliationSummaryPill(
-                label: 'Actual TDS',
-                value: _fmt(summary.actualTds),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   int _totalSections() {
     return _filteredMetrics?.totalSections ?? 0;
-  }
-
-  Map<String, int> _sectionCounts() {
-    return _filteredMetrics?.sectionCounts ?? const <String, int>{};
-  }
-
-  String _topMismatchSection() {
-    return _filteredMetrics?.topMismatchSection ?? '-';
   }
 
   int _skippedSellerCount(SkippedRowSummary skippedRowSummary) {
@@ -2212,15 +1797,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     }
   }
 
-  String _sellerExceptionFilterLabel(_SellerExceptionFilter filter) {
-    switch (filter) {
-      case _SellerExceptionFilter.skippedRows:
-        return 'Seller exception: Skipped rows';
-      case _SellerExceptionFilter.missing26Q:
-        return 'Seller exception: Missing 26Q deductions';
-    }
-  }
-
   void _toggleSellerExceptionFilter(_SellerExceptionFilter filter) {
     setState(() {
       _activeSellerExceptionFilter = _activeSellerExceptionFilter == filter
@@ -2228,19 +1804,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           : filter;
     });
     _applyFilters();
-  }
-
-  double _purchaseOnlyAmount() {
-    return _filteredMetrics?.purchaseOnlyAmount ?? 0.0;
-  }
-
-  double _only26QAmount() {
-    return _filteredMetrics?.only26QAmount ?? 0.0;
-  }
-
-  String _sellerFilterDisplayValue() {
-    final query = selectedSeller.trim();
-    return query.isEmpty ? 'All Visible Sellers' : query;
   }
 
   String _exportSellerLabel() {
@@ -2450,7 +2013,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case CalculationService.sellerStatusMatched:
-      case ReconciliationStatus.matched:
         return Colors.green.shade50;
       case CalculationService.sellerStatusMismatch:
         return Colors.red.shade50;
@@ -2492,7 +2054,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       case ReconciliationStatus.applicableButNo26Q:
         return const Color(0xFFB45309);
       case CalculationService.sellerStatusMatched:
-      case ReconciliationStatus.matched:
         return const Color(0xFF166534);
       case ReconciliationStatus.amountMismatch:
         return const Color(0xFFB91C1C);
