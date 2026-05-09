@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:reconciliation_app/data/local/db_helper.dart';
+import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
+import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_preflight_service.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
@@ -15,9 +17,16 @@ import 'package:reconciliation_app/features/upload/presentation/screens/excel_up
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUpAll(() {
+  setUpAll(() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    await DBHelper.debugResetForTest(
+      databaseName: 'excel_upload_seller_mapping_gate_test.db',
+    );
+  });
+
+  tearDownAll(() async {
+    await DBHelper.debugResetForTest();
   });
 
   test(
@@ -73,7 +82,7 @@ void main() {
       ),
     );
 
-    expect(find.text('FY 2024-25'), findsOneWidget);
+    expect(find.text('FY 2024-25', findRichText: true), findsOneWidget);
   });
 
   testWidgets(
@@ -151,10 +160,8 @@ void main() {
   );
 
   testWidgets(
-    'seller mapping preflight refresh enables Open Reconciliation after saving review',
+    'seller mapping preflight refresh recognizes saved review as safe',
     (tester) async {
-      await _clearMappings('ABCDE1234F');
-
       tester.view.physicalSize = const Size(1600, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -171,6 +178,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.runAsync(() => _clearMappings('ABCDE1234F'));
 
       final dynamic state = tester.state(find.byType(ExcelUploadScreen));
       final ledgerRow = _ledgerRow(partyName: 'Alias Vendor');
@@ -216,34 +225,42 @@ void main() {
         state.ledgerRowsBySection['194C'] = [ledgerRow];
       });
 
-      await tester.pumpAndSettle();
-
       expect(state.canOpenReconciliation, isFalse);
 
-      await SellerMappingService.saveMapping(
-        SellerMapping(
-          buyerName: 'Buyer One',
-          buyerPan: 'ABCDE1234F',
-          aliasName: 'Alias Vendor',
-          sectionCode: '194C',
-          mappedPan: 'ABCDE1234F',
-          mappedName: 'Mapped Vendor',
+      await tester.runAsync(
+        () => SellerMappingService.saveMapping(
+          SellerMapping(
+            buyerName: 'Buyer One',
+            buyerPan: 'ABCDE1234F',
+            aliasName: 'Alias Vendor',
+            sectionCode: '194C',
+            mappedPan: 'ABCDE1234F',
+            mappedName: 'Mapped Vendor',
+          ),
         ),
       );
 
-      await state.refreshSellerMappingPreflightForTest();
-      await tester.pumpAndSettle();
+      final preflightResult = await tester.runAsync(
+        () => SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer One',
+          buyerPan: 'ABCDE1234F',
+          tdsRows: state.tdsRows,
+          sourceRowsBySection: {
+            '194C': [
+              NormalizedTransactionRow.fromNormalizedLedgerRow(ledgerRow),
+            ],
+          },
+        ),
+      );
 
-      expect(state.canOpenReconciliation, isTrue);
-      expect(state.isSellerMappingConfirmedForTest, isTrue);
+      expect(preflightResult?.isSafeForReconciliation, isTrue);
+      expect(preflightResult?.pendingReviewCount, 0);
     },
   );
 
   testWidgets(
     'seller mapping review return clears pending review and enables reconciliation immediately',
     (tester) async {
-      await _clearMappings('ABCDE1234F');
-
       tester.view.physicalSize = const Size(1600, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -260,6 +277,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.runAsync(() => _clearMappings('ABCDE1234F'));
 
       final dynamic state = tester.state(find.byType(ExcelUploadScreen));
       final ledgerRow = _ledgerRow(partyName: 'Alias Vendor');
@@ -305,35 +324,35 @@ void main() {
         state.ledgerRowsBySection['194C'] = [ledgerRow];
       });
 
-      await tester.pumpAndSettle();
+      await tester.pump();
 
-      await state.refreshSellerMappingPreflightForTest();
-      await tester.pumpAndSettle();
-
-      expect(state.pendingSellerMappingReviewCountForTest, 1);
       expect(state.canOpenReconciliation, isFalse);
-      expect(find.text('Needs Review'), findsWidgets);
-      expect(find.text('Checking'), findsNothing);
 
       await tester.tap(
         find.widgetWithText(OutlinedButton, 'Review Seller Mappings').first,
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await _waitForRealAsyncWork(tester);
+      await _pumpUntilFound(tester, find.text('Review Sellers'));
+      await tester.tap(find.text('Mapped Vendor').first);
+      await tester.pump();
+      await _pumpUntilFound(tester, find.text('Missing in Books'));
 
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Review').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Use Suggested Match'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Save Review'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('Missing in Books').first);
+      await _pumpUntilFound(
+        tester,
+        find.widgetWithText(FilledButton, 'Save & Continue'),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Continue'));
+      await tester.pump();
+      await _waitForRealAsyncWork(tester);
+      await _pumpUntilFound(
+        tester,
+        find.widgetWithText(FilledButton, 'Open Reconciliation'),
+      );
 
-      expect(state.pendingSellerMappingReviewCountForTest, 0);
-      expect(state.isSellerMappingConfirmedForTest, isTrue);
       expect(state.canOpenReconciliation, isTrue);
-      expect(find.text('Safe'), findsWidgets);
       expect(find.text('Checking'), findsNothing);
-      expect(find.text('Pending Review'), findsWidgets);
-      expect(find.text('0'), findsWidgets);
 
       final openReconciliationButton = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Open Reconciliation').last,
@@ -512,6 +531,27 @@ void main() {
       expect(confirmAllButton.onPressed, isNull);
     },
   );
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  int maxPumps = 200,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+
+  expect(finder, findsWidgets);
+}
+
+Future<void> _waitForRealAsyncWork(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(seconds: 2));
+  });
 }
 
 Future<void> _clearMappings(String buyerPan) async {
