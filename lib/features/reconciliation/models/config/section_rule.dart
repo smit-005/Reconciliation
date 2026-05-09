@@ -40,12 +40,10 @@ class SectionRateConfig {
       otherEntityRate = null;
 
   const SectionRateConfig.bySellerPanEntityType({
-    required double individualOrHufRate,
-    required double otherEntityRate,
+    required this.individualOrHufRate,
+    required this.otherEntityRate,
   }) : resolverType = SectionRateResolverType.sellerPanEntityType,
-       fixedRate = null,
-       individualOrHufRate = individualOrHufRate,
-       otherEntityRate = otherEntityRate;
+       fixedRate = null;
 }
 
 class SectionRuleConfig {

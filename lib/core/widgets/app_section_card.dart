@@ -36,7 +36,7 @@ class AppSectionCard extends StatelessWidget {
                   if (title != null) Expanded(child: title!),
                   if (title != null && trailing != null)
                     const SizedBox(width: AppSpacing.md),
-                  if (trailing != null) trailing!,
+                  ?trailing,
                 ],
               ),
               const SizedBox(height: AppSpacing.md),

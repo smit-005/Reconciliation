@@ -255,23 +255,25 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               title: const Text('Select 26Q Sheet'),
               content: SizedBox(
                 width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: sheets
-                      .map(
-                        (sheet) => RadioListTile<String>(
-                          value: sheet,
-                          groupValue: selectedSheet,
-                          title: Text(sheet),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setLocalState(() {
-                              selectedSheet = value;
-                            });
-                          },
-                        ),
-                      )
-                      .toList(),
+                child: RadioGroup<String>(
+                  groupValue: selectedSheet,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setLocalState(() {
+                      selectedSheet = value;
+                    });
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: sheets
+                        .map(
+                          (sheet) => RadioListTile<String>(
+                            value: sheet,
+                            title: Text(sheet),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
               ),
               actions: [
@@ -1488,19 +1490,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return 'Setup Required';
   }
 
-  String get _workspaceStatusDetail {
-    if (canOpenReconciliation) {
-      return '26Q and source files are confirmed. Continue to reconciliation.';
-    }
-    if (!_has26QReady) {
-      return 'Upload the mandatory 26Q master file to unlock the workflow.';
-    }
-    if (!_allRequiredMappingsConfirmed) {
-      return 'Review and confirm column mapping for every uploaded file before reconciliation.';
-    }
-    return 'Add at least one source file in a selected section to continue.';
-  }
-
   int _sectionFileCount(String sectionCode) =>
       sectionFiles[sectionCode]?.length ?? 0;
 
@@ -1625,15 +1614,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
   }
 
-  String _formatTimestamp(DateTime value) {
-    final date = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final year = value.year.toString();
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$date/$month/$year $hour:$minute';
-  }
-
   Widget _buildHeader() {
     return SizedBox(
       height: 52,
@@ -1679,41 +1659,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  void _showUploadHelp() {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Upload Help'),
-          content: const SizedBox(
-            width: 460,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('1. Upload the mandatory 26Q file.'),
-                SizedBox(height: 8),
-                Text(
-                  '2. Add section-wise source files such as purchase or ledger files.',
-                ),
-                SizedBox(height: 8),
-                Text('3. Review and confirm column mappings.'),
-                SizedBox(height: 8),
-                Text('4. Review seller mappings, then open reconciliation.'),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Got it'),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -2030,7 +1975,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: _availableSections.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          separatorBuilder: (_, _) => const SizedBox(width: 10),
           itemBuilder: (context, index) {
             final section = _availableSections[index];
             final selected = selectedSections.contains(section);
@@ -2142,70 +2087,6 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             );
           },
         ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: _panelDecoration(),
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: [
-          _buildSummaryTile('Buyer', widget.selectedBuyerName),
-          _buildSummaryTile('Buyer PAN', widget.selectedBuyerPan),
-          if (_selectedFinancialYearValue() != null)
-            _buildSummaryTile('FY', _selectedFinancialYearValue()!),
-          _buildSummaryTile('26Q Rows', tdsRows.length.toString()),
-          _buildSummaryTile('Section Files', _totalSectionFiles.toString()),
-          _buildSummaryTile('Source Rows', _totalLedgerRows.toString()),
-          _buildSummaryTile(
-            'Active Buckets',
-            selectedSections.length.toString(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryTile(String label, String value) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 180, minHeight: 112),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B1220),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-              height: 1.1,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }

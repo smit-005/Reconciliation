@@ -44,7 +44,6 @@ class _ReconciliationTableSectionState
   static int _tableBuildCounter = 0;
   static const List<int> _pageSizeOptions = <int>[100, 250];
 
-  late List<_SellerGroupViewModel> _groups;
   late List<_SellerGroupPage> _pages;
   int _currentPageIndex = 0;
   int _pageSize = _pageSizeOptions.first;
@@ -69,7 +68,7 @@ class _ReconciliationTableSectionState
     final visiblePage = _visiblePage;
     debugPrint(
       'RECON TABLE BUILD => count=$_tableBuildCounter totalRows=${widget.filteredRows.length} '
-      'page=${visiblePage.pageNumber}/${_totalPages} renderedRows=${visiblePage.rowCount} '
+      'page=${visiblePage.pageNumber}/$_totalPages renderedRows=${visiblePage.rowCount} '
       'renderedGroups=${visiblePage.groups.length} pageSize=$_pageSize',
     );
 
@@ -350,7 +349,6 @@ class _ReconciliationTableSectionState
       'pageMs=${pagingWatch.elapsedMilliseconds}',
     );
 
-    _groups = nextGroups;
     _pages = nextPages;
 
     if (resetPage) {
