@@ -439,6 +439,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       _processingMessage = 'Processing reconciliation...';
     });
     await _allowLoadingFrame();
+    if (!mounted) return;
 
     try {
       debugPrint('RECON PERF => heavy work started');
@@ -453,6 +454,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final prevStatus = selectedStatus;
       final mappingsWatch = Stopwatch()..start();
       final latestManualMappings = await _loadManualMappingsFromDb();
+      if (!mounted) return;
       mappingsWatch.stop();
       _logPerformance(
         'manual mapping load',
@@ -464,6 +466,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         _processingMessage = 'Preparing source data...';
       });
       await _allowLoadingFrame();
+      if (!mounted) return;
 
       final sourceRows = widget.sourceRowsBySection.values
           .expand((rows) => rows)
@@ -508,6 +511,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           tdsParties: tdsNames,
           threshold: 0.80,
         );
+        if (!mounted) return;
         isolateWatch.stop();
         debugPrint(
           'AUTO MAP ISOLATE => completed ${isolateWatch.elapsedMilliseconds} ms',
@@ -576,6 +580,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         _processingMessage = 'Propagating seller PAN mappings...';
       });
       await _allowLoadingFrame();
+      if (!mounted) return;
 
       final panPropagationWatch = Stopwatch()..start();
       final panMapBuildWatch = Stopwatch()..start();
@@ -607,6 +612,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         _processingMessage = 'Calculating reconciliation results...';
       });
       await _allowLoadingFrame();
+      if (!mounted) return;
 
       final reconciliationWatch = Stopwatch()..start();
       final sectionResult = await CalculationService.reconcileSectionWise(
@@ -618,6 +624,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         includeAllRows: true,
         sections: widget.sourceRowsBySection.keys.toList(),
       );
+      if (!mounted) return;
       reconciliationWatch.stop();
       _logPerformance(
         'reconciliation calculation',
@@ -630,6 +637,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         _processingMessage = 'Applying filters and preparing results table...';
       });
       await _allowLoadingFrame();
+      if (!mounted) return;
 
       final freshRows = sectionResult.rows;
       final visibleRows = _rowsForCurrentSummaryScope(freshRows);
@@ -1890,6 +1898,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           financialYearId: widget.selectedFinancialYearId,
         ),
       );
+      if (!mounted) return;
       final filePath = await ExcelExportService.exportReconciliationExcel(
         rows: filteredRows,
         buyerName: widget.buyerName,
@@ -1922,6 +1931,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           financialYearId: widget.selectedFinancialYearId,
         ),
       );
+      if (!mounted) return;
       final filePath = await ExcelExportService.exportReconciliationExcel(
         rows: rows,
         buyerName: widget.buyerName,
@@ -1953,6 +1963,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           financialYearId: widget.selectedFinancialYearId,
         ),
       );
+      if (!mounted) return;
       final filePath = await ExcelExportService.exportPivotSummaryExcel(
         rows: filteredRows,
         buyerName: widget.buyerName,
@@ -2001,6 +2012,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   void _showSnackBar(String message) {
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger
       ..clearSnackBars()

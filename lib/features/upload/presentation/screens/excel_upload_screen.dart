@@ -187,10 +187,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
 
     if (previewData == null) {
+      if (!mounted) return null;
       _showUploadSnackBar('Could not build mapping preview for this file');
       return null;
     }
 
+    if (!mounted) return null;
     return showColumnMappingScreen(previewData: previewData);
   }
 
@@ -212,10 +214,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
 
     if (previewData == null) {
+      if (!mounted) return null;
       _showUploadSnackBar('Could not build mapping preview for this file');
       return null;
     }
 
+    if (!mounted) return null;
     return showColumnMappingScreen(previewData: previewData);
   }
 
@@ -234,10 +238,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
 
     if (previewData == null) {
+      if (!mounted) return null;
       _showUploadSnackBar('Could not build mapping preview for this file');
       return null;
     }
 
+    if (!mounted) return null;
     return showColumnMappingScreen(previewData: previewData);
   }
 
@@ -351,6 +357,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       allowedExtensions: _allowedUploadExtensions,
       withData: true,
     );
+    if (!mounted) return null;
 
     if (result == null || result.files.isEmpty) {
       return null;
@@ -397,6 +404,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   void _setSectionLoading(String sectionCode, bool isLoading) {
+    if (!mounted) return;
     final setStateWatch = Stopwatch()..start();
     setState(() {
       sectionLoading[sectionCode] = isLoading;
@@ -457,6 +465,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       initialMappedColumns: initialMappedColumns,
       forceColumnMapping: forceColumnMapping,
     );
+    if (!mounted) return null;
 
     if (response.isFailure) {
       parseWatch.stop();
@@ -475,6 +484,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         result: result.columnMappingResult!,
         sampleSignature: result.sampleSignature,
       );
+      if (!mounted) return null;
     }
 
     final fileId =
@@ -535,6 +545,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       initialMappedColumns: initialMappedColumns,
       forceColumnMapping: forceColumnMapping,
     );
+    if (!mounted) return null;
 
     if (response.isFailure) {
       parseWatch.stop();
@@ -583,6 +594,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final columnMappingResult = await _openStoredFileColumnMapping(
         file: file,
       );
+      if (!mounted) return;
       if (columnMappingResult == null) {
         _setSectionLoading(sectionCode, false);
         return;
@@ -592,6 +604,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         file: file,
         columnMappingResult: columnMappingResult,
       );
+      if (!mounted) return;
       if (response.isFailure) {
         _setSectionLoading(sectionCode, false);
         _showUploadSnackBar(
@@ -612,6 +625,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             result: columnMappingResult,
             sampleSignature: result.sampleSignature!,
           );
+          if (!mounted) return;
         }
         if (result.parsedPurchaseRows != null) {
           purchaseRowsByFileId[file.id] = result.parsedPurchaseRows!;
@@ -647,9 +661,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<void> _upload194QFile() async {
     _setSectionLoading('194Q', true);
     await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
 
     try {
       final pickedFile = await _pickExcelFile();
+      if (!mounted) return;
       if (pickedFile == null) {
         _setSectionLoading('194Q', false);
         return;
@@ -665,6 +681,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         pickedFile: pickedFile,
         bytes: bytes,
       );
+      if (!mounted) return;
       if (uploadFile == null) {
         _setSectionLoading('194Q', false);
         return;
@@ -699,9 +716,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Future<void> _uploadGenericSectionFile(String sectionCode) async {
     _setSectionLoading(sectionCode, true);
     await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
 
     try {
       final pickedFile = await _pickExcelFile();
+      if (!mounted) return;
       if (pickedFile == null) {
         _setSectionLoading(sectionCode, false);
         return;
@@ -718,6 +737,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         pickedFile: pickedFile,
         bytes: bytes,
       );
+      if (!mounted) return;
       if (uploadFile == null) {
         _setSectionLoading(sectionCode, false);
         return;
@@ -761,11 +781,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       'UPLOAD FREEZE PERF => step=tds_loading_setState ms=${initialSetStateWatch.elapsedMilliseconds} loading=true',
     );
     await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
 
     try {
       final uploadWatch = Stopwatch()..start();
       final pickWatch = Stopwatch()..start();
       final pickedFile = await _pickExcelFile();
+      if (!mounted) return;
       pickWatch.stop();
       debugPrint(
         'UPLOAD FREEZE PERF => step=tds_pick_file ms=${pickWatch.elapsedMilliseconds} selected=${pickedFile != null}',
@@ -789,6 +811,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final validation = await ImportUploadFlowService.validateTds26QImport(
         bytes,
       );
+      if (!mounted) return;
       validationWatch.stop();
       debugPrint(
         'UPLOAD FREEZE PERF => step=tds_validation_total ms=${validationWatch.elapsedMilliseconds} valid=${validation.isValid} requiresSelection=${validation.requiresUserSelection}',
@@ -801,9 +824,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         final selectableSheets = validation.candidateSheets.isNotEmpty
             ? validation.candidateSheets
             : await ExcelService.list26QSelectableSheetsInBackground(bytes);
+        if (!mounted) return;
         preferredSheetName = await _show26QSheetSelectionDialog(
           selectableSheets,
         );
+        if (!mounted) return;
         sheetSelectionWatch.stop();
         debugPrint(
           'UPLOAD FREEZE PERF => step=tds_sheet_selection_dialog ms=${sheetSelectionWatch.elapsedMilliseconds} sheets=${selectableSheets.length} selected=${preferredSheetName != null}',
@@ -829,6 +854,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         openColumnMapping: _openImportColumnMapping,
         preferredSheetName: preferredSheetName,
       );
+      if (!mounted) return;
       prepareWatch.stop();
       debugPrint(
         'UPLOAD FREEZE PERF => step=tds_prepare_import_total ms=${prepareWatch.elapsedMilliseconds} success=${response.isSuccess}',
@@ -893,6 +919,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
       _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingTds = false);
       _showUploadSnackBar('26Q upload error: $e');
     }
@@ -908,6 +935,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     try {
       final columnMappingResult = await _openStoredTdsColumnMapping(file: file);
+      if (!mounted) return;
       if (columnMappingResult == null) {
         setState(() => isLoadingTds = false);
         return;
@@ -917,6 +945,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         bytes: file.bytes,
         columnMappingResult: columnMappingResult,
       );
+      if (!mounted) return;
       if (response.isFailure) {
         setState(() => isLoadingTds = false);
         _showUploadSnackBar(response.errorMessage ?? '26Q remap failed');
@@ -953,6 +982,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
       _showUploadSnackBar('26Q mapping confirmed');
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingTds = false);
       _showUploadSnackBar('26Q remap failed: $e');
     }
@@ -995,6 +1025,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       'tdsRows=${tdsRows.length} sections=${sourceRowsBySection.keys.join(',')}',
     );
 
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -1086,6 +1117,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           ),
         ),
       );
+      if (!mounted) return;
 
       // Phase 2 perf: if SellerMappingScreen already proves review is safe,
       // skip the expensive full seller preflight refresh.
@@ -1097,6 +1129,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         );
 
         await _persistSellerMappingResult(result);
+        if (!mounted) return;
         _storeSellerMappingDraft(result);
 
         setState(() {
@@ -1115,6 +1148,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       }
 
       await _persistSellerMappingResult(result);
+      if (!mounted) return;
       _storeSellerMappingDraft(result);
       _invalidateSellerPreflightCache();
 
@@ -1418,6 +1452,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     switch (item.type) {
       case BatchMappingReviewItemType.tds26q:
         await _reviewTds26QMapping();
+        if (!mounted) return false;
         break;
       case BatchMappingReviewItemType.sectionFile:
         final file = _findSectionFileByBatchItem(item);
@@ -1425,12 +1460,14 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           return false;
         }
         await _remapSectionFile(file.sectionCode, file);
+        if (!mounted) return false;
     }
 
     return beforeSnapshot != _batchItemSnapshot(item);
   }
 
   Future<bool> _confirmBatchMappingItem(BatchMappingReviewItem item) async {
+    if (!mounted) return false;
     if (item.mappingStatus.isConfirmed) {
       return false;
     }
@@ -1469,6 +1506,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
   Future<int> _confirmAllSafeBatchMappings() async {
     final items = await _loadBatchMappingReviewItems();
+    if (!mounted) return 0;
     var confirmedCount = 0;
 
     for (final item in items) {
@@ -1476,6 +1514,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         continue;
       }
       final confirmed = await _confirmBatchMappingItem(item);
+      if (!mounted) return confirmedCount;
       if (confirmed) {
         confirmedCount += 1;
       }
