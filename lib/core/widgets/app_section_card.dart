@@ -51,6 +51,13 @@ class AppSectionCard extends StatelessWidget {
         color: backgroundColor ?? AppColorScheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: borderColor ?? AppColorScheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: content,
     );

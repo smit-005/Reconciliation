@@ -266,9 +266,9 @@ class _DataRowCardState extends State<_DataRowCard> {
   Widget build(BuildContext context) {
     final remarks = widget.row.remarks.trim();
     final zebra = widget.index.isEven
-        ? const Color(0xFFFFFFFF)
-        : const Color(0xFFF8FAFC);
-    final hover = const Color(0xFFF3F7FB);
+        ? AppColorScheme.surface
+        : AppColorScheme.surfaceVariant;
+    final hover = AppColorScheme.infoSoft;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -557,9 +557,9 @@ class _DataRowCardState extends State<_DataRowCard> {
   }
 
   Color _deltaColor(double value) {
-    if (value > 0) return const Color(0xFFB45309);
-    if (value < 0) return const Color(0xFFB91C1C);
-    return const Color(0xFF0F172A);
+    if (value > 0) return AppColorScheme.warning;
+    if (value < 0) return AppColorScheme.danger;
+    return AppColorScheme.textPrimary;
   }
 }
 

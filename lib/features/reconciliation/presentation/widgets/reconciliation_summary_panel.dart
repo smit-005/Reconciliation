@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/skipped_row_summary.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'reconciliation_common_widgets.dart';
@@ -102,7 +103,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: AppColorScheme.border),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -182,7 +183,9 @@ class ReconciliationSummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.red.shade200),
+        border: Border.all(
+          color: AppColorScheme.warning.withValues(alpha: 0.28),
+        ),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Wrap(
@@ -192,20 +195,20 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           mismatchTile(
             label: 'Applicable but no 26Q Rows',
             value: applicableButNo26QCount.toString(),
-            bgColor: Colors.red.shade50,
-            textColor: Colors.red.shade700,
+            bgColor: AppColorScheme.warningSoft,
+            textColor: AppColorScheme.warning,
           ),
           mismatchTile(
             label: 'Applicable Amount Missing in 26Q',
             value: _fmt(applicableButNo26QAmount),
-            bgColor: Colors.orange.shade50,
-            textColor: Colors.orange.shade800,
+            bgColor: AppColorScheme.warningSoft,
+            textColor: AppColorScheme.warning,
           ),
           mismatchTile(
             label: 'Expected TDS Missing in 26Q',
             value: _fmt(applicableButNo26QTds),
-            bgColor: Colors.deepOrange.shade50,
-            textColor: Colors.deepOrange.shade700,
+            bgColor: AppColorScheme.dangerSoft,
+            textColor: AppColorScheme.danger,
           ),
         ],
       ),
@@ -223,8 +226,10 @@ class ReconciliationSummaryPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        border: Border.all(color: const Color(0xFFF59E0B)),
+        color: AppColorScheme.warningSoft,
+        border: Border.all(
+          color: AppColorScheme.warning.withValues(alpha: 0.28),
+        ),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -235,7 +240,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF9A3412),
+              color: AppColorScheme.warning,
             ),
           ),
           const SizedBox(height: 8),
@@ -244,7 +249,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF9A3412),
+              color: AppColorScheme.warning,
             ),
           ),
           const SizedBox(height: 10),
@@ -256,7 +261,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF7C2D12),
+                  color: AppColorScheme.warning,
                 ),
               ),
             ),
@@ -272,7 +277,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: AppColorScheme.border),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -290,44 +295,44 @@ class ReconciliationSummaryPanel extends StatelessWidget {
               mismatchTile(
                 label: 'Mismatch Rows',
                 value: mismatchRowsCount.toString(),
-                bgColor: Colors.red.shade50,
-                textColor: Colors.red.shade700,
+                bgColor: AppColorScheme.dangerSoft,
+                textColor: AppColorScheme.danger,
               ),
               mismatchTile(
                 label: 'Short Deduction TDS',
                 value: _fmt(shortDeductionAmount),
-                bgColor: Colors.orange.shade50,
-                textColor: Colors.orange.shade800,
+                bgColor: AppColorScheme.warningSoft,
+                textColor: AppColorScheme.warning,
               ),
               mismatchTile(
                 label: 'Excess Deduction TDS',
                 value: _fmt(excessDeductionAmount),
-                bgColor: Colors.red.shade50,
-                textColor: Colors.red.shade700,
+                bgColor: AppColorScheme.dangerSoft,
+                textColor: AppColorScheme.danger,
               ),
               mismatchTile(
                 label: 'Timing Difference TDS',
                 value: _fmt(timingDifferenceAmount),
-                bgColor: Colors.teal.shade50,
-                textColor: Colors.teal.shade700,
+                bgColor: AppColorScheme.infoSoft,
+                textColor: AppColorScheme.secondary,
               ),
               mismatchTile(
                 label: '${ReconciliationStatus.purchaseOnly} Rows',
                 value: purchaseOnlyCount.toString(),
-                bgColor: Colors.blue.shade50,
-                textColor: Colors.blue.shade700,
+                bgColor: AppColorScheme.infoSoft,
+                textColor: AppColorScheme.info,
               ),
               mismatchTile(
                 label: '${ReconciliationStatus.onlyIn26Q} Rows',
                 value: only26QCount.toString(),
-                bgColor: Colors.purple.shade50,
-                textColor: Colors.purple.shade700,
+                bgColor: AppColorScheme.surfaceVariant,
+                textColor: AppColorScheme.textSecondary,
               ),
               mismatchTile(
                 label: 'Net Mismatch TDS',
                 value: _fmt(netMismatchAmount),
-                bgColor: Colors.amber.shade50,
-                textColor: Colors.deepOrange.shade700,
+                bgColor: AppColorScheme.warningSoft,
+                textColor: AppColorScheme.warning,
               ),
             ],
           ),
@@ -341,13 +346,20 @@ class ReconciliationSummaryPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.amber.shade50,
+        color: AppColorScheme.warningSoft,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.shade200),
+        border: Border.all(
+          color: AppColorScheme.warning.withValues(alpha: 0.24),
+        ),
       ),
       child: const Text(
         'Applicable but no 26Q means: Applicable Amount is greater than zero, so TDS should have been deducted, but no deducted amount / TDS is found in 26Q for that row. Relevant seller logic used: only sellers present in 26Q or sellers whose financial year purchase crosses ₹50,00,000 are included. Basic Amount is amount without GST. Applicable Amount starts only after cumulative ₹50,00,000 threshold in that FY. TDS rate is 0.1%.',
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: AppColorScheme.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          height: 1.45,
+        ),
       ),
     );
   }
@@ -358,7 +370,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: AppColorScheme.border),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -380,7 +392,7 @@ class ReconciliationSummaryPanel extends StatelessWidget {
           ),
           subtitle: Text(
             'Buyer, totals, analytics, mismatch cards and notes.',
-            style: TextStyle(color: Colors.grey.shade700),
+            style: TextStyle(color: AppColorScheme.textSecondary),
           ),
           children: [
             _buildTopSummaryCard(),

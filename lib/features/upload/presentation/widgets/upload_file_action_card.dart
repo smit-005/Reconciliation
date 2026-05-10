@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 
@@ -60,9 +61,9 @@ class UploadFileActionCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppColorScheme.border),
       ),
       child: Row(
         children: [
@@ -70,7 +71,7 @@ class UploadFileActionCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColorScheme.infoSoft,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Stack(
@@ -82,7 +83,7 @@ class UploadFileActionCard extends StatelessWidget {
                     is26Q
                         ? Icons.fact_check_rounded
                         : Icons.description_rounded,
-                    color: const Color(0xFF2563EB),
+                    color: AppColorScheme.info,
                     size: 20,
                   ),
                 ),
@@ -105,7 +106,7 @@ class UploadFileActionCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF0F172A),
+                    color: AppColorScheme.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
@@ -168,14 +169,14 @@ class _MiniChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppColorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppColorScheme.divider),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFF64748B),
+          color: AppColorScheme.textMuted,
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
@@ -199,7 +200,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? const Color(0xFFDC2626) : const Color(0xFF334155);
+    final color = danger ? AppColorScheme.danger : AppColorScheme.textSecondary;
 
     return IconButton(
       tooltip: tooltip,
@@ -208,11 +209,11 @@ class _ActionButton extends StatelessWidget {
       icon: Icon(icon, size: 19),
       color: color,
       style: IconButton.styleFrom(
-        backgroundColor: const Color(0xFFF8FAFC),
-        disabledForegroundColor: const Color(0xFF94A3B8),
+        backgroundColor: AppColorScheme.surfaceVariant,
+        disabledForegroundColor: AppColorScheme.textMuted,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: Color(0xFFE2E8F0)),
+          side: const BorderSide(color: AppColorScheme.divider),
         ),
       ),
     );

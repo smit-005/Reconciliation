@@ -343,7 +343,7 @@ class _BatchMappingReviewScreenState extends State<BatchMappingReviewScreen> {
 
   Widget _buildTableRow(BatchMappingReviewItem item) {
     final needsReview = !item.isConfirmed;
-    final rowColor = needsReview ? const Color(0xFFFFFBEB) : Colors.white;
+    final rowColor = needsReview ? AppColorScheme.warningSoft : Colors.white;
 
     return Container(
       color: rowColor,

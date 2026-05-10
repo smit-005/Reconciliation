@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/theme/app_radius.dart';
+import 'package:reconciliation_app/core/theme/app_spacing.dart';
+
 class ReconciliationTopInfoNote extends StatelessWidget {
   const ReconciliationTopInfoNote({super.key});
 
@@ -7,15 +11,20 @@ class ReconciliationTopInfoNote extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade200),
+        color: AppColorScheme.infoSoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColorScheme.info.withValues(alpha: 0.18)),
       ),
       child: const Text(
-        'Relevant sellers only: this report includes only sellers who are present in 26Q or whose total purchase crosses \u00e2\u201a\u00b950,00,000 in the financial year. Sellers below threshold and not present in 26Q are excluded to avoid false mismatches.',
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        'Relevant sellers only: this report includes only sellers who are present in 26Q or whose total purchase crosses Rs 50,00,000 in the financial year. Sellers below threshold and not present in 26Q are excluded to avoid false mismatches.',
+        style: TextStyle(
+          color: AppColorScheme.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          height: 1.4,
+        ),
       ),
     );
   }

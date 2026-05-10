@@ -30,7 +30,7 @@ class AppStatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.$1,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: colors.$2.withValues(alpha: 0.24)),
+        border: Border.all(color: colors.$2.withValues(alpha: 0.20)),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 148),
@@ -70,7 +70,7 @@ class AppStatusBadge extends StatelessWidget {
       case AppStatusBadgeTone.danger:
         return (AppColorScheme.dangerSoft, AppColorScheme.danger);
       case AppStatusBadgeTone.neutral:
-        return (AppColorScheme.surfaceVariant, AppColorScheme.textSecondary);
+        return (AppColorScheme.surfaceMuted, AppColorScheme.textSecondary);
     }
   }
 }

@@ -52,8 +52,8 @@ class AppPageHeader extends StatelessWidget {
                   style: const TextStyle(
                     color: AppColorScheme.textPrimary,
                     fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.4,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
                   ),
                 ),
                 if (subtitle != null && subtitle!.trim().isNotEmpty) ...[

@@ -6,6 +6,7 @@ export 'app_loading.dart';
 export 'app_page_header.dart';
 export 'app_page_scaffold.dart';
 export 'app_section_card.dart';
+export 'app_section_selector.dart';
 export 'app_status_badge.dart';
 export 'app_primary_button.dart';
 export 'app_secondary_button.dart';

@@ -40,7 +40,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
         filled: true,
-        fillColor: AppColorScheme.surface,
+        fillColor: AppColorScheme.surfaceVariant,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: 14,
@@ -79,6 +79,9 @@ class AppTheme {
           side: const WidgetStatePropertyAll(
             BorderSide(color: AppColorScheme.border),
           ),
+          overlayColor: WidgetStatePropertyAll(
+            AppColorScheme.primary.withValues(alpha: 0.06),
+          ),
           foregroundColor: const WidgetStatePropertyAll(
             AppColorScheme.textPrimary,
           ),
@@ -90,6 +93,9 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
           foregroundColor: const WidgetStatePropertyAll(AppColorScheme.primary),
+          overlayColor: WidgetStatePropertyAll(
+            AppColorScheme.primary.withValues(alpha: 0.06),
+          ),
           textStyle: const WidgetStatePropertyAll(
             TextStyle(fontWeight: FontWeight.w600),
           ),
@@ -107,6 +113,16 @@ class AppTheme {
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColorScheme.primary,
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: const WidgetStatePropertyAll(
+            AppColorScheme.textSecondary,
+          ),
+          overlayColor: WidgetStatePropertyAll(
+            AppColorScheme.primary.withValues(alpha: 0.06),
+          ),
+        ),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.fixed,
@@ -137,7 +153,7 @@ class AppTheme {
       ),
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.disabled)) {
-          return AppColorScheme.border;
+          return AppColorScheme.surfaceMuted;
         }
         return backgroundColor;
       }),

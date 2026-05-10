@@ -49,7 +49,7 @@ class AppInfoChip extends StatelessWidget {
         vertical: compact ? 6 : AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: backgroundColor ?? Colors.white,
+        color: backgroundColor ?? AppColorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: borderColor ?? AppColorScheme.divider),
       ),

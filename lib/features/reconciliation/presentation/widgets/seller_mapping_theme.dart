@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+
 class SellerMappingTheme {
-  static const Color pageBackground = Color(0xFFF4F7FB);
-  static const Color surfaceColor = Colors.white;
-  static const Color primaryColor = Color(0xFF3559E0);
-  static const Color primarySoft = Color(0xFFEAF0FF);
-  static const Color successColor = Color(0xFF1F8F5F);
-  static const Color warningColor = Color(0xFFB7791F);
-  static const Color dangerColor = Color(0xFFC15353);
-  static const Color mutedTextColor = Color(0xFF667085);
-  static const Color titleTextColor = Color(0xFF101828);
-  static const Color borderColor = Color(0xFFD9E2F2);
+  static const Color pageBackground = AppColorScheme.background;
+  static const Color surfaceColor = AppColorScheme.surface;
+  static const Color primaryColor = AppColorScheme.primary;
+  static const Color primarySoft = AppColorScheme.infoSoft;
+  static const Color successSoft = AppColorScheme.successSoft;
+  static const Color warningSoft = AppColorScheme.warningSoft;
+  static const Color dangerSoft = AppColorScheme.dangerSoft;
+  static const Color surfaceMuted = AppColorScheme.surfaceMuted;
+  static const Color successColor = AppColorScheme.success;
+  static const Color warningColor = AppColorScheme.warning;
+  static const Color dangerColor = AppColorScheme.danger;
+  static const Color mutedTextColor = AppColorScheme.textMuted;
+  static const Color titleTextColor = AppColorScheme.textPrimary;
+  static const Color borderColor = AppColorScheme.border;
 }

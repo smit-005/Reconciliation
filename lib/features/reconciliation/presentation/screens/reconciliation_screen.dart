@@ -8,6 +8,7 @@ import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
+import 'package:reconciliation_app/core/widgets/app_section_selector.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
@@ -1582,112 +1583,20 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   Widget _buildSectionTabs() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: _sectionTabs.map((section) {
-          final isActive = activeSectionTab == section;
-          final sellerCount = _sellerCountForSection(section);
-          return Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              onTap: () => _selectSectionTab(section),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  gradient: isActive
-                      ? const LinearGradient(
-                          colors: [Color(0xFF1E3A5F), Color(0xFF0F172A)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
-                  color: isActive ? null : Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(
-                    color: isActive
-                        ? const Color(0xFF93C5FD)
-                        : AppColorScheme.border,
-                  ),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF0F172A,
-                            ).withValues(alpha: 0.12),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          section == 'All'
-                              ? section
-                              : sectionDisplayLabel(section),
-                          style: TextStyle(
-                            color: isActive
-                                ? Colors.white
-                                : AppColorScheme.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          section == 'All'
-                              ? 'Unique sellers'
-                              : 'Section sellers',
-                          style: TextStyle(
-                            color: isActive
-                                ? Colors.white.withValues(alpha: 0.72)
-                                : AppColorScheme.textMuted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? const Color(0xFF1E40AF)
-                            : const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '$sellerCount sellers',
-                        style: TextStyle(
-                          color: isActive
-                              ? Colors.white
-                              : const Color(0xFF1D4ED8),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return AppSectionSelector(
+      showContainer: false,
+      items: _sectionTabs.map((section) {
+        final sellerCount = _sellerCountForSection(section);
+        return AppSectionSelectorItem(
+          value: section,
+          label: compactSectionDisplayLabel(section),
+          subtitle: section == 'All' ? 'Unique sellers' : 'Section sellers',
+          metricLabel: sellerCount.toString(),
+          isSelected: activeSectionTab == section,
+          onTap: () => _selectSectionTab(section),
+          width: section == 'All' ? 150 : null,
+        );
+      }).toList(),
     );
   }
 
@@ -2126,65 +2035,65 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case CalculationService.sellerStatusMatched:
-        return Colors.green.shade50;
+        return AppColorScheme.successSoft;
       case CalculationService.sellerStatusMismatch:
-        return Colors.red.shade50;
+        return AppColorScheme.dangerSoft;
       case CalculationService.sellerStatusNo26Q:
       case ReconciliationStatus.applicableButNo26Q:
-        return Colors.orange.shade50;
+        return AppColorScheme.warningSoft;
       case ReconciliationStatus.sectionMissing:
       case ReconciliationStatus.reviewRequired:
-        return const Color(0xFFFFF7ED);
+        return AppColorScheme.warningSoft;
       case CalculationService.sellerStatusOnly26Q:
       case ReconciliationStatus.onlyIn26Q:
-        return Colors.purple.shade50;
+        return AppColorScheme.surfaceVariant;
       case ReconciliationStatus.belowThreshold:
-        return Colors.grey.shade100;
+        return AppColorScheme.surfaceMuted;
       case ReconciliationStatus.timingDifference:
-        return Colors.teal.shade50;
+        return AppColorScheme.infoSoft;
       case ReconciliationStatus.shortDeduction:
-        return Colors.orange.shade50;
+        return AppColorScheme.warningSoft;
       case ReconciliationStatus.excessDeduction:
-        return Colors.red.shade50;
+        return AppColorScheme.dangerSoft;
       case ReconciliationStatus.purchaseOnly:
-        return Colors.blue.shade50;
+        return AppColorScheme.infoSoft;
       default:
-        return Colors.grey.shade100;
+        return AppColorScheme.surfaceMuted;
     }
   }
 
   Color _statusTextColor(String status) {
     switch (status) {
       case CalculationService.sellerStatusMismatch:
-        return const Color(0xFFB91C1C);
+        return AppColorScheme.danger;
       case CalculationService.sellerStatusNo26Q:
-        return const Color(0xFFB45309);
+        return AppColorScheme.warning;
       case ReconciliationStatus.belowThreshold:
-        return const Color(0xFF64748B);
+        return AppColorScheme.textMuted;
       case ReconciliationStatus.sectionMissing:
       case ReconciliationStatus.reviewRequired:
-        return const Color(0xFF9A3412);
+        return AppColorScheme.warning;
       case ReconciliationStatus.applicableButNo26Q:
-        return const Color(0xFFB45309);
+        return AppColorScheme.warning;
       case CalculationService.sellerStatusMatched:
-        return const Color(0xFF166534);
+        return AppColorScheme.success;
       case ReconciliationStatus.amountMismatch:
-        return const Color(0xFFB91C1C);
+        return AppColorScheme.danger;
       case 'PAN/name mismatch':
-        return const Color(0xFF1D4ED8);
+        return AppColorScheme.info;
       case CalculationService.sellerStatusOnly26Q:
       case ReconciliationStatus.onlyIn26Q:
-        return const Color(0xFF6D28D9);
+        return AppColorScheme.textSecondary;
       case ReconciliationStatus.timingDifference:
-        return Colors.teal.shade800;
+        return AppColorScheme.secondary;
       case ReconciliationStatus.shortDeduction:
-        return Colors.orange.shade800;
+        return AppColorScheme.warning;
       case ReconciliationStatus.excessDeduction:
-        return Colors.red.shade800;
+        return AppColorScheme.danger;
       case ReconciliationStatus.purchaseOnly:
-        return Colors.blue.shade800;
+        return AppColorScheme.info;
       default:
-        return Colors.grey.shade800;
+        return AppColorScheme.textSecondary;
     }
   }
 

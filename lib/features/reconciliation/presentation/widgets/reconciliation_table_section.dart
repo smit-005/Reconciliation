@@ -543,9 +543,11 @@ class _ReconciliationTableSectionState
       ),
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: AppColorScheme.warningSoft,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: const Color(0xFFF59E0B)),
+        border: Border.all(
+          color: AppColorScheme.warning.withValues(alpha: 0.28),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -555,7 +557,7 @@ class _ReconciliationTableSectionState
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF9A3412),
+              color: AppColorScheme.warning,
             ),
           ),
           const SizedBox(height: 4),
@@ -564,7 +566,7 @@ class _ReconciliationTableSectionState
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF9A3412),
+              color: AppColorScheme.warning,
             ),
           ),
           if (reasonEntries.isNotEmpty) ...[
@@ -581,14 +583,16 @@ class _ReconciliationTableSectionState
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.78),
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: const Color(0xFFFCD34D)),
+                    border: Border.all(
+                      color: AppColorScheme.warning.withValues(alpha: 0.22),
+                    ),
                   ),
                   child: Text(
                     '${entry.key}: ${entry.value}',
                     style: const TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF92400E),
+                      color: AppColorScheme.warning,
                     ),
                   ),
                 );

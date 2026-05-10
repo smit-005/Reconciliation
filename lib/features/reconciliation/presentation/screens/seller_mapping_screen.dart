@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
+import 'package:reconciliation_app/core/widgets/app_section_selector.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_summary_cards.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_review_view.dart';
@@ -2107,39 +2108,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _availableSectionCodes.map((sectionCode) {
+                child: AppSectionSelector(
+                  showContainer: false,
+                  items: _availableSectionCodes.map((sectionCode) {
                     final isSelected = _activeSectionCode == sectionCode;
                     final count = _needsActionCountForSection(sectionCode);
-                    return ChoiceChip(
-                      label: Text(
-                        '${sectionDisplayLabel(sectionCode)}($count)',
-                      ),
-                      selected: isSelected,
-                      onSelected: (_) {
+                    return AppSectionSelectorItem(
+                      value: sectionCode,
+                      label: compactSectionDisplayLabel(sectionCode),
+                      subtitle: 'Needs action',
+                      metricLabel: count.toString(),
+                      isSelected: isSelected,
+                      onTap: () {
                         setState(() {
                           _activeSectionCode = sectionCode;
                           _invalidateViewCaches(resetPage: true);
                         });
                       },
-                      selectedColor: SellerMappingTheme.primarySoft,
-                      backgroundColor: Colors.white,
-                      side: BorderSide(
-                        color: isSelected
-                            ? SellerMappingTheme.primaryColor
-                            : SellerMappingTheme.borderColor,
-                      ),
-                      labelStyle: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: isSelected
-                            ? SellerMappingTheme.primaryColor
-                            : SellerMappingTheme.titleTextColor,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
                     );
                   }).toList(),
                 ),

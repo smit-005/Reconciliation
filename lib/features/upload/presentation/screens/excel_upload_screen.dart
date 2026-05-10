@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 import 'package:reconciliation_app/core/widgets/app_page_scaffold.dart';
 import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
+import 'package:reconciliation_app/core/widgets/app_section_selector.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
@@ -1648,21 +1650,21 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Color _sectionAccent(String sectionCode) {
     switch (sectionCode) {
       case '194Q':
-        return const Color(0xFF2563EB);
+        return AppColorScheme.primary;
       case '194C':
-        return const Color(0xFF0F766E);
+        return AppColorScheme.secondary;
       case '194H':
-        return const Color(0xFF9333EA);
+        return const Color(0xFF6750A4);
       case '194I_A':
-        return const Color(0xFFEA580C);
+        return AppColorScheme.warning;
       case '194I_B':
-        return const Color(0xFFDC2626);
+        return AppColorScheme.danger;
       case '194J_A':
-        return const Color(0xFF0891B2);
+        return const Color(0xFF0E7490);
       case '194J_B':
-        return const Color(0xFF7C3AED);
+        return const Color(0xFF5B4B8A);
       default:
-        return const Color(0xFF475569);
+        return AppColorScheme.textSecondary;
     }
   }
 
@@ -1676,31 +1678,31 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Color _mappingStatusColor(UploadMappingStatus status) {
     switch (status) {
       case UploadMappingStatus.notMapped:
-        return const Color(0xFF9A3412);
+        return AppColorScheme.warning;
       case UploadMappingStatus.autoMapped:
-        return const Color(0xFF1D4ED8);
+        return AppColorScheme.info;
       case UploadMappingStatus.needsReview:
-        return const Color(0xFFB45309);
+        return AppColorScheme.warning;
       case UploadMappingStatus.confirmed:
-        return const Color(0xFF166534);
+        return AppColorScheme.success;
     }
   }
 
   Color _mappingStatusBackground(UploadMappingStatus status) {
     switch (status) {
       case UploadMappingStatus.notMapped:
-        return const Color(0xFFFFEDD5);
+        return AppColorScheme.warningSoft;
       case UploadMappingStatus.autoMapped:
-        return const Color(0xFFDBEAFE);
+        return AppColorScheme.infoSoft;
       case UploadMappingStatus.needsReview:
-        return const Color(0xFFFEF3C7);
+        return AppColorScheme.warningSoft;
       case UploadMappingStatus.confirmed:
-        return const Color(0xFFDCFCE7);
+        return AppColorScheme.successSoft;
     }
   }
 
   BoxDecoration _panelDecoration({
-    Color borderColor = const Color(0xFF334155),
+    Color borderColor = AppColorScheme.border,
     Color backgroundColor = Colors.white,
     List<BoxShadow>? shadows,
   }) {
@@ -1712,9 +1714,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           shadows ??
           [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
+              color: Colors.black.withValues(alpha: 0.055),
               blurRadius: 18,
-              offset: const Offset(0, 10),
+              offset: const Offset(0, 6),
             ),
           ],
     );
@@ -1891,18 +1893,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: _panelDecoration(
-        borderColor: const Color(0xFF1D4ED8).withValues(alpha: 0.35),
+        borderColor: AppColorScheme.primary.withValues(alpha: 0.26),
         backgroundColor: Colors.white,
         shadows: [
           BoxShadow(
-            color: const Color(0xFF1D4ED8).withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: AppColorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1916,12 +1913,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDBEAFE),
+                  color: AppColorScheme.infoSoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
                   Icons.insert_drive_file_rounded,
-                  color: Color(0xFF2563EB),
+                  color: AppColorScheme.info,
                   size: 22,
                 ),
               ),
@@ -1961,8 +1958,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           const SizedBox(height: 8),
           Text(
             'This file is mandatory and powers the reconciliation baseline.',
-            style: TextStyle(
-              color: Colors.blueGrey.shade700,
+            style: const TextStyle(
+              color: AppColorScheme.textSecondary,
               fontSize: 14,
               height: 1.5,
             ),
@@ -1983,9 +1980,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColorScheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: AppColorScheme.divider),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1996,12 +1993,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFDBEAFE),
+                          color: AppColorScheme.infoSoft,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
                           Icons.upload_file_rounded,
-                          color: Color(0xFF2563EB),
+                          color: AppColorScheme.info,
                           size: 22,
                         ),
                       ),
@@ -2013,7 +2010,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                             Text(
                               'No 26Q file uploaded yet',
                               style: TextStyle(
-                                color: Color(0xFF0F172A),
+                                color: AppColorScheme.textPrimary,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 15,
                               ),
@@ -2022,7 +2019,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                             Text(
                               'Upload the statutory 26Q workbook to unlock reconciliation.',
                               style: TextStyle(
-                                color: Color(0xFF64748B),
+                                color: AppColorScheme.textMuted,
                                 fontSize: 13,
                                 height: 1.4,
                               ),
@@ -2039,7 +2036,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                       key: const ValueKey('upload_26q_button'),
                       onPressed: isLoadingTds ? null : uploadTds26QFile,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
+                        backgroundColor: AppColorScheme.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -2068,132 +2065,29 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   Widget _buildSectionSelector() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFD8E1EF)),
-      ),
-      child: SizedBox(
-        height: 70,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: _availableSections.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 10),
-          itemBuilder: (context, index) {
-            final section = _availableSections[index];
-            final selected = selectedSections.contains(section);
-            final active = _activeSectionCode == section && selected;
-            final fileCount = _sectionFileCount(section);
-            final rowCount = _sectionRowCount(section);
-            final metricText = fileCount == 0
-                ? '0 files'
-                : '$fileCount file${fileCount == 1 ? '' : 's'}';
+    return AppSectionSelector(
+      items: _availableSections.map((section) {
+        final selected = selectedSections.contains(section);
+        final active = _activeSectionCode == section && selected;
+        final fileCount = _sectionFileCount(section);
+        final rowCount = _sectionRowCount(section);
+        final metricText = fileCount == 0
+            ? '0 files'
+            : '$fileCount file${fileCount == 1 ? '' : 's'}';
 
-            return InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: selected
-                  ? () => _setActiveSection(section)
-                  : () => _toggleSection(section),
-              onLongPress: selected ? () => _toggleSection(section) : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                curve: Curves.easeOut,
-                width: section.length > 6 ? 210 : 184,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: active ? const Color(0xFF08285C) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: active
-                        ? const Color(0xFF2563EB)
-                        : const Color(0xFFD8E1EF),
-                    width: active ? 1.4 : 1,
-                  ),
-                  boxShadow: active
-                      ? [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF2563EB,
-                            ).withValues(alpha: 0.18),
-                            blurRadius: 14,
-                            offset: const Offset(0, 7),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            sectionDisplayLabel(section),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: active
-                                  ? Colors.white
-                                  : const Color(0xFF0F172A),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            rowCount == 0
-                                ? 'Section rows'
-                                : '$rowCount section rows',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: active
-                                  ? Colors.white.withValues(alpha: 0.78)
-                                  : const Color(0xFF64748B),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: active
-                            ? const Color(0xFF2563EB)
-                            : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        metricText,
-                        style: TextStyle(
-                          color: active
-                              ? Colors.white
-                              : const Color(0xFF2563EB),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+        return AppSectionSelectorItem(
+          value: section,
+          label: compactSectionDisplayLabel(section),
+          subtitle: rowCount == 0 ? 'Section rows' : '$rowCount rows',
+          metricLabel: metricText,
+          isSelected: active,
+          isMuted: !selected,
+          onTap: selected
+              ? () => _setActiveSection(section)
+              : () => _toggleSection(section),
+          onLongPress: selected ? () => _toggleSection(section) : null,
+        );
+      }).toList(),
     );
   }
 
@@ -2248,18 +2142,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _panelDecoration(
-        borderColor: accent.withValues(alpha: 0.28),
+        borderColor: accent.withValues(alpha: 0.24),
         backgroundColor: Colors.white,
         shadows: [
           BoxShadow(
-            color: accent.withValues(alpha: 0.10),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: accent.withValues(alpha: 0.08),
             blurRadius: 16,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -2462,13 +2351,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A).withValues(alpha: 0.98),
-          border: const Border(top: BorderSide(color: Color(0xFF1E293B))),
+          color: AppColorScheme.surface,
+          border: const Border(top: BorderSide(color: AppColorScheme.border)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.28),
-              blurRadius: 24,
-              offset: const Offset(0, -8),
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, -5),
             ),
           ],
         ),
@@ -2478,12 +2367,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               key: const ValueKey('review_mapping_button'),
               onPressed: _hasWorkspaceContent ? _reviewWorkspaceStatus : null,
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                disabledForegroundColor: const Color(0xFF64748B),
+                foregroundColor: AppColorScheme.textPrimary,
+                disabledForegroundColor: AppColorScheme.textMuted,
                 side: BorderSide(
                   color: _hasWorkspaceContent
-                      ? const Color(0xFF475569)
-                      : const Color(0xFF334155),
+                      ? AppColorScheme.border
+                      : AppColorScheme.divider,
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 18,
@@ -2504,13 +2393,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                     : openSellerMappingScreen,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _isSellerMappingConfirmed
-                      ? Colors.green
-                      : Colors.white,
-                  disabledForegroundColor: const Color(0xFF64748B),
+                      ? AppColorScheme.success
+                      : AppColorScheme.textPrimary,
+                  disabledForegroundColor: AppColorScheme.textMuted,
                   side: BorderSide(
                     color: _isSellerMappingConfirmed
-                        ? Colors.green.shade600
-                        : const Color(0xFF475569),
+                        ? AppColorScheme.success.withValues(alpha: 0.38)
+                        : AppColorScheme.border,
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,
@@ -2541,9 +2430,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   ? openReconciliationScreen
                   : null,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                disabledBackgroundColor: const Color(0xFF334155),
-                disabledForegroundColor: const Color(0xFF64748B),
+                backgroundColor: AppColorScheme.primary,
+                disabledBackgroundColor: AppColorScheme.surfaceMuted,
+                disabledForegroundColor: AppColorScheme.textMuted,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 22,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'reconciliation_common_widgets.dart';
 
 class ReconciliationAnalyticsPanel extends StatelessWidget {
@@ -31,7 +32,7 @@ class ReconciliationAnalyticsPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: AppColorScheme.border),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -49,38 +50,38 @@ class ReconciliationAnalyticsPanel extends StatelessWidget {
               mismatchTile(
                 label: 'Total Mismatch Rows',
                 value: mismatchRowsCount.toString(),
-                bgColor: Colors.red.shade50,
-                textColor: Colors.red.shade700,
+                bgColor: AppColorScheme.dangerSoft,
+                textColor: AppColorScheme.danger,
               ),
               mismatchTile(
                 label: 'Mismatch %',
                 value: '${mismatchPercentage.toStringAsFixed(1)}%',
-                bgColor: Colors.orange.shade50,
-                textColor: Colors.orange.shade800,
+                bgColor: AppColorScheme.warningSoft,
+                textColor: AppColorScheme.warning,
               ),
               mismatchTile(
                 label: 'Matched %',
                 value: '${matchedPercentage.toStringAsFixed(1)}%',
-                bgColor: Colors.green.shade50,
-                textColor: Colors.green.shade700,
+                bgColor: AppColorScheme.successSoft,
+                textColor: AppColorScheme.success,
               ),
               mismatchTile(
                 label: 'Top Mismatch Section',
                 value: topMismatchSection,
-                bgColor: Colors.indigo.shade50,
-                textColor: Colors.indigo.shade700,
+                bgColor: AppColorScheme.infoSoft,
+                textColor: AppColorScheme.info,
               ),
               mismatchTile(
                 label: 'Total Sellers',
                 value: totalSellers.toString(),
-                bgColor: Colors.blue.shade50,
-                textColor: Colors.blue.shade700,
+                bgColor: AppColorScheme.surfaceVariant,
+                textColor: AppColorScheme.textSecondary,
               ),
               mismatchTile(
                 label: 'Sections Found',
                 value: totalSections.toString(),
-                bgColor: Colors.purple.shade50,
-                textColor: Colors.purple.shade700,
+                bgColor: AppColorScheme.surfaceVariant,
+                textColor: AppColorScheme.textSecondary,
               ),
             ],
           ),
@@ -102,9 +103,9 @@ class ReconciliationAnalyticsPanel extends StatelessWidget {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: AppColorScheme.surfaceVariant,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: AppColorScheme.divider),
                       ),
                       child: Text(
                         '${entry.key}: ${entry.value} rows',

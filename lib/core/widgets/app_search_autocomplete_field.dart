@@ -148,7 +148,7 @@ class _AppSearchAutocompleteFieldState
             ),
           ),
           filled: true,
-          fillColor: const Color(0xFFFDFEFF),
+          fillColor: AppColorScheme.surfaceVariant,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
             vertical: 11,

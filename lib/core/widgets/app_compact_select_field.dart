@@ -41,7 +41,7 @@ class AppCompactSelectField extends StatelessWidget {
           enabled: isInteractive,
           tooltip: labelText ?? hintText ?? 'Select',
           initialValue: value,
-          color: Colors.white,
+          color: AppColorScheme.surface,
           elevation: 8,
           constraints: BoxConstraints(
             minWidth: triggerWidth,
@@ -95,7 +95,7 @@ class AppCompactSelectField extends StatelessWidget {
               vertical: 10,
             ),
             decoration: BoxDecoration(
-              color: const Color(0xFFFDFEFF),
+              color: AppColorScheme.surfaceVariant,
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(color: AppColorScheme.border),
             ),

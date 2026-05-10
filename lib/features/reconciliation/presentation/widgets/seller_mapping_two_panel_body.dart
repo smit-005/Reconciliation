@@ -138,6 +138,13 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         color: SellerMappingTheme.surfaceColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: SellerMappingTheme.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: _leftReviewRows.isEmpty
           ? _buildEmptyState()
@@ -484,7 +491,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: SellerMappingTheme.surfaceMuted,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: SellerMappingTheme.borderColor),
         ),
@@ -565,7 +572,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: SellerMappingTheme.surfaceMuted,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: SellerMappingTheme.borderColor),
       ),
@@ -1400,8 +1407,8 @@ class _SellerCard extends StatelessWidget {
     final bgColor = selected
         ? SellerMappingTheme.primarySoft
         : highlighted
-        ? const Color(0xFFFFFBEB)
-        : const Color(0xFFF8FAFC);
+        ? SellerMappingTheme.warningSoft
+        : SellerMappingTheme.surfaceMuted;
 
     return Material(
       color: bgColor,
@@ -1511,25 +1518,27 @@ class _SellerCard extends StatelessWidget {
   }
 
   Color _detailChipBackgroundColor(String value) {
-    if (_isPanMatchHint(value)) return const Color(0xFFEAF7EF);
+    if (_isPanMatchHint(value)) return SellerMappingTheme.successSoft;
     if (_isPanVariantWarning(value) || _isPanDiffWarning(value)) {
-      return const Color(0xFFFFFBEB);
+      return SellerMappingTheme.warningSoft;
     }
     return Colors.white;
   }
 
   Color _detailChipBorderColor(String value) {
-    if (_isPanMatchHint(value)) return const Color(0xFFB7E4C7);
+    if (_isPanMatchHint(value)) {
+      return SellerMappingTheme.successColor.withValues(alpha: 0.22);
+    }
     if (_isPanVariantWarning(value) || _isPanDiffWarning(value)) {
-      return const Color(0xFFF59E0B);
+      return SellerMappingTheme.warningColor.withValues(alpha: 0.28);
     }
     return SellerMappingTheme.borderColor;
   }
 
   Color _detailChipTextColor(String value) {
-    if (_isPanMatchHint(value)) return const Color(0xFF166534);
+    if (_isPanMatchHint(value)) return SellerMappingTheme.successColor;
     if (_isPanVariantWarning(value) || _isPanDiffWarning(value)) {
-      return const Color(0xFF92400E);
+      return SellerMappingTheme.warningColor;
     }
     return SellerMappingTheme.mutedTextColor;
   }
