@@ -116,7 +116,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       _selectedLeftKey = widget.selectedLeftKey;
     }
 
-    final selectedRow = _selectedLeftRowFrom(_leftSourceRows);
+    final selectedRow = _selectedLeftRowFrom(_filteredLeftRows);
     if (selectedRow == null) return;
 
     final selectedRowChanged = previousSelectedKey != selectedRow.rowKey;
@@ -128,7 +128,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   @override
   Widget build(BuildContext context) {
     final filteredLeftRows = _filteredLeftRows;
-    final selectedRow = _selectedLeftRowFrom(_leftSourceRows);
+    final selectedRow = _selectedLeftRowFrom(filteredLeftRows);
     final rightPanelKey = ValueKey<String?>(
       selectedRow == null ? null : 'right-panel:${selectedRow.rowKey}',
     );

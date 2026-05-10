@@ -344,6 +344,104 @@ void main() {
     expect(find.text('Multiple PANs: 2'), findsOneWidget);
   });
 
+  testWidgets(
+    'two-panel selection clears when search hides the selected left seller',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      const hiddenRow = SellerMappingRowVm(
+        purchasePartyDisplayName: '',
+        normalizedAlias: 'Hidden Vendor',
+        sectionCode: '194C',
+        rowIndex: 0,
+        tdsDisplayName: 'Hidden Vendor',
+        tdsPan: 'AAAAA1111A',
+        purchasePan: '',
+        purchaseGstNo: '',
+        tdsRowCount: 1,
+        is26QUnmatched: true,
+      );
+      const visibleRow = SellerMappingRowVm(
+        purchasePartyDisplayName: '',
+        normalizedAlias: 'Visible Vendor',
+        sectionCode: '194C',
+        rowIndex: 1,
+        tdsDisplayName: 'Visible Vendor',
+        tdsPan: 'BBBBB2222B',
+        purchasePan: '',
+        purchaseGstNo: '',
+        tdsRowCount: 1,
+        is26QUnmatched: true,
+      );
+      const ledgerRow = SellerMappingRowVm(
+        purchasePartyDisplayName: 'Ledger Vendor',
+        normalizedAlias: 'Ledger Vendor',
+        sectionCode: '194C',
+        rowIndex: 2,
+        purchasePan: 'AAAAA1111A',
+        purchaseGstNo: '',
+        sourceRowCount: 1,
+      );
+
+      String? selectedLeftKey;
+      final acceptedRows = <String>[];
+
+      Widget buildBody(String searchQuery) {
+        return MaterialApp(
+          home: Scaffold(
+            body: SellerMappingTwoPanelBody(
+              visibleRows: const <SellerMappingRowVm>[hiddenRow, visibleRow],
+              allLeftRows: const <SellerMappingRowVm>[hiddenRow, visibleRow],
+              ledgerCandidateRows: const <SellerMappingRowVm>[ledgerRow],
+              searchQuery: searchQuery,
+              selectedLeftKey: selectedLeftKey,
+              onSelectedLeftKeyChanged: (rowKey) {
+                selectedLeftKey = rowKey;
+              },
+              tdsParties: const <String>['Hidden Vendor', 'Visible Vendor'],
+              tdsPartyPans: const <String, List<String>>{
+                'Hidden Vendor': <String>['AAAAA1111A'],
+                'Visible Vendor': <String>['BBBBB2222B'],
+              },
+              selectedValueForRow: (_) => null,
+              selectedPanForRow: (_) => '',
+              statusForRow: (_) => '26Q Unmatched',
+              helperMessagesForRow: (_) => const <String>[],
+              canAcceptSuggestion: (_) => true,
+              onAcceptSuggestion: (row) => acceptedRows.add(row.rowKey),
+              onLinkToTds: (row, tdsParty) {},
+              onLinkToLedgerRow: (row, ledgerRow) {},
+              onKeepSeparate: (_) {},
+              onClear: (_) {},
+              onMarkTimingDifference: (_) {},
+              onMarkMissingInBooks: (_) {},
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildBody(''));
+      await tester.tap(find.text('Hidden Vendor').first);
+      await tester.pump();
+
+      expect(selectedLeftKey, hiddenRow.rowKey);
+
+      await tester.pumpWidget(buildBody('Visible'));
+      await tester.pump();
+
+      expect(selectedLeftKey, isNull);
+      expect(find.text('Select a seller to enable actions.'), findsOneWidget);
+
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, 'Accept Suggestion'),
+      );
+      await tester.pump();
+
+      expect(acceptedRows, isEmpty);
+    },
+  );
+
   testWidgets('seller mapping action column avoids compact height overflow', (
     tester,
   ) async {
