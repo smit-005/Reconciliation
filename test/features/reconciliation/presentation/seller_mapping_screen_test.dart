@@ -195,6 +195,93 @@ void main() {
     },
   );
 
+  testWidgets(
+    'review view clear visible clears review-visible rows instead of working-filtered rows',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      SellerMappingScreenResult? capturedResult;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _SellerMappingDirectLaunchHarness(
+            screen: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194C',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: const <SellerMappingScreenRowData>[
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'Mapped Vendor',
+                  normalizedAlias: 'Mapped Vendor',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'Mapped Vendor',
+                  tdsPan: 'ABCDE1234F',
+                  purchasePan: 'ABCDE1234F',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                  resolvedSuggestion: SellerMappingResolvedSuggestion(
+                    mappedName: 'Mapped Vendor',
+                    mappedPan: 'ABCDE1234F',
+                    source: 'saved_exact',
+                  ),
+                ),
+              ],
+              tdsParties: const <String>['Mapped Vendor'],
+              existingMappings: <SellerMapping>[
+                SellerMapping(
+                  buyerName: 'Buyer One',
+                  buyerPan: 'ABCDE1234F',
+                  aliasName: 'Mapped Vendor',
+                  sectionCode: '194C',
+                  mappedName: 'Mapped Vendor',
+                  mappedPan: 'ABCDE1234F',
+                ),
+              ],
+              blockedAliases: const <String>{},
+              tdsPartyPans: const <String, List<String>>{
+                'Mapped Vendor': <String>['ABCDE1234F'],
+              },
+            ),
+            onResult: (result) => capturedResult = result,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Seller Mapping'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.text('Review View'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.widgetWithText(TextButton, 'Clear Visible'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Continue'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(capturedResult, isNotNull);
+      expect(capturedResult!.upserts, isEmpty);
+      expect(
+        capturedResult!.deleted,
+        contains(
+          predicate<Map<String, String>>(
+            (item) =>
+                item['sectionCode'] == '194C' &&
+                (item['aliasName']?.isNotEmpty ?? false),
+          ),
+        ),
+      );
+    },
+  );
+
   testWidgets('right ledger card warns when alias has multiple PAN variants', (
     tester,
   ) async {
@@ -357,6 +444,34 @@ class _SellerMappingLaunchHarness extends StatelessWidget {
                       },
                     ),
                   ),
+                );
+            onResult(result);
+          },
+          child: const Text('Open Seller Mapping'),
+        ),
+      ),
+    );
+  }
+}
+
+class _SellerMappingDirectLaunchHarness extends StatelessWidget {
+  final SellerMappingScreen screen;
+  final ValueChanged<SellerMappingScreenResult?> onResult;
+
+  const _SellerMappingDirectLaunchHarness({
+    required this.screen,
+    required this.onResult,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () async {
+            final result = await Navigator.of(context)
+                .push<SellerMappingScreenResult>(
+                  MaterialPageRoute(builder: (_) => screen),
                 );
             onResult(result);
           },

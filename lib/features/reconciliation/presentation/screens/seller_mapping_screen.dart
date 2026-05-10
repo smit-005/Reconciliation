@@ -1323,7 +1323,10 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _clearVisibleMappings() {
-    final visibleRows = _filteredRows();
+    final visibleRows =
+        _activeWorkspaceView == SellerMappingWorkspaceView.review
+        ? _reviewFilteredRows()
+        : _filteredRows();
     setState(() {
       for (final row in visibleRows) {
         if (row.isReadOnly) continue;
