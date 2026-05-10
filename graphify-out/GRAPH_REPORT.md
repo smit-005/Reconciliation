@@ -1,11 +1,11 @@
 # Graph Report - E:\reconciliation_app_codex  (2026-05-10)
 
 ## Corpus Check
-- 201 files · ~131,868 words
+- 201 files · ~132,817 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1748 nodes · 2089 edges · 88 communities detected
+- 1753 nodes · 2094 edges · 89 communities detected
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 36 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -98,6 +98,7 @@
 - [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `package:flutter/material.dart` - 60 edges
@@ -126,32 +127,32 @@
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.01
-Nodes (149): buyer_repository.dart, build, MaterialApp, ReconciliationApp, BuyerFinancialYearStore, BuyerRepository, BuyerStore, load (+141 more)
+Cohesion: 0.02
+Nodes (104): app_loading.dart, app_section_card.dart, app_status_badge.dart, AppRoutes, MaterialPageRoute, AppColorScheme, AppCompactMetricCard, build (+96 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (122): app/app.dart, ../../core/utils/normalize_utils.dart, dart:convert, dart:io, app_settings, buyer_financial_years, buyers, _createAppSettingsTable (+114 more)
+Nodes (116): dart:async, BatchMappingReviewItem, copyWith, LedgerUploadFile, AlertDialog, AppPageScaffold, BoxDecoration, build (+108 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
-Nodes (111): dart:async, BatchMappingReviewItem, copyWith, LedgerUploadFile, AlertDialog, AppPageScaffold, BoxDecoration, build (+103 more)
+Nodes (114): build, MaterialApp, ReconciliationApp, addFinancialYear, AlertDialog, AppEmptyState, AppSectionCard, build (+106 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.02
-Nodes (93): app_loading.dart, app_section_card.dart, app_status_badge.dart, AppRoutes, MaterialPageRoute, AppColorScheme, AppCompactMetricCard, build (+85 more)
+Nodes (103): _acceptSuggestedMapping, addDeleted, _addDeletedMappingsTargeting, _allSectionRows, _applyAutoMap, AutoMapDecision, build, _buildBottomBar (+95 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.02
-Nodes (103): _acceptSuggestedMapping, addDeleted, _addDeletedMappingsTargeting, _allSectionRows, _applyAutoMap, AutoMapDecision, build, _buildBottomBar (+95 more)
+Nodes (95): buildSellerDisplayKey, buildSellerSectionDisplayKey, sortSections, _activeSourceFileCount, _activeSourceRowCount, _allowLoadingFrame, _applicableButNo26QCount, _applicableButNo26QSellerCount (+87 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.02
-Nodes (91): build, Center, Column, _CompletionBanner, Container, Divider, _EmptyReviewState, fromRows (+83 more)
+Nodes (88): buyer_repository.dart, dart:convert, dart:io, BuyerFinancialYearRepository, BuyerFinancialYearStore, BuyerStore, load, AppSectionCard (+80 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.02
-Nodes (82): NormalizedLedgerRow, copyWith, NormalizedTransactionRow, PurchaseRow, _extractSectionFromText, _inferSection, _isKnownSection, Tds26QRow (+74 more)
+Nodes (91): build, Center, Column, _CompletionBanner, Container, Divider, _EmptyReviewState, fromRows (+83 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.02
@@ -159,23 +160,23 @@ Nodes (90): addScore, _appendGenericLedgerNarration, _buildPreviewData, _buildPr
 
 ### Community 8 - "Community 8"
 Cohesion: 0.03
-Nodes (74): _activeSourceFileCount, _activeSourceRowCount, _allowLoadingFrame, _applicableButNo26QCount, _applicableButNo26QSellerCount, _applyExportAvailabilitySnapshot, _applyFilters, build (+66 more)
+Nodes (73): app/app.dart, BuyerRepository, _normalizeMappingKey, AutoMapDecision, CandidateScore, resolveLedgerSellerTitle, resolveTdsSellerTitle, SellerMappingRowVm (+65 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.03
-Nodes (64): buildSellerDisplayKey, buildSellerSectionDisplayKey, sortSections, copyWith, ReconciliationRow, build, _buildComputedDifference, _buildExplanation (+56 more)
+Nodes (76): NormalizedLedgerRow, copyWith, NormalizedTransactionRow, PurchaseRow, _extractSectionFromText, _inferSection, _isKnownSection, Tds26QRow (+68 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.03
-Nodes (63): AppCompactSelectField, build, _displayLabel, Function, Icon, LayoutBuilder, SizedBox, Align (+55 more)
+Nodes (65): build, _buildPaginationControls, _buildSkippedImpactStrip, _buildTable, Column, Container, DecoratedBox, didUpdateWidget (+57 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.03
-Nodes (65): build, _buildPaginationControls, _buildSkippedImpactStrip, _buildTable, Column, Container, DecoratedBox, didUpdateWidget (+57 more)
+Nodes (59): dart:math, _autoMapBestGuess, BoxDecoration, build, _buildFieldCard, _buildFieldsPanel, _buildFileInfoCard, _buildInfoChip (+51 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.03
-Nodes (59): dart:math, _autoMapBestGuess, BoxDecoration, build, _buildFieldCard, _buildFieldsPanel, _buildFileInfoCard, _buildInfoChip (+51 more)
+Cohesion: 0.04
+Nodes (54): AppCompactSelectField, build, _displayLabel, Function, Icon, LayoutBuilder, SizedBox, Align (+46 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.05
@@ -191,135 +192,135 @@ Nodes (34): FlutterEngine(), RelinquishEngine(), ReloadSystemFonts(), SetNextFra
 
 ### Community 16 - "Community 16"
 Cohesion: 0.04
-Nodes (42): applyBelowThresholdClassification, buildBaseStatus, buildComputedAmounts, buildRemarks, buildRow, buildStatusAndRemarks, chooseSellerName, chooseSellerPan (+34 more)
+Nodes (48): add, _applyNameMapping, build, _buildApplicableReason, _buildExpectedTdsReason, _buildFinalStatusReason, _buildReconciliationRow, buildSellerLevelStatus (+40 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.05
-Nodes (36): add, addAll, addToIndex, _analyzeWithExistingMappings, buildResult, _CompactSourceIdentity, copyWith, _deserializeCompactSourceIdentityForIsolate (+28 more)
+Nodes (41): copyWith, ReconciliationRow, AlertDialog, Align, _amountText, build, Color, Container (+33 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.07
-Nodes (29): Architecture Rules, Candidate Rules, Centralized UI, Core Architecture, Core Workflow Rules, Data Handling, Demo Philosophy, Exception Handling (+21 more)
+Cohesion: 0.05
+Nodes (36): add, addAll, addToIndex, _analyzeWithExistingMappings, buildResult, _CompactSourceIdentity, copyWith, _deserializeCompactSourceIdentityForIsolate (+28 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.08
-Nodes (23): _cellString, _cellValue, _containsRealTdsSection, DateTime, Exception, _extractSectionCode, _findHeaderRowIndex, _formatFinancialYear (+15 more)
+Cohesion: 0.07
+Nodes (29): Architecture Rules, Candidate Rules, Centralized UI, Core Architecture, Core Workflow Rules, Data Handling, Demo Philosophy, Exception Handling (+21 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.1
 Nodes (19): build, Container, ReconciliationAnalyticsPanel, SizedBox, Text, build, _buildApplicableNo26QSummary, _buildFooterNote (+11 more)
 
 ### Community 21 - "Community 21"
+Cohesion: 0.1
+Nodes (19): ../../core/utils/normalize_utils.dart, app_settings, buyer_financial_years, buyers, _createAppSettingsTable, _createBuyerFinancialYearsTable, _createImportFormatProfilesTable, _createSellerMappingsTable (+11 more)
+
+### Community 22 - "Community 22"
 Cohesion: 0.15
 Nodes (11): app_color_scheme.dart, app_radius.dart, app_spacing.dart, app_text_styles.dart, AppTextStyles, AppTheme, ButtonStyle, _filledButtonStyle (+3 more)
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
 Cohesion: 0.25
 Nodes (7): extractPanFromGstin, isLegacyUnsupportedSection, looksLikePan, normalizeName, normalizePan, normalizeSection, sectionDisplayLabel
 
-### Community 23 - "Community 23"
+### Community 24 - "Community 24"
 Cohesion: 0.33
 Nodes (5): compareFinancialYearMonthKeys, compareMonthKeys, DateTime, financialYearFromMonthKey, normalizeMonth
 
-### Community 24 - "Community 24"
+### Community 25 - "Community 25"
 Cohesion: 0.33
 Nodes (5): ImportMappingService, isAmountField, isDateField, _normalizeCanonicalKey, ../models/mapping_field_option.dart
 
-### Community 25 - "Community 25"
+### Community 26 - "Community 26"
 Cohesion: 0.4
 Nodes (4): ExcelPreviewHeaderCandidate, finish, _looksLikeManualHeaderSelectionRow, _supportsManualHeaderRowSelection
 
-### Community 26 - "Community 26"
+### Community 27 - "Community 27"
 Cohesion: 0.5
 Nodes (3): SectionRateConfig, SectionRuleConfig, SectionThresholdRule
 
-### Community 27 - "Community 27"
+### Community 28 - "Community 28"
 Cohesion: 0.5
 Nodes (3): SkippedRowSample, SkippedRowSummary, SkippedSellerImpact
 
-### Community 28 - "Community 28"
+### Community 29 - "Community 29"
 Cohesion: 0.5
 Nodes (3): _debugDuplicateSourceSectionLeakage, _debugSectionCounts, _debugSummaryMap
 
-### Community 29 - "Community 29"
+### Community 30 - "Community 30"
 Cohesion: 0.5
 Nodes (3): copyWithHeaderCandidate, ExcelPreviewData, ExcelPreviewHeaderCandidate
 
-### Community 30 - "Community 30"
+### Community 31 - "Community 31"
 Cohesion: 0.67
 Nodes (2): currentIndianFinancialYearLabel, formatFinancialYearDisplayLabel
 
-### Community 31 - "Community 31"
+### Community 32 - "Community 32"
 Cohesion: 0.67
 Nodes (2): parseDouble, round2
 
-### Community 32 - "Community 32"
+### Community 33 - "Community 33"
 Cohesion: 0.67
 Nodes (2): Buyer, copyWith
 
-### Community 33 - "Community 33"
+### Community 34 - "Community 34"
 Cohesion: 0.67
 Nodes (2): copyWith, ReconciliationDebugInfo
 
-### Community 34 - "Community 34"
+### Community 35 - "Community 35"
 Cohesion: 0.67
 Nodes (2): ReconciliationRowExplanation, ReconciliationRowExplanationValue
 
-### Community 35 - "Community 35"
+### Community 36 - "Community 36"
 Cohesion: 0.67
 Nodes (2): Features, Reconciliation App
 
-### Community 36 - "Community 36"
+### Community 37 - "Community 37"
 Cohesion: 1.0
 Nodes (1): MainActivity
 
-### Community 37 - "Community 37"
+### Community 38 - "Community 38"
 Cohesion: 1.0
 Nodes (1): AppRadius
 
-### Community 38 - "Community 38"
+### Community 39 - "Community 39"
 Cohesion: 1.0
 Nodes (1): AppSpacing
 
-### Community 39 - "Community 39"
+### Community 40 - "Community 40"
 Cohesion: 1.0
 Nodes (1): BuyerFinancialYear
 
-### Community 40 - "Community 40"
+### Community 41 - "Community 41"
 Cohesion: 1.0
 Nodes (1): TransactionModel
 
-### Community 41 - "Community 41"
+### Community 42 - "Community 42"
 Cohesion: 1.0
 Nodes (1): ReconciliationStatus
 
-### Community 42 - "Community 42"
+### Community 43 - "Community 43"
 Cohesion: 1.0
 Nodes (1): ReconciliationSummary
 
-### Community 43 - "Community 43"
+### Community 44 - "Community 44"
 Cohesion: 1.0
 Nodes (1): ResolvedSellerIdentity
 
-### Community 44 - "Community 44"
+### Community 45 - "Community 45"
 Cohesion: 1.0
 Nodes (1): ColumnMappingResult
 
-### Community 45 - "Community 45"
+### Community 46 - "Community 46"
 Cohesion: 1.0
 Nodes (1): ImportAuditRecord
 
-### Community 46 - "Community 46"
+### Community 47 - "Community 47"
 Cohesion: 1.0
 Nodes (1): ImportFormatProfile
 
-### Community 47 - "Community 47"
-Cohesion: 1.0
-Nodes (1): MappingFieldOption
-
 ### Community 48 - "Community 48"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): MappingFieldOption
 
 ### Community 49 - "Community 49"
 Cohesion: 1.0
@@ -411,11 +412,11 @@ Nodes (0):
 
 ### Community 71 - "Community 71"
 Cohesion: 1.0
-Nodes (1): graphify
+Nodes (0): 
 
 ### Community 72 - "Community 72"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): graphify
 
 ### Community 73 - "Community 73"
 Cohesion: 1.0
@@ -477,127 +478,131 @@ Nodes (0):
 Cohesion: 1.0
 Nodes (0): 
 
+### Community 88 - "Community 88"
+Cohesion: 1.0
+Nodes (0): 
+
 ## Knowledge Gaps
-- **1331 isolated node(s):** `MainActivity`, `main`, `app/app.dart`, `ReconciliationApp`, `build` (+1326 more)
+- **1336 isolated node(s):** `MainActivity`, `main`, `app/app.dart`, `ReconciliationApp`, `build` (+1331 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 36`** (2 nodes): `MainActivity.kt`, `MainActivity`
+- **Thin community `Community 37`** (2 nodes): `MainActivity.kt`, `MainActivity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 37`** (2 nodes): `app_radius.dart`, `AppRadius`
+- **Thin community `Community 38`** (2 nodes): `app_radius.dart`, `AppRadius`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 38`** (2 nodes): `app_spacing.dart`, `AppSpacing`
+- **Thin community `Community 39`** (2 nodes): `app_spacing.dart`, `AppSpacing`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 39`** (2 nodes): `buyer_financial_year.dart`, `BuyerFinancialYear`
+- **Thin community `Community 40`** (2 nodes): `buyer_financial_year.dart`, `BuyerFinancialYear`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 40`** (2 nodes): `transaction.dart`, `TransactionModel`
+- **Thin community `Community 41`** (2 nodes): `transaction.dart`, `TransactionModel`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 41`** (2 nodes): `reconciliation_status.dart`, `ReconciliationStatus`
+- **Thin community `Community 42`** (2 nodes): `reconciliation_status.dart`, `ReconciliationStatus`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 42`** (2 nodes): `reconciliation_summary.dart`, `ReconciliationSummary`
+- **Thin community `Community 43`** (2 nodes): `reconciliation_summary.dart`, `ReconciliationSummary`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 43`** (2 nodes): `resolved_seller_identity.dart`, `ResolvedSellerIdentity`
+- **Thin community `Community 44`** (2 nodes): `resolved_seller_identity.dart`, `ResolvedSellerIdentity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 44`** (2 nodes): `column_mapping_result.dart`, `ColumnMappingResult`
+- **Thin community `Community 45`** (2 nodes): `column_mapping_result.dart`, `ColumnMappingResult`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 45`** (2 nodes): `import_audit_record.dart`, `ImportAuditRecord`
+- **Thin community `Community 46`** (2 nodes): `import_audit_record.dart`, `ImportAuditRecord`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 46`** (2 nodes): `import_format_profile.dart`, `ImportFormatProfile`
+- **Thin community `Community 47`** (2 nodes): `import_format_profile.dart`, `ImportFormatProfile`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 47`** (2 nodes): `mapping_field_option.dart`, `MappingFieldOption`
+- **Thin community `Community 48`** (2 nodes): `mapping_field_option.dart`, `MappingFieldOption`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 48`** (2 nodes): `flutter()`, `binary_messenger_impl.h`
+- **Thin community `Community 49`** (2 nodes): `flutter()`, `binary_messenger_impl.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 49`** (2 nodes): `flutter()`, `byte_buffer_streams.h`
+- **Thin community `Community 50`** (2 nodes): `flutter()`, `byte_buffer_streams.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 50`** (2 nodes): `texture_registrar_impl.h`, `flutter()`
+- **Thin community `Community 51`** (2 nodes): `texture_registrar_impl.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 51`** (2 nodes): `flutter()`, `binary_messenger.h`
+- **Thin community `Community 52`** (2 nodes): `flutter()`, `binary_messenger.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 52`** (2 nodes): `flutter()`, `byte_streams.h`
+- **Thin community `Community 53`** (2 nodes): `flutter()`, `byte_streams.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 53`** (2 nodes): `GpuPreference()`, `dart_project.h`
+- **Thin community `Community 54`** (2 nodes): `GpuPreference()`, `dart_project.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 54`** (2 nodes): `encodable_value.h`, `flutter()`
+- **Thin community `Community 55`** (2 nodes): `encodable_value.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 55`** (2 nodes): `event_sink.h`, `flutter()`
+- **Thin community `Community 56`** (2 nodes): `event_sink.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 56`** (2 nodes): `event_stream_handler.h`, `flutter()`
+- **Thin community `Community 57`** (2 nodes): `event_stream_handler.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 57`** (2 nodes): `event_stream_handler_functions.h`, `flutter()`
+- **Thin community `Community 58`** (2 nodes): `event_stream_handler_functions.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (2 nodes): `flutter_engine.h`, `flutter()`
+- **Thin community `Community 59`** (2 nodes): `flutter_engine.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 59`** (2 nodes): `flutter_view.h`, `flutter()`
+- **Thin community `Community 60`** (2 nodes): `flutter_view.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 60`** (2 nodes): `flutter_view_controller.h`, `flutter()`
+- **Thin community `Community 61`** (2 nodes): `flutter_view_controller.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 61`** (2 nodes): `method_call.h`, `flutter()`
+- **Thin community `Community 62`** (2 nodes): `method_call.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 62`** (2 nodes): `method_result.h`, `flutter()`
+- **Thin community `Community 63`** (2 nodes): `method_result.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (2 nodes): `method_result_functions.h`, `flutter()`
+- **Thin community `Community 64`** (2 nodes): `method_result_functions.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 64`** (2 nodes): `plugin_registrar.h`, `flutter()`
+- **Thin community `Community 65`** (2 nodes): `plugin_registrar.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 65`** (2 nodes): `plugin_registrar_windows.h`, `flutter()`
+- **Thin community `Community 66`** (2 nodes): `plugin_registrar_windows.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 66`** (2 nodes): `plugin_registry.h`, `flutter()`
+- **Thin community `Community 67`** (2 nodes): `plugin_registry.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 67`** (2 nodes): `standard_codec_serializer.h`, `flutter()`
+- **Thin community `Community 68`** (2 nodes): `standard_codec_serializer.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 68`** (2 nodes): `standard_message_codec.h`, `flutter()`
+- **Thin community `Community 69`** (2 nodes): `standard_message_codec.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 69`** (2 nodes): `standard_method_codec.h`, `flutter()`
+- **Thin community `Community 70`** (2 nodes): `standard_method_codec.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 70`** (2 nodes): `texture_registrar.h`, `flutter()`
+- **Thin community `Community 71`** (2 nodes): `texture_registrar.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 71`** (2 nodes): `CLAUDE.md`, `graphify`
+- **Thin community `Community 72`** (2 nodes): `CLAUDE.md`, `graphify`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 72`** (1 nodes): `build.gradle.kts`
+- **Thin community `Community 73`** (1 nodes): `build.gradle.kts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 73`** (1 nodes): `settings.gradle.kts`
+- **Thin community `Community 74`** (1 nodes): `settings.gradle.kts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 74`** (1 nodes): `build.gradle.kts`
+- **Thin community `Community 75`** (1 nodes): `build.gradle.kts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 75`** (1 nodes): `app_ui_exports.dart`
+- **Thin community `Community 76`** (1 nodes): `app_ui_exports.dart`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 76`** (1 nodes): `reconciliation_view_mode.dart`
+- **Thin community `Community 77`** (1 nodes): `reconciliation_view_mode.dart`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 77`** (1 nodes): `upload_mapping_status.dart`
+- **Thin community `Community 78`** (1 nodes): `upload_mapping_status.dart`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 78`** (1 nodes): `generated_plugin_registrant.h`
+- **Thin community `Community 79`** (1 nodes): `generated_plugin_registrant.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 79`** (1 nodes): `flutter_export.h`
+- **Thin community `Community 80`** (1 nodes): `flutter_export.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 80`** (1 nodes): `flutter_messenger.h`
+- **Thin community `Community 81`** (1 nodes): `flutter_messenger.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 81`** (1 nodes): `flutter_plugin_registrar.h`
+- **Thin community `Community 82`** (1 nodes): `flutter_plugin_registrar.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 82`** (1 nodes): `flutter_texture_registrar.h`
+- **Thin community `Community 83`** (1 nodes): `flutter_texture_registrar.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 83`** (1 nodes): `flutter_windows.h`
+- **Thin community `Community 84`** (1 nodes): `flutter_windows.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 84`** (1 nodes): `engine_method_result.cc`
+- **Thin community `Community 85`** (1 nodes): `engine_method_result.cc`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 85`** (1 nodes): `resource.h`
+- **Thin community `Community 86`** (1 nodes): `resource.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 86`** (1 nodes): `utils.h`
+- **Thin community `Community 87`** (1 nodes): `utils.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 87`** (1 nodes): `win32_window.h`
+- **Thin community `Community 88`** (1 nodes): `win32_window.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `package:flutter/material.dart` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 20`, `Community 21`?**
-  _High betweenness centrality (0.258) - this node is a cross-community bridge._
-- **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 6` to `Community 1`, `Community 2`, `Community 4`, `Community 7`, `Community 8`, `Community 9`, `Community 11`, `Community 16`, `Community 17`?**
-  _High betweenness centrality (0.093) - this node is a cross-community bridge._
-- **Why does `package:flutter/foundation.dart` connect `Community 14` to `Community 1`, `Community 2`, `Community 4`, `Community 6`, `Community 7`, `Community 17`?**
-  _High betweenness centrality (0.046) - this node is a cross-community bridge._
+- **Why does `package:flutter/material.dart` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 10`, `Community 11`, `Community 12`, `Community 17`, `Community 20`, `Community 22`?**
+  _High betweenness centrality (0.341) - this node is a cross-community bridge._
+- **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 9` to `Community 1`, `Community 3`, `Community 4`, `Community 7`, `Community 8`, `Community 10`, `Community 16`, `Community 17`, `Community 18`?**
+  _High betweenness centrality (0.088) - this node is a cross-community bridge._
+- **Why does `package:flutter/foundation.dart` connect `Community 14` to `Community 1`, `Community 3`, `Community 5`, `Community 7`, `Community 8`, `Community 9`, `Community 16`, `Community 18`?**
+  _High betweenness centrality (0.059) - this node is a cross-community bridge._
 - **What connects `MainActivity`, `main`, `app/app.dart` to the rest of the system?**
-  _1331 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1336 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.01 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.02 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.02 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**

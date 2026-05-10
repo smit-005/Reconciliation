@@ -155,6 +155,76 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   List<NormalizedTransactionRow> normalizedTdsRows = [];
   String? detectedGstNo;
 
+  @override
+  void didUpdateWidget(covariant ExcelUploadScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_hasBuyerOrFinancialYearChanged(oldWidget)) return;
+    _resetStateForBuyerFinancialYearChange();
+  }
+
+  bool _hasBuyerOrFinancialYearChanged(ExcelUploadScreen oldWidget) {
+    return _hasBuyerChanged(oldWidget) || _hasFinancialYearChanged(oldWidget);
+  }
+
+  bool _hasBuyerChanged(ExcelUploadScreen oldWidget) {
+    final oldBuyerId = oldWidget.selectedBuyerId.trim();
+    final newBuyerId = widget.selectedBuyerId.trim();
+    if (oldBuyerId != newBuyerId) return true;
+
+    final oldBuyerPan = normalizePan(oldWidget.selectedBuyerPan);
+    final newBuyerPan = normalizePan(widget.selectedBuyerPan);
+    if (oldBuyerPan != newBuyerPan) return true;
+
+    if (oldBuyerId.isEmpty && oldBuyerPan.isEmpty) {
+      return oldWidget.selectedBuyerName.trim() !=
+          widget.selectedBuyerName.trim();
+    }
+
+    return false;
+  }
+
+  bool _hasFinancialYearChanged(ExcelUploadScreen oldWidget) {
+    final oldFinancialYearId = oldWidget.selectedFinancialYearId?.trim() ?? '';
+    final newFinancialYearId = widget.selectedFinancialYearId?.trim() ?? '';
+    if (oldFinancialYearId != newFinancialYearId) return true;
+
+    if (oldFinancialYearId.isEmpty) {
+      return (oldWidget.selectedFinancialYearLabel?.trim() ?? '') !=
+          (widget.selectedFinancialYearLabel?.trim() ?? '');
+    }
+
+    return false;
+  }
+
+  void _resetStateForBuyerFinancialYearChange() {
+    isLoadingTds = false;
+    tdsUploadFile = null;
+    _activeSectionCode = '194Q';
+
+    _isSellerMappingConfirmed = false;
+    _isLoadingSellerMapping = false;
+    _cachedPreflightResult = null;
+    _isSellerPreflightDirty = true;
+    _sellerSelectedMappings = <String, String>{};
+    _sellerClearedRowKeys = <String>{};
+
+    selectedSections
+      ..clear()
+      ..add('194Q');
+    for (final section in _availableSections) {
+      sectionLoading[section] = false;
+      sectionFiles[section] = <LedgerUploadFile>[];
+      ledgerRowsBySection[section] = <NormalizedLedgerRow>[];
+    }
+    purchaseRowsByFileId.clear();
+
+    purchaseRows = <PurchaseRow>[];
+    tdsRows = <Tds26QRow>[];
+    normalizedPurchaseRows = <NormalizedTransactionRow>[];
+    normalizedTdsRows = <NormalizedTransactionRow>[];
+    detectedGstNo = null;
+  }
+
   Future<ColumnMappingResult?> showColumnMappingScreen({
     required ExcelPreviewData previewData,
   }) async {
