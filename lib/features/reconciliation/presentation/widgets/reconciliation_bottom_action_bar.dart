@@ -7,15 +7,17 @@ import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_sticky_action_bar.dart';
 
 class ReconciliationBottomActionBar extends StatelessWidget {
-  final VoidCallback? onExportCurrentSection;
-  final VoidCallback? onExportAllSections;
-  final VoidCallback? onExportPivot;
+  final VoidCallback? onExportCurrentView;
+  final VoidCallback? onExportSection;
+  final VoidCallback? onExportPivotReport;
+  final VoidCallback? onExportDetailedReport;
 
   const ReconciliationBottomActionBar({
     super.key,
-    required this.onExportCurrentSection,
-    required this.onExportAllSections,
-    required this.onExportPivot,
+    required this.onExportCurrentView,
+    required this.onExportSection,
+    required this.onExportPivotReport,
+    required this.onExportDetailedReport,
   });
 
   @override
@@ -35,25 +37,33 @@ class ReconciliationBottomActionBar extends StatelessWidget {
             _ActionButtonSlot(
               child: AppPrimaryButton(
                 key: const ValueKey('export_current_button'),
-                onPressed: onExportCurrentSection,
+                onPressed: onExportCurrentView,
                 icon: Icons.download_rounded,
-                label: 'Export Current Section',
+                label: 'Export Current View',
               ),
             ),
             _ActionButtonSlot(
               child: AppSecondaryButton(
-                key: const ValueKey('export_all_sections_button'),
-                onPressed: onExportAllSections,
+                key: const ValueKey('export_section_button'),
+                onPressed: onExportSection,
                 icon: Icons.download_for_offline_rounded,
-                label: 'Export All Sections',
+                label: 'Export Section',
               ),
             ),
             _ActionButtonSlot(
               child: AppSecondaryButton(
                 key: const ValueKey('export_pivot_button'),
-                onPressed: onExportPivot,
+                onPressed: onExportPivotReport,
                 icon: Icons.table_chart_rounded,
-                label: 'Export Pivot',
+                label: 'Export Pivot Report',
+              ),
+            ),
+            _ActionButtonSlot(
+              child: AppSecondaryButton(
+                key: const ValueKey('export_detailed_button'),
+                onPressed: onExportDetailedReport,
+                icon: Icons.article_rounded,
+                label: 'Export Detailed Report',
               ),
             ),
           ];

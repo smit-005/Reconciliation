@@ -162,10 +162,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   bool _isRecalculating = false;
   bool _hasCompletedInitialLoad = false;
-  bool _hasCurrentSectionExportRows = false;
-  bool _hasAllSectionExportRows = false;
-  int _currentSectionExportRowCount = 0;
-  int _allSectionExportRowCount = 0;
+  bool _hasCurrentViewExportRows = false;
+  bool _hasSectionExportRows = false;
+  bool _hasReportExportRows = false;
+  int _currentViewExportRowCount = 0;
+  int _sectionExportRowCount = 0;
+  int _reportExportRowCount = 0;
   String _processingMessage = 'Processing reconciliation...';
   final Map<String, List<ReconciliationRow>> _filterRowsCache = {};
   final Map<String, List<String>> _sectionOptionsCache = {};
@@ -186,11 +188,16 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     ReconciliationStatus.reviewRequired,
   ];
 
-  bool get _canExportCurrentSection =>
-      _hasCurrentSectionExportRows && _currentSectionExportRowCount > 0;
+  bool get _canExportCurrentView =>
+      _hasCurrentViewExportRows && _currentViewExportRowCount > 0;
 
-  bool get _canExportAllSections =>
-      _hasAllSectionExportRows && _allSectionExportRowCount > 0;
+  bool get _canExportSection =>
+      _selectedExportSection() != null &&
+      _hasSectionExportRows &&
+      _sectionExportRowCount > 0;
+
+  bool get _canExportReports =>
+      _hasReportExportRows && _reportExportRowCount > 0;
 
   @override
   void initState() {
@@ -726,9 +733,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final exportAvailability = _buildExportAvailabilitySnapshot(
         rows: freshRows,
         currentFilteredRows: nextFilteredRows,
-        selectedSellerValue: nextSelectedSeller,
         selectedFinancialYearValue: nextSelectedFinancialYear,
-        selectedStatusValue: nextSelectedStatus,
+        selectedSectionValue: nextSelectedSection,
       );
       setState(() {
         _sectionResultCache = sectionResult;
@@ -847,9 +853,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     final exportAvailability = _buildExportAvailabilitySnapshot(
       rows: allRows,
       currentFilteredRows: nextFilteredRows,
-      selectedSellerValue: nextSelectedSeller,
       selectedFinancialYearValue: nextSelectedFinancialYear,
-      selectedStatusValue: selectedStatus,
+      selectedSectionValue: nextSelectedSection,
     );
 
     setState(() {
@@ -1809,11 +1814,6 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     _applyFilters();
   }
 
-  String _exportSellerLabel() {
-    final query = selectedSeller.trim();
-    return query.isEmpty ? 'All Sellers' : query;
-  }
-
   String _exportFinancialYearLabel() {
     final selected = selectedFinancialYear.trim();
     if (selected.isNotEmpty && selected != 'All FY') {
@@ -1824,160 +1824,266 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return workflowLabel.isEmpty ? selectedFinancialYear : workflowLabel;
   }
 
-  List<ReconciliationRow> _rowsForAllSectionsExport() {
-    return _filterRows(
-      rows: allRows,
-      selectedSellerValue: selectedSeller,
-      selectedFinancialYearValue: selectedFinancialYear,
-      selectedSectionValue: 'All Sections',
-      selectedStatusValue: selectedStatus,
+  String? _selectedExportSection({String? selectedSectionValue}) {
+    final value = (selectedSectionValue ?? selectedSection).trim();
+    if (value.isNotEmpty && value != 'All Sections') return value;
+    if (activeSectionTab != 'All') return activeSectionTab;
+    return null;
+  }
+
+  List<ReconciliationRow> _rowsForSelectedSectionExport({
+    List<ReconciliationRow>? rows,
+    String? selectedSectionValue,
+    String? selectedFinancialYearValue,
+  }) {
+    final section = _selectedExportSection(
+      selectedSectionValue: selectedSectionValue,
     );
+    if (section == null) return const <ReconciliationRow>[];
+
+    final fy = selectedFinancialYearValue ?? selectedFinancialYear;
+    final sourceRows = rows ?? allRows;
+    final exportRows = sourceRows.where((row) {
+      if (row.section.trim() != section) return false;
+      if (fy != 'All FY' && row.financialYear.trim() != fy.trim()) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    _sortExportRows(exportRows);
+    return exportRows;
+  }
+
+  List<ReconciliationRow> _rowsForReportExport({
+    List<ReconciliationRow>? rows,
+    String? selectedFinancialYearValue,
+  }) {
+    final fy = selectedFinancialYearValue ?? selectedFinancialYear;
+    final sourceRows = rows ?? allRows;
+    final exportRows = sourceRows.where((row) {
+      if (fy != 'All FY' && row.financialYear.trim() != fy.trim()) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    _sortExportRows(exportRows);
+    return exportRows;
+  }
+
+  void _sortExportRows(List<ReconciliationRow> rows) {
+    rows.sort((a, b) {
+      final sectionCompare = TdsSectionCatalog.compare(
+        a.section.trim(),
+        b.section.trim(),
+      );
+      if (sectionCompare != 0) return sectionCompare;
+
+      final sellerCompare = _sellerFilterLabel(a)
+          .trim()
+          .toUpperCase()
+          .compareTo(_sellerFilterLabel(b).trim().toUpperCase());
+      if (sellerCompare != 0) return sellerCompare;
+
+      final fyCompare = a.financialYear.trim().compareTo(
+        b.financialYear.trim(),
+      );
+      if (fyCompare != 0) return fyCompare;
+
+      return CalculationService.compareMonthLabels(a.month, b.month);
+    });
   }
 
   ({
-    bool hasCurrentSectionExportRows,
-    bool hasAllSectionExportRows,
-    int currentSectionExportRowCount,
-    int allSectionExportRowCount,
+    bool hasCurrentViewExportRows,
+    bool hasSectionExportRows,
+    bool hasReportExportRows,
+    int currentViewExportRowCount,
+    int sectionExportRowCount,
+    int reportExportRowCount,
   })
   _buildExportAvailabilitySnapshot({
     required List<ReconciliationRow> rows,
     required List<ReconciliationRow> currentFilteredRows,
-    required String selectedSellerValue,
     required String selectedFinancialYearValue,
-    required String selectedStatusValue,
+    required String selectedSectionValue,
   }) {
     final watch = Stopwatch()..start();
-    final allSectionRows = _filterRows(
+    final sectionRows = _rowsForSelectedSectionExport(
       rows: rows,
-      selectedSellerValue: selectedSellerValue,
+      selectedSectionValue: selectedSectionValue,
       selectedFinancialYearValue: selectedFinancialYearValue,
-      selectedSectionValue: 'All Sections',
-      selectedStatusValue: selectedStatusValue,
+    );
+    final reportRows = _rowsForReportExport(
+      rows: rows,
+      selectedFinancialYearValue: selectedFinancialYearValue,
     );
     watch.stop();
     debugPrint(
       'RECON PERF => export availability cache rebuild ms=${watch.elapsedMilliseconds} '
-      'currentRows=${currentFilteredRows.length} allRows=${allSectionRows.length}',
+      'currentRows=${currentFilteredRows.length} sectionRows=${sectionRows.length} reportRows=${reportRows.length}',
     );
 
     return (
-      hasCurrentSectionExportRows: currentFilteredRows.isNotEmpty,
-      hasAllSectionExportRows: allSectionRows.isNotEmpty,
-      currentSectionExportRowCount: currentFilteredRows.length,
-      allSectionExportRowCount: allSectionRows.length,
+      hasCurrentViewExportRows: currentFilteredRows.isNotEmpty,
+      hasSectionExportRows: sectionRows.isNotEmpty,
+      hasReportExportRows: reportRows.isNotEmpty,
+      currentViewExportRowCount: currentFilteredRows.length,
+      sectionExportRowCount: sectionRows.length,
+      reportExportRowCount: reportRows.length,
     );
   }
 
   void _applyExportAvailabilitySnapshot(
     ({
-      bool hasCurrentSectionExportRows,
-      bool hasAllSectionExportRows,
-      int currentSectionExportRowCount,
-      int allSectionExportRowCount,
+      bool hasCurrentViewExportRows,
+      bool hasSectionExportRows,
+      bool hasReportExportRows,
+      int currentViewExportRowCount,
+      int sectionExportRowCount,
+      int reportExportRowCount,
     })
     snapshot,
   ) {
-    _hasCurrentSectionExportRows = snapshot.hasCurrentSectionExportRows;
-    _hasAllSectionExportRows = snapshot.hasAllSectionExportRows;
-    _currentSectionExportRowCount = snapshot.currentSectionExportRowCount;
-    _allSectionExportRowCount = snapshot.allSectionExportRowCount;
+    _hasCurrentViewExportRows = snapshot.hasCurrentViewExportRows;
+    _hasSectionExportRows = snapshot.hasSectionExportRows;
+    _hasReportExportRows = snapshot.hasReportExportRows;
+    _currentViewExportRowCount = snapshot.currentViewExportRowCount;
+    _sectionExportRowCount = snapshot.sectionExportRowCount;
+    _reportExportRowCount = snapshot.reportExportRowCount;
   }
 
-  Future<void> _exportCurrentSectionExcel() async {
+  Future<void> _exportCurrentViewExcel() async {
     try {
       final workingDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'current_section',
+        exportType: 'current_view',
         resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
           buyerId: widget.selectedBuyerId,
           financialYearId: widget.selectedFinancialYearId,
         ),
       );
       if (!mounted) return;
-      final filePath = await ExcelExportService.exportReconciliationExcel(
-        rows: filteredRows,
-        buyerName: widget.buyerName,
-        buyerPan: widget.buyerPan,
-        gstNo: widget.gstNo,
-        outputFolderPath: workingDirectory?.path,
-        financialYear: selectedFinancialYear,
-        sellerName: _exportSellerLabel(),
-      );
-
-      if (!mounted) return;
-      _showSnackBar(
-        workingDirectory == null
-            ? 'Workspace unavailable. Exported to Downloads: $filePath'
-            : 'Current section export saved to workspace: $filePath',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnackBar('Export failed: $e');
-    }
-  }
-
-  Future<void> _exportAllSectionsExcel() async {
-    final rows = _rowsForAllSectionsExport();
-    try {
-      final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'all_sections',
-        resolve: () => _workspaceExportPathService.resolveFinalExportsDirectory(
-          buyerId: widget.selectedBuyerId,
-          financialYearId: widget.selectedFinancialYearId,
-        ),
-      );
-      if (!mounted) return;
-      final filePath = await ExcelExportService.exportReconciliationExcel(
-        rows: rows,
-        buyerName: widget.buyerName,
-        buyerPan: widget.buyerPan,
-        gstNo: widget.gstNo,
-        outputFolderPath: finalExportsDirectory?.path,
-        financialYear: selectedFinancialYear,
-        sellerName: _exportSellerLabel(),
-      );
-
-      if (!mounted) return;
-      _showSnackBar(
-        finalExportsDirectory == null
-            ? 'Workspace unavailable. Exported to Downloads: $filePath'
-            : 'All sections export saved to workspace: $filePath',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnackBar('Export failed: $e');
-    }
-  }
-
-  Future<void> _exportPivotExcel() async {
-    try {
-      final workingDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'pivot',
-        resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
-          buyerId: widget.selectedBuyerId,
-          financialYearId: widget.selectedFinancialYearId,
-        ),
-      );
-      if (!mounted) return;
-      final filePath = await ExcelExportService.exportPivotSummaryExcel(
+      final filePath = await ExcelExportService.exportCurrentViewExcel(
         rows: filteredRows,
         buyerName: widget.buyerName,
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
         outputFolderPath: workingDirectory?.path,
         financialYear: _exportFinancialYearLabel(),
-        sellerName: _exportSellerLabel(),
       );
 
       if (!mounted) return;
       _showSnackBar(
         workingDirectory == null
             ? 'Workspace unavailable. Exported to Downloads: $filePath'
+            : 'Current view export saved to workspace: $filePath',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('Export failed: $e');
+    }
+  }
+
+  Future<void> _exportSectionExcel() async {
+    final section = _selectedExportSection();
+    if (section == null) {
+      _showSnackBar('Select a section tab before exporting a section report.');
+      return;
+    }
+    final rows = _rowsForSelectedSectionExport();
+    try {
+      final workingDirectory = await _resolveWorkspaceExportDirectory(
+        exportType: 'section',
+        resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
+          buyerId: widget.selectedBuyerId,
+          financialYearId: widget.selectedFinancialYearId,
+        ),
+      );
+      if (!mounted) return;
+      final filePath = await ExcelExportService.exportSectionExcel(
+        rows: rows,
+        section: section,
+        buyerName: widget.buyerName,
+        buyerPan: widget.buyerPan,
+        gstNo: widget.gstNo,
+        outputFolderPath: workingDirectory?.path,
+        financialYear: _exportFinancialYearLabel(),
+      );
+
+      if (!mounted) return;
+      _showSnackBar(
+        workingDirectory == null
+            ? 'Workspace unavailable. Exported to Downloads: $filePath'
+            : 'Section export saved to workspace: $filePath',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('Export failed: $e');
+    }
+  }
+
+  Future<void> _exportPivotReportExcel() async {
+    final rows = _rowsForReportExport();
+    try {
+      final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
+        exportType: 'pivot_report',
+        resolve: () => _workspaceExportPathService.resolveFinalExportsDirectory(
+          buyerId: widget.selectedBuyerId,
+          financialYearId: widget.selectedFinancialYearId,
+        ),
+      );
+      if (!mounted) return;
+      final filePath = await ExcelExportService.exportPivotReportExcel(
+        rows: rows,
+        buyerName: widget.buyerName,
+        buyerPan: widget.buyerPan,
+        gstNo: widget.gstNo,
+        outputFolderPath: finalExportsDirectory?.path,
+        financialYear: _exportFinancialYearLabel(),
+      );
+
+      if (!mounted) return;
+      _showSnackBar(
+        finalExportsDirectory == null
+            ? 'Workspace unavailable. Exported to Downloads: $filePath'
             : 'Pivot report exported to workspace: $filePath',
       );
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('Pivot export failed: $e');
+    }
+  }
+
+  Future<void> _exportDetailedReportExcel() async {
+    final rows = _rowsForReportExport();
+    try {
+      final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
+        exportType: 'detailed_report',
+        resolve: () => _workspaceExportPathService.resolveFinalExportsDirectory(
+          buyerId: widget.selectedBuyerId,
+          financialYearId: widget.selectedFinancialYearId,
+        ),
+      );
+      if (!mounted) return;
+      final filePath = await ExcelExportService.exportDetailedReportExcel(
+        rows: rows,
+        buyerName: widget.buyerName,
+        buyerPan: widget.buyerPan,
+        gstNo: widget.gstNo,
+        outputFolderPath: finalExportsDirectory?.path,
+        financialYear: _exportFinancialYearLabel(),
+      );
+
+      if (!mounted) return;
+      _showSnackBar(
+        finalExportsDirectory == null
+            ? 'Workspace unavailable. Exported to Downloads: $filePath'
+            : 'Detailed report exported to workspace: $filePath',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar('Detailed report export failed: $e');
     }
   }
 
@@ -2269,13 +2375,16 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         ),
       ),
       bottomNavigationBar: ReconciliationBottomActionBar(
-        onExportCurrentSection: !_canExportCurrentSection
+        onExportCurrentView: !_canExportCurrentView
             ? null
-            : _exportCurrentSectionExcel,
-        onExportAllSections: !_canExportAllSections
+            : _exportCurrentViewExcel,
+        onExportSection: !_canExportSection ? null : _exportSectionExcel,
+        onExportPivotReport: !_canExportReports
             ? null
-            : _exportAllSectionsExcel,
-        onExportPivot: !_canExportCurrentSection ? null : _exportPivotExcel,
+            : _exportPivotReportExcel,
+        onExportDetailedReport: !_canExportReports
+            ? null
+            : _exportDetailedReportExcel,
       ),
       body: Stack(
         children: [

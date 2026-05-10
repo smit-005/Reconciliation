@@ -4,9 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'reconciliation_orchestrator.dart';
+
+enum ExcelExportMode { currentView, section, pivotReport, detailedReport }
 
 class ExcelExportService {
   static const double _thresholdAmount = 5000000;
@@ -22,6 +25,84 @@ class ExcelExportService {
     );
   }
 
+  static Future<String> exportCurrentViewExcel({
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    String gstNo = '',
+    String? outputFolderPath,
+    String? financialYear,
+  }) async {
+    return _exportWorkbook(
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      outputFolderPath: outputFolderPath,
+      financialYear: financialYear,
+      mode: ExcelExportMode.currentView,
+    );
+  }
+
+  static Future<String> exportSectionExcel({
+    required List<ReconciliationRow> rows,
+    required String section,
+    required String buyerName,
+    required String buyerPan,
+    String gstNo = '',
+    String? outputFolderPath,
+    String? financialYear,
+  }) async {
+    return _exportWorkbook(
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      outputFolderPath: outputFolderPath,
+      financialYear: financialYear,
+      section: section,
+      mode: ExcelExportMode.section,
+    );
+  }
+
+  static Future<String> exportPivotReportExcel({
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    String gstNo = '',
+    String? outputFolderPath,
+    String? financialYear,
+  }) async {
+    return _exportWorkbook(
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      outputFolderPath: outputFolderPath,
+      financialYear: financialYear,
+      mode: ExcelExportMode.pivotReport,
+    );
+  }
+
+  static Future<String> exportDetailedReportExcel({
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    String gstNo = '',
+    String? outputFolderPath,
+    String? financialYear,
+  }) async {
+    return _exportWorkbook(
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      outputFolderPath: outputFolderPath,
+      financialYear: financialYear,
+      mode: ExcelExportMode.detailedReport,
+    );
+  }
+
   static Future<String> exportReconciliationExcel({
     required List<ReconciliationRow> rows,
     required String buyerName,
@@ -30,135 +111,15 @@ class ExcelExportService {
     String? outputFolderPath,
     String? financialYear,
     String? sellerName,
-  }) async {
-    debugPrint('EXPORT PERF => step=rows_count rows=${rows.length}');
-    final workbookWatch = Stopwatch()..start();
-    final workbook = xlsio.Workbook();
-    workbookWatch.stop();
-    _logPerformance('workbook_creation', workbookWatch);
-
-    try {
-      final detailSheet = workbook.worksheets[0];
-      detailSheet.name = 'Reconciliation';
-
-      _writeTitle(
-        detailSheet,
-        buyerName.isEmpty ? 'RECONCILIATION REPORT' : buyerName.toUpperCase(),
-      );
-
-      _writeSummarySection(
-        detailSheet,
-        rows: rows,
-        buyerName: buyerName,
-        buyerPan: buyerPan,
-        gstNo: gstNo,
-      );
-
-      final detailWatch = Stopwatch()..start();
-      _writeDetailTable(detailSheet, rows: rows, startRow: 8);
-      detailWatch.stop();
-      _logPerformance(
-        'detail_sheet_writing',
-        detailWatch,
-        details: 'sheet=Reconciliation rows=${rows.length}',
-      );
-
-      final summarySheet = workbook.worksheets.addWithName('Summary');
-      _writeCompactSummarySheet(
-        summarySheet,
-        rows: rows,
-        buyerName: buyerName,
-        buyerPan: buyerPan,
-        gstNo: gstNo,
-      );
-
-      final pivotSheet = workbook.worksheets.addWithName('Pivot Summary');
-      final pivotWatch = Stopwatch()..start();
-      _writePivotSummarySheet(pivotSheet, rows: rows);
-      pivotWatch.stop();
-      _logPerformance(
-        'pivot_writing',
-        pivotWatch,
-        details: 'sheet=Pivot Summary rows=${rows.length}',
-      );
-
-      final sectionGrouped = _groupBySection(rows);
-
-      final sectionSummarySheet = workbook.worksheets.addWithName(
-        'Section Summary',
-      );
-      _writeSectionSummarySheet(
-        sectionSummarySheet,
-        grouped: sectionGrouped,
-        buyerName: buyerName,
-        buyerPan: buyerPan,
-        gstNo: gstNo,
-      );
-
-      final sortedSections = sectionGrouped.keys.toList()..sort();
-      for (final section in sortedSections) {
-        final sectionRows = sectionGrouped[section]!;
-        final cleanSection = section.trim().toUpperCase();
-
-        if (cleanSection == 'NO SECTION') continue;
-
-        final safeName = _safeSheetName(cleanSection);
-
-        final sheet = workbook.worksheets.addWithName(safeName);
-
-        _writeTitle(sheet, 'SECTION: $section');
-        _writeSummarySection(
-          sheet,
-          rows: sectionRows,
-          buyerName: buyerName,
-          buyerPan: buyerPan,
-          gstNo: gstNo,
-        );
-        final sectionDetailWatch = Stopwatch()..start();
-        _writeDetailTable(sheet, rows: sectionRows, startRow: 8);
-        sectionDetailWatch.stop();
-        _logPerformance(
-          'detail_sheet_writing',
-          sectionDetailWatch,
-          details: 'sheet=$safeName rows=${sectionRows.length}',
-        );
-      }
-
-      final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
-      _writeTdsSectionInfoSheet(infoSheet);
-
-      final saveStreamWatch = Stopwatch()..start();
-      final bytes = workbook.saveAsStream();
-      saveStreamWatch.stop();
-      _logPerformance(
-        'saveAsStream',
-        saveStreamWatch,
-        details: 'bytes=${bytes.length}',
-      );
-      final fileName = _buildExportFileName(
-        buyerName: buyerName,
-        sellerName: sellerName,
-        financialYear: financialYear,
-        isPivot: false,
-      );
-
-      final folderPath = outputFolderPath ?? _getDownloadsPath();
-      final fullPath = await _resolveAvailableFilePath(folderPath, fileName);
-
-      final file = File(fullPath);
-      final fileWriteWatch = Stopwatch()..start();
-      await file.writeAsBytes(bytes, flush: true);
-      fileWriteWatch.stop();
-      _logPerformance(
-        'file_write',
-        fileWriteWatch,
-        details: 'bytes=${bytes.length} path=$fullPath',
-      );
-
-      return fullPath;
-    } finally {
-      workbook.dispose();
-    }
+  }) {
+    return exportDetailedReportExcel(
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      outputFolderPath: outputFolderPath,
+      financialYear: financialYear,
+    );
   }
 
   static Future<String> exportPivotSummaryExcel({
@@ -169,6 +130,26 @@ class ExcelExportService {
     String? outputFolderPath,
     String? financialYear,
     String? sellerName,
+  }) {
+    return exportPivotReportExcel(
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      outputFolderPath: outputFolderPath,
+      financialYear: financialYear,
+    );
+  }
+
+  static Future<String> _exportWorkbook({
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+    required ExcelExportMode mode,
+    String? outputFolderPath,
+    String? financialYear,
+    String? section,
   }) async {
     debugPrint('EXPORT PERF => step=rows_count rows=${rows.length}');
     final workbookWatch = Stopwatch()..start();
@@ -177,97 +158,331 @@ class ExcelExportService {
     _logPerformance('workbook_creation', workbookWatch);
 
     try {
-      final pivotSheet = workbook.worksheets[0];
-      pivotSheet.name = 'Pivot Summary';
-
-      final pivotWatch = Stopwatch()..start();
-      _writePivotSummarySheet(
-        pivotSheet,
-        rows: rows,
-        title: 'PIVOT SUMMARY: ${buyerName.toUpperCase()}',
-      );
-      pivotWatch.stop();
-      _logPerformance(
-        'pivot_writing',
-        pivotWatch,
-        details: 'sheet=Pivot Summary rows=${rows.length}',
-      );
-
-      final sectionGrouped = _groupBySection(rows);
-
-      final sortedSections = sectionGrouped.keys.toList()..sort();
-
-      for (final section in sortedSections) {
-        final sectionRows = sectionGrouped[section]!;
-
-        final cleanSection = section.trim().toUpperCase();
-        if (cleanSection == 'NO SECTION') continue;
-
-        final safeName = _safeSheetName(cleanSection);
-
-        final sheet = workbook.worksheets.addWithName(safeName);
-
-        final sectionPivotWatch = Stopwatch()..start();
-        _writePivotSummarySheet(
-          sheet,
-          rows: sectionRows,
-          title: 'SECTION $cleanSection - ${buyerName.toUpperCase()}',
-        );
-        sectionPivotWatch.stop();
-        _logPerformance(
-          'pivot_writing',
-          sectionPivotWatch,
-          details: 'sheet=$safeName rows=${sectionRows.length}',
-        );
+      switch (mode) {
+        case ExcelExportMode.currentView:
+          _buildCurrentViewWorkbook(
+            workbook,
+            rows: rows,
+            buyerName: buyerName,
+            buyerPan: buyerPan,
+            gstNo: gstNo,
+          );
+        case ExcelExportMode.section:
+          _buildSectionWorkbook(
+            workbook,
+            rows: rows,
+            section: section ?? _sectionLabelFromRows(rows),
+            buyerName: buyerName,
+            buyerPan: buyerPan,
+            gstNo: gstNo,
+          );
+        case ExcelExportMode.pivotReport:
+          _buildPivotReportWorkbook(
+            workbook,
+            rows: rows,
+            buyerName: buyerName,
+            buyerPan: buyerPan,
+            gstNo: gstNo,
+          );
+        case ExcelExportMode.detailedReport:
+          _buildDetailedReportWorkbook(
+            workbook,
+            rows: rows,
+            buyerName: buyerName,
+            buyerPan: buyerPan,
+            gstNo: gstNo,
+          );
       }
 
-      final sectionSummarySheet = workbook.worksheets.addWithName(
-        'Section Summary',
-      );
-
-      _writeSectionSummarySheet(
-        sectionSummarySheet,
-        grouped: sectionGrouped,
+      final fileName = buildExportFileName(
+        mode: mode,
         buyerName: buyerName,
-        buyerPan: buyerPan,
-        gstNo: gstNo,
-      );
-
-      final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
-      _writeTdsSectionInfoSheet(infoSheet);
-
-      final saveStreamWatch = Stopwatch()..start();
-      final bytes = workbook.saveAsStream();
-      saveStreamWatch.stop();
-      _logPerformance(
-        'saveAsStream',
-        saveStreamWatch,
-        details: 'bytes=${bytes.length}',
-      );
-      final fileName = buildPivotReportFileName(
-        buyerName: buyerName,
-        sellerName: sellerName,
         financialYear: financialYear,
+        section: section ?? _sectionLabelFromRows(rows),
       );
 
-      final folderPath = outputFolderPath ?? _getDownloadsPath();
-      await Directory(folderPath).create(recursive: true);
-      final fullPath = await _resolveAvailableFilePath(folderPath, fileName);
-
-      final file = File(fullPath);
-      final fileWriteWatch = Stopwatch()..start();
-      await file.writeAsBytes(bytes, flush: true);
-      fileWriteWatch.stop();
-      _logPerformance(
-        'file_write',
-        fileWriteWatch,
-        details: 'bytes=${bytes.length} path=$fullPath',
+      return _saveWorkbook(
+        workbook,
+        fileName: fileName,
+        outputFolderPath: outputFolderPath,
       );
-
-      return fullPath;
     } finally {
       workbook.dispose();
     }
+  }
+
+  static void _buildCurrentViewWorkbook(
+    xlsio.Workbook workbook, {
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
+    final detailSheet = workbook.worksheets[0];
+    detailSheet.name = 'Current View';
+    _writeTitle(detailSheet, 'CURRENT VIEW');
+    _writeSummarySection(
+      detailSheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+    );
+    _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+
+    final summarySheet = workbook.worksheets.addWithName('View Summary');
+    _writeCompactSummarySheet(
+      summarySheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      title: 'View Summary',
+    );
+
+    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    _writeTdsSectionInfoSheet(infoSheet);
+  }
+
+  static void _buildSectionWorkbook(
+    xlsio.Workbook workbook, {
+    required List<ReconciliationRow> rows,
+    required String section,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
+    final grouped = _groupBySection(rows);
+    final sectionSummarySheet = workbook.worksheets[0];
+    sectionSummarySheet.name = 'Section Summary';
+    _writeSectionSummarySheet(
+      sectionSummarySheet,
+      grouped: grouped,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+    );
+
+    final pivotSheet = workbook.worksheets.addWithName('Seller Pivot');
+    _writeTimedPivotSummarySheet(
+      pivotSheet,
+      rows: rows,
+      title: 'SECTION $section SELLER PIVOT',
+    );
+
+    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
+    _writeExceptionsSheet(exceptionsSheet, rows: rows);
+
+    final detailSheet = workbook.worksheets.addWithName('Detail');
+    _writeTitle(detailSheet, 'SECTION $section DETAIL');
+    _writeSummarySection(
+      detailSheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+    );
+    _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+
+    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    _writeTdsSectionInfoSheet(infoSheet);
+  }
+
+  static void _buildPivotReportWorkbook(
+    xlsio.Workbook workbook, {
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
+    final grouped = _groupBySection(rows);
+    final workbookSummarySheet = workbook.worksheets[0];
+    workbookSummarySheet.name = 'Workbook Summary';
+    _writeCompactSummarySheet(
+      workbookSummarySheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      title: 'Workbook Summary',
+    );
+
+    final sectionSummarySheet = workbook.worksheets.addWithName(
+      'Section Summary',
+    );
+    _writeSectionSummarySheet(
+      sectionSummarySheet,
+      grouped: grouped,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+    );
+
+    _writeSectionPivotSheets(workbook, grouped: grouped);
+
+    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
+    _writeExceptionsSheet(exceptionsSheet, rows: rows);
+
+    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    _writeTdsSectionInfoSheet(infoSheet);
+  }
+
+  static void _buildDetailedReportWorkbook(
+    xlsio.Workbook workbook, {
+    required List<ReconciliationRow> rows,
+    required String buyerName,
+    required String buyerPan,
+    required String gstNo,
+  }) {
+    final grouped = _groupBySection(rows);
+    final workbookSummarySheet = workbook.worksheets[0];
+    workbookSummarySheet.name = 'Workbook Summary';
+    _writeCompactSummarySheet(
+      workbookSummarySheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      title: 'Workbook Summary',
+    );
+
+    final sectionSummarySheet = workbook.worksheets.addWithName(
+      'Section Summary',
+    );
+    _writeSectionSummarySheet(
+      sectionSummarySheet,
+      grouped: grouped,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+    );
+
+    _writeSectionPivotSheets(workbook, grouped: grouped);
+
+    final detailSheet = workbook.worksheets.addWithName('Raw Reconciliation');
+    _writeTitle(detailSheet, 'RAW RECONCILIATION');
+    _writeSummarySection(
+      detailSheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+    );
+    _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+
+    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    _writeTdsSectionInfoSheet(infoSheet);
+  }
+
+  static void _writeSectionPivotSheets(
+    xlsio.Workbook workbook, {
+    required Map<String, List<ReconciliationRow>> grouped,
+  }) {
+    final sortedSections = grouped.keys.toList()
+      ..sort(TdsSectionCatalog.compare);
+
+    for (final section in sortedSections) {
+      final cleanSection = section.trim().toUpperCase();
+      if (cleanSection == 'NO SECTION') continue;
+
+      final sectionRows = grouped[section]!;
+      final sheetName = _safeSheetName('$cleanSection Pivot');
+      final sheet = workbook.worksheets.addWithName(sheetName);
+      _writeTimedPivotSummarySheet(
+        sheet,
+        rows: sectionRows,
+        title: '$cleanSection PIVOT',
+      );
+    }
+  }
+
+  static void _writeExceptionsSheet(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+  }) {
+    final exceptionRows = rows.where(_isExceptionRow).toList();
+    _writeTitle(sheet, 'EXCEPTIONS');
+    _writeTimedDetailTable(sheet, rows: exceptionRows, startRow: 3);
+  }
+
+  static bool _isExceptionRow(ReconciliationRow row) {
+    final status = row.status.trim();
+    return status != ReconciliationStatus.matched &&
+        status != ReconciliationStatus.belowThreshold &&
+        status != ReconciliationStatus.noDeductionRequired;
+  }
+
+  static void _writeTimedDetailTable(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    required int startRow,
+  }) {
+    final detailWatch = Stopwatch()..start();
+    _writeDetailTable(sheet, rows: rows, startRow: startRow);
+    detailWatch.stop();
+    _logPerformance(
+      'detail_sheet_writing',
+      detailWatch,
+      details: 'sheet=${sheet.name} rows=${rows.length}',
+    );
+  }
+
+  static void _writeTimedPivotSummarySheet(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    String? title,
+  }) {
+    final pivotWatch = Stopwatch()..start();
+    _writePivotSummarySheet(sheet, rows: rows, title: title);
+    pivotWatch.stop();
+    _logPerformance(
+      'pivot_writing',
+      pivotWatch,
+      details: 'sheet=${sheet.name} rows=${rows.length}',
+    );
+  }
+
+  static String _sectionLabelFromRows(List<ReconciliationRow> rows) {
+    final sections =
+        rows
+            .map((row) => row.section.trim())
+            .where((section) => section.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort(TdsSectionCatalog.compare);
+    if (sections.length == 1) return sections.single;
+    return 'All Sections';
+  }
+
+  static Future<String> _saveWorkbook(
+    xlsio.Workbook workbook, {
+    required String fileName,
+    String? outputFolderPath,
+  }) async {
+    final saveStreamWatch = Stopwatch()..start();
+    final bytes = workbook.saveAsStream();
+    saveStreamWatch.stop();
+    _logPerformance(
+      'saveAsStream',
+      saveStreamWatch,
+      details: 'bytes=${bytes.length}',
+    );
+
+    final folderPath = outputFolderPath ?? _getDownloadsPath();
+    await Directory(folderPath).create(recursive: true);
+    final fullPath = await _resolveAvailableFilePath(folderPath, fileName);
+
+    final file = File(fullPath);
+    final fileWriteWatch = Stopwatch()..start();
+    await file.writeAsBytes(bytes, flush: true);
+    fileWriteWatch.stop();
+    _logPerformance(
+      'file_write',
+      fileWriteWatch,
+      details: 'bytes=${bytes.length} path=$fullPath',
+    );
+
+    return fullPath;
   }
 
   static Map<String, List<ReconciliationRow>> _groupBySection(
@@ -528,9 +743,10 @@ class ExcelExportService {
     required String buyerName,
     required String buyerPan,
     required String gstNo,
+    String title = 'Reconciliation Summary',
   }) {
     sheet.getRangeByName('A1:H1').merge();
-    sheet.getRangeByName('A1').setText('Reconciliation Summary');
+    sheet.getRangeByName('A1').setText(title);
     sheet.getRangeByName('A1').cellStyle.bold = true;
     sheet.getRangeByName('A1').cellStyle.fontSize = 16;
     sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
@@ -758,46 +974,59 @@ class ExcelExportService {
       [
         '194Q',
         'Purchase of Goods',
-        'Exceeding ₹50 Lakhs in FY',
-        '0.1% (5% if no PAN)',
-        'Buyer > ₹10 Cr Turnover',
+        'Exceeding Rs.50 Lakhs in FY',
+        '0.1% on excess over Rs.50 Lakhs',
+        'Buyer',
+      ],
+      [
+        '194A',
+        'Interest other than Securities',
+        'Exceeding Rs.10,000',
+        '10%',
+        'Any payer',
       ],
       [
         '194C',
         'Payment to Contractors',
-        'Single > ₹30k / Annual > ₹1L',
+        'Single > Rs.30k / Annual > Rs.1L',
         '1% (Ind/HUF) / 2% (Other)',
         'Any payer',
       ],
       [
         '194J_A',
         'Technical Services',
-        'Exceeding ₹30,000',
-        '2% / 10%',
+        'Exceeding Rs.50,000',
+        '2%',
         'Any payer',
       ],
       [
         '194J_B',
         'Professional Services',
-        'Exceeding ₹30,000',
-        '2% / 10%',
+        'Exceeding Rs.50,000',
+        '10%',
         'Any payer',
       ],
       [
         '194I_A',
         'Rent (Plant & Machinery)',
-        'Exceeding ₹2.4 Lakhs',
+        'Exceeding Rs.50,000 per month',
         '2%',
         'Any payer',
       ],
       [
         '194I_B',
         'Rent (Land & Building)',
-        'Exceeding ₹2.4 Lakhs',
+        'Exceeding Rs.50,000 per month',
         '10%',
         'Any payer',
       ],
-      ['194H', 'Commission/Brokerage', 'Exceeding ₹15,000', '5%', 'Any payer'],
+      [
+        '194H',
+        'Commission/Brokerage',
+        'Exceeding Rs.20,000',
+        '2%',
+        'Any payer',
+      ],
     ];
 
     sheet.getRangeByName('A1:E1').merge();
@@ -1181,100 +1410,52 @@ class ExcelExportService {
     String? financialYear,
     DateTime? generatedAt,
   }) {
-    final safeBuyerName = _safeFileName(
-      buyerName.trim().isEmpty ? 'Buyer' : buyerName,
+    return buildExportFileName(
+      mode: ExcelExportMode.pivotReport,
+      buyerName: buyerName,
+      financialYear: financialYear,
     );
-    final sellerNameValue = sellerName?.trim() ?? '';
-    final financialYearValue = financialYear?.trim() ?? '';
-    final hasSeller =
-        sellerNameValue.isNotEmpty && sellerNameValue != 'All Sellers';
-    final hasFy =
-        financialYearValue.isNotEmpty && financialYearValue != 'All FY';
-
-    final segments = <String>['Pivot_Report', safeBuyerName];
-    if (hasSeller) {
-      segments.add(_safeFileName(sellerNameValue));
-    }
-    if (hasFy) {
-      segments.add(_financialYearFileSegment(financialYearValue));
-    }
-    segments.add(_timestamp(generatedAt ?? DateTime.now()));
-
-    return '${segments.where((segment) => segment.trim().isNotEmpty).join('_')}.xlsx';
   }
 
-  static String _buildExportFileName({
+  static String buildExportFileName({
+    required ExcelExportMode mode,
     required String buyerName,
-    String? sellerName,
     String? financialYear,
-    required bool isPivot,
+    String? section,
   }) {
-    final safeBuyerName = _safeFileName(
-      buyerName.isEmpty ? 'buyer' : buyerName,
-    );
-    final sellerNameValue = sellerName ?? '';
-    final financialYearValue = financialYear ?? '';
+    final segments = <String>[
+      _safeFileName(buyerName.trim().isEmpty ? 'Buyer' : buyerName),
+    ];
 
-    final hasSeller =
-        sellerNameValue.trim().isNotEmpty &&
-        sellerNameValue.trim() != 'All Sellers';
-
-    final hasFy =
-        financialYearValue.trim().isNotEmpty &&
-        financialYearValue.trim() != 'All FY';
-
-    String fileName;
-
-    if (isPivot) {
-      if (hasSeller && hasFy) {
-        fileName =
-            '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
-      } else if (hasFy) {
-        fileName =
-            '${safeBuyerName}_pivot_${_safeFileName(financialYearValue.trim())}.xlsx';
-      } else if (hasSeller) {
-        fileName =
-            '${safeBuyerName}_pivot_${_safeFileName(sellerNameValue.trim())}.xlsx';
-      } else {
-        fileName = '${safeBuyerName}_pivot_summary.xlsx';
-      }
-    } else {
-      if (hasSeller && hasFy) {
-        fileName =
-            '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}_${_safeFileName(financialYearValue.trim())}.xlsx';
-      } else if (hasFy) {
-        fileName =
-            '${safeBuyerName}_${_safeFileName(financialYearValue.trim())}.xlsx';
-      } else if (hasSeller) {
-        fileName =
-            '${safeBuyerName}_${_safeFileName(sellerNameValue.trim())}.xlsx';
-      } else {
-        fileName = '${safeBuyerName}_reconciliation.xlsx';
-      }
+    switch (mode) {
+      case ExcelExportMode.currentView:
+        segments.add('Current_View');
+      case ExcelExportMode.section:
+        final sectionSegment = section?.trim() ?? '';
+        segments.add(sectionSegment.isEmpty ? 'Section' : sectionSegment);
+      case ExcelExportMode.pivotReport:
+        segments.add('Pivot_Report');
+      case ExcelExportMode.detailedReport:
+        segments.add('Detailed_Report');
     }
 
-    final now = DateTime.now();
-    final timestamp =
-        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final fySegment = _financialYearFileSegment(financialYear ?? '');
+    if (fySegment.isNotEmpty) {
+      segments.add(fySegment);
+    }
 
-    return fileName.replaceAll('.xlsx', '_$timestamp.xlsx');
+    return '${segments.map(_safeFileName).where((segment) => segment.trim().isNotEmpty).join('_')}.xlsx';
   }
 
   static String _financialYearFileSegment(String financialYear) {
+    if (financialYear.trim().isEmpty || financialYear.trim() == 'All FY') {
+      return '';
+    }
     final stripped = financialYear.trim().replaceFirst(
       RegExp(r'^fy\s*', caseSensitive: false),
       '',
     );
     return 'FY_${_safeFileName(stripped)}';
-  }
-
-  static String _timestamp(DateTime value) {
-    return '${value.year.toString().padLeft(4, '0')}'
-        '${value.month.toString().padLeft(2, '0')}'
-        '${value.day.toString().padLeft(2, '0')}_'
-        '${value.hour.toString().padLeft(2, '0')}'
-        '${value.minute.toString().padLeft(2, '0')}'
-        '${value.second.toString().padLeft(2, '0')}';
   }
 
   static Future<String> _resolveAvailableFilePath(
