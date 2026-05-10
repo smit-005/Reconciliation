@@ -48,6 +48,29 @@ void main() {
       },
     );
 
+    test('194A participates in section-aware grouping', () async {
+      final rows = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: 'AINTS1234A',
+        sourceRows: [
+          _sourceRow(section: '194A', amount: 25000),
+          _sourceRow(section: '194C', amount: 50000),
+        ],
+        tdsRows: [
+          _tdsRow(section: '194A', deductedAmount: 25000, tds: 0),
+          _tdsRow(section: '194C', deductedAmount: 50000, tds: 500),
+        ],
+      );
+
+      final bySection = {for (final row in rows.rows) row.section: row};
+
+      expect(bySection.keys, containsAll(<String>['194A', '194C']));
+      expect(bySection['194A']!.purchasePresent, isTrue);
+      expect(bySection['194A']!.tdsPresent, isTrue);
+      expect(bySection['194A']!.tds26QAmount, 25000);
+      expect(bySection['194C']!.tds26QAmount, 50000);
+    });
+
     test(
       'same seller + same FY/month + same section still aggregates',
       () async {

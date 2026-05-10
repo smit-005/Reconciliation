@@ -5,6 +5,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_summary_cards.dart';
@@ -170,15 +171,8 @@ class _SellerFilterRowState {
 }
 
 class _SellerMappingScreenState extends State<SellerMappingScreen> {
-  static const List<String> _sectionTabOrder = <String>[
-    '194Q',
-    '194C',
-    '194H',
-    '194I_A',
-    '194I_B',
-    '194J_A',
-    '194J_B',
-  ];
+  static const List<String> _sectionTabOrder =
+      TdsSectionCatalog.supportedSectionCodes;
   static const int _initialVisibleRowLimit = 100;
   static const int _visibleRowIncrement = 100;
   static const String _separatePrefix = '__SEPARATE__:';

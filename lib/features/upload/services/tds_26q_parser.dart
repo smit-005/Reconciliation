@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 
 class Parsed26QRow {
   final String partyName;
@@ -398,12 +399,10 @@ class Tds26QParser {
 
   static bool _containsRealTdsSection(String value) {
     final v = value.toUpperCase();
-    return v.contains('194Q') ||
-        v.contains('194C') ||
-        v.contains('194J') ||
-        v.contains('194I') ||
-        v.contains('194A') ||
-        v.contains('194H') ||
+    final normalized = TdsSectionCatalog.normalizeCode(value);
+    return TdsSectionCatalog.supportedSectionCodeSet.contains(normalized) ||
+        normalized == '194J' ||
+        normalized == '194I' ||
         v.contains('194D') ||
         v.contains('194B') ||
         v.contains('194IA') ||
@@ -418,17 +417,14 @@ class Tds26QParser {
     if (input.trim().isEmpty) return '';
 
     final upper = input.toUpperCase().replaceAll(' ', '');
+    final normalized = TdsSectionCatalog.normalizeCode(input);
+    if (TdsSectionCatalog.supportedSectionCodeSet.contains(normalized) ||
+        normalized == '194J' ||
+        normalized == '194I') {
+      return normalized;
+    }
 
     final patterns = [
-      '194Q',
-      '194C',
-      '194J_A',
-      '194J_B',
-      '194J',
-      '194I_A',
-      '194I_B',
-      '194I',
-      '194A',
       '194H',
       '194D',
       '194B',
@@ -443,11 +439,6 @@ class Tds26QParser {
     for (final p in patterns) {
       if (upper.contains(p)) return p;
     }
-
-    if (upper.contains('194J(A)') || upper.contains('194J A')) return '194J_A';
-    if (upper.contains('194J(B)') || upper.contains('194J B')) return '194J_B';
-    if (upper.contains('194I(A)') || upper.contains('194I A')) return '194I_A';
-    if (upper.contains('194I(B)') || upper.contains('194I B')) return '194I_B';
 
     final regex = RegExp(r'(19\d{2}[A-Z]{0,2}|20\d{2}[A-Z]{0,2})');
     final match = regex.firstMatch(upper);

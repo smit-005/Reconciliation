@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 import 'package:reconciliation_app/core/widgets/app_page_scaffold.dart';
 import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
@@ -113,15 +114,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     'xlsm',
     'csv',
   ];
-  static const List<String> _availableSections = [
-    '194Q',
-    '194C',
-    '194H',
-    '194I_A',
-    '194I_B',
-    '194J_A',
-    '194J_B',
-  ];
+  static const List<String> _availableSections =
+      TdsSectionCatalog.supportedSectionCodes;
 
   bool isLoadingTds = false;
   Tds26QUploadFile? tdsUploadFile;
@@ -1673,7 +1667,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   }
 
   String _parserLabel(String sectionCode) {
-    return sectionCode == '194Q' ? 'Purchase Parser' : 'Generic Ledger Parser';
+    return TdsSectionCatalog.uploadModeFor(sectionCode) ==
+            TdsSectionUploadMode.purchase
+        ? 'Purchase Parser'
+        : 'Generic Ledger Parser';
   }
 
   Color _mappingStatusColor(UploadMappingStatus status) {

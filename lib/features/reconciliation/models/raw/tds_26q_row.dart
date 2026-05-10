@@ -1,3 +1,4 @@
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/date_utils.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 
@@ -113,11 +114,13 @@ class Tds26QRow {
       return '194J_B';
     }
     if (t.contains('194IB')) return '194IB';
-    if (t.contains('194I')) return '194I';
-    if (t.contains('194Q')) return '194Q';
-    if (t.contains('194C')) return '194C';
-    if (t.contains('194H')) return '194H';
-    if (t.contains('194J')) return '194J';
+
+    final normalized = TdsSectionCatalog.normalizeCode(t);
+    if (TdsSectionCatalog.supportedSectionCodeSet.contains(normalized) ||
+        normalized == '194I' ||
+        normalized == '194J') {
+      return normalized;
+    }
 
     return '';
   }
@@ -143,16 +146,11 @@ class Tds26QRow {
   }
 
   static bool _isKnownSection(String value) {
-    return value == '194Q' ||
-        value == '194C' ||
-        value == '194I_A' ||
-        value == '194I_B' ||
-        value == '194I' ||
-        value == '194H' ||
-        value == '194J_A' ||
-        value == '194J_B' ||
-        value == '194J' ||
-        value == '194IB';
+    final normalized = TdsSectionCatalog.normalizeCode(value);
+    return TdsSectionCatalog.supportedSectionCodeSet.contains(normalized) ||
+        normalized == '194I' ||
+        normalized == '194J' ||
+        value.trim().toUpperCase() == '194IB';
   }
 
   static double _toDouble(dynamic value) {

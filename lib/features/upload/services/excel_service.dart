@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/parse_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
@@ -2842,16 +2843,9 @@ class ExcelService {
 
   static String inferSection(double amount, double tds, {String? sectionHint}) {
     final normalizedHint = normalizeSection(sectionHint ?? '');
-    if (normalizedHint == '194Q' ||
-        normalizedHint == '194C' ||
-        normalizedHint == '194J_A' ||
-        normalizedHint == '194J_B' ||
+    if (TdsSectionCatalog.supportedSectionCodeSet.contains(normalizedHint) ||
         normalizedHint == '194J' ||
-        normalizedHint == '194I_A' ||
-        normalizedHint == '194I_B' ||
-        normalizedHint == '194I' ||
-        normalizedHint == '194A' ||
-        normalizedHint == '194H') {
+        normalizedHint == '194I') {
       return normalizedHint;
     }
 

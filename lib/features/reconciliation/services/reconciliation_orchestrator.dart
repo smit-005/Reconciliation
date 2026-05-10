@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/date_utils.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/parse_utils.dart';
@@ -298,15 +299,8 @@ class CalculationService {
   static const String sellerStatusMismatch = 'Mismatch';
   static const String sellerStatusNo26Q = 'No 26Q';
   static const String sellerStatusOnly26Q = 'Only 26Q';
-  static const List<String> supportedSections = [
-    '194Q',
-    '194C',
-    '194H',
-    '194I_A',
-    '194I_B',
-    '194J_A',
-    '194J_B',
-  ];
+  static const List<String> supportedSections =
+      TdsSectionCatalog.supportedSectionCodes;
   // Phase 3A safe perf patch: keep duplicate leakage diagnostics off by default.
   // Your current stress test uploads the same source file in multiple sections,
   // so duplicate-section fingerprints are expected and should not cost runtime.
@@ -1516,19 +1510,5 @@ class CalculationService {
 }
 
 String sortKeyForSection(String value) {
-  const preferredOrder = [
-    '194Q',
-    '194C',
-    '194H',
-    '194I_A',
-    '194I_B',
-    '194J_A',
-    '194J_B',
-  ];
-  final normalized = value.trim();
-  final index = preferredOrder.indexOf(normalized);
-  if (index == -1) {
-    return 'Z:$normalized';
-  }
-  return 'A:${index.toString().padLeft(2, '0')}:$normalized';
+  return TdsSectionCatalog.sortKey(value);
 }

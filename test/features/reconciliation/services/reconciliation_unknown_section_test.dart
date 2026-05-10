@@ -81,7 +81,7 @@ void main() {
     );
 
     test(
-      'unsupported explicit section stays conservative in final reconciliation',
+      '194A is supported and stays conservative until rules are configured',
       () async {
         final result = await CalculationService.reconcileSectionWise(
           buyerName: 'Test Buyer',
@@ -110,5 +110,21 @@ void main() {
         expect(row.actualTds, 250);
       },
     );
+
+    test('194A is extracted from nature of payment text', () {
+      final row = Tds26QRow.fromMap({
+        'month': 'Apr-2024',
+        'financial_year': '2024-25',
+        'party_name': 'Interest Vendor',
+        'pan_number': 'ABCPA1234F',
+        'amount_paid': 25000,
+        'tds_amount': 250,
+        'section': '',
+        'nature_of_payment': 'Interest payment under section 194A',
+      });
+
+      expect(row.section, '194A');
+      expect(row.normalizedSection, '194A');
+    });
   });
 }

@@ -1,29 +1,9 @@
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 
 void sortSections(List<String> sections) {
-  const preferredOrder = [
-    '194Q',
-    '194C',
-    '194H',
-    '194I_A',
-    '194I_B',
-    '194J_A',
-    '194J_B',
-    'No Section',
-  ];
-
-  sections.sort((a, b) {
-    final aIndex = preferredOrder.indexOf(a);
-    final bIndex = preferredOrder.indexOf(b);
-
-    if (aIndex != -1 && bIndex != -1) {
-      return aIndex.compareTo(bIndex);
-    }
-    if (aIndex != -1) return -1;
-    if (bIndex != -1) return 1;
-    return a.compareTo(b);
-  });
+  sections.sort(TdsSectionCatalog.compare);
 }
 
 String buildSellerDisplayKey(ReconciliationRow row) {

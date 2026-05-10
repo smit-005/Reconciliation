@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
@@ -134,13 +135,7 @@ class ReconciliationScreen extends StatefulWidget {
 class _ReconciliationScreenState extends State<ReconciliationScreen> {
   static const List<String> _sectionTabs = [
     'All',
-    '194Q',
-    '194C',
-    '194H',
-    '194I_A',
-    '194I_B',
-    '194J_A',
-    '194J_B',
+    ...TdsSectionCatalog.supportedSectionCodes,
   ];
 
   List<ReconciliationRow> allRows = [];
