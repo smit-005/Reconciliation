@@ -80,36 +80,33 @@ void main() {
       },
     );
 
-    test(
-      '194A is supported and stays conservative until rules are configured',
-      () async {
-        final result = await CalculationService.reconcileSectionWise(
-          buyerName: 'Test Buyer',
-          buyerPan: 'YYYYY8888Y',
-          sourceRows: const [],
-          tdsRows: [
-            Tds26QRow.fromMap({
-              'month': 'Apr-2024',
-              'financial_year': '2024-25',
-              'party_name': 'Acme Traders',
-              'pan_number': 'ABCPD1234F',
-              'amount_paid': 25000,
-              'tds_amount': 250,
-              'section': '194A',
-            }),
-          ],
-        );
+    test('194A is supported for 26Q-only rows without source amount', () async {
+      final result = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: 'YYYYY8888Y',
+        sourceRows: const [],
+        tdsRows: [
+          Tds26QRow.fromMap({
+            'month': 'Apr-2024',
+            'financial_year': '2024-25',
+            'party_name': 'Acme Traders',
+            'pan_number': 'ABCPD1234F',
+            'amount_paid': 25000,
+            'tds_amount': 250,
+            'section': '194A',
+          }),
+        ],
+      );
 
-        expect(result.rows, hasLength(1));
-        final row = result.rows.single;
-        expect(row.section, '194A');
-        expect(row.status, ReconciliationStatus.onlyIn26Q);
-        expect(row.applicableAmount, 0);
-        expect(row.expectedTds, 0);
-        expect(row.tds26QAmount, 25000);
-        expect(row.actualTds, 250);
-      },
-    );
+      expect(result.rows, hasLength(1));
+      final row = result.rows.single;
+      expect(row.section, '194A');
+      expect(row.status, ReconciliationStatus.onlyIn26Q);
+      expect(row.applicableAmount, 0);
+      expect(row.expectedTds, 0);
+      expect(row.tds26QAmount, 25000);
+      expect(row.actualTds, 250);
+    });
 
     test('194A is extracted from nature of payment text', () {
       final row = Tds26QRow.fromMap({

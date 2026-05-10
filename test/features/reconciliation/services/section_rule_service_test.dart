@@ -73,6 +73,42 @@ void main() {
     });
   });
 
+  group('SectionRuleService 194A FY 2025-26 rule', () {
+    test('below threshold is not applicable', () {
+      final result = SectionRuleService.applyRule(
+        section: '194A',
+        cumulativePurchase: 0,
+        previousCumulative: 0,
+        currentAmount: 8000,
+        sectionCumulative: 8000,
+        previousSectionCumulative: 0,
+        sellerPan: '',
+      );
+
+      expect(result.applicableAmount, 0);
+      expect(result.expectedTds, 0);
+      expect(result.rate, 0);
+      expect(result.manualReviewRequired, isFalse);
+    });
+
+    test('above threshold applies 10 percent others rate', () {
+      final result = SectionRuleService.applyRule(
+        section: '194A',
+        cumulativePurchase: 0,
+        previousCumulative: 0,
+        currentAmount: 12000,
+        sectionCumulative: 12000,
+        previousSectionCumulative: 0,
+        sellerPan: '',
+      );
+
+      expect(result.applicableAmount, 12000);
+      expect(result.rate, 0.10);
+      expect(result.expectedTds, 1200);
+      expect(result.manualReviewRequired, isFalse);
+    });
+  });
+
   group('SectionRuleService 194C config pilot', () {
     test('below both thresholds returns zero amounts', () {
       final result = SectionRuleService.applyRule(

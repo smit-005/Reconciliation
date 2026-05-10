@@ -794,8 +794,12 @@ class CalculationService {
         final sectionKey = normalizedSection.isNotEmpty
             ? normalizedSection
             : entry.section;
+        final thresholdScopeKey = _sectionThresholdScopeKey(
+          sectionKey: sectionKey,
+          month: entry.month,
+        );
         final previousOverall = cumulative194Q;
-        final previousSection = sectionTotals[sectionKey] ?? 0.0;
+        final previousSection = sectionTotals[thresholdScopeKey] ?? 0.0;
         final nextOverall = normalizedSection == '194Q'
             ? round2(previousOverall + entry.amount)
             : previousOverall;
@@ -826,7 +830,7 @@ class CalculationService {
         if (normalizedSection == '194Q') {
           cumulative194Q = nextOverall;
         }
-        sectionTotals[sectionKey] = nextSection;
+        sectionTotals[thresholdScopeKey] = nextSection;
 
         final computation = _PurchaseComputation(
           source: entry,
@@ -1350,6 +1354,16 @@ class CalculationService {
     );
   }
 
+  static String _sectionThresholdScopeKey({
+    required String sectionKey,
+    required String month,
+  }) {
+    if (sectionKey == '194I_A' || sectionKey == '194I_B') {
+      return '$sectionKey|$month';
+    }
+    return sectionKey;
+  }
+
   static int _compareMonthlyBucketKeys(
     _MonthlyBucketKey a,
     _MonthlyBucketKey b,
@@ -1387,6 +1401,13 @@ class CalculationService {
       return '194Q threshold was already crossed before this row; full amount ${round2(amount)} is applicable.';
     }
 
+    if (normalizedSection == '194A') {
+      if (applicableAmount <= 0) {
+        return '194A threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
+      }
+      return 'Applicable under 194A because cumulative section amount ${round2(currentCumulative)} exceeds 10000.';
+    }
+
     if (normalizedSection == '194C') {
       if (applicableAmount <= 0) {
         return '194C threshold not crossed; single payment stayed within 30000 and cumulative remained at ${round2(currentCumulative)}.';
@@ -1401,7 +1422,7 @@ class CalculationService {
       if (applicableAmount <= 0) {
         return '194H threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
       }
-      return 'Applicable under 194H because cumulative section amount ${round2(currentCumulative)} exceeds 15000.';
+      return 'Applicable under 194H because cumulative section amount ${round2(currentCumulative)} exceeds 20000.';
     }
 
     if (normalizedSection == '194J' ||
@@ -1410,19 +1431,19 @@ class CalculationService {
       if (applicableAmount <= 0) {
         return '194J threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
       }
-      if (amount > 30000.0) {
-        return 'Applicable under 194J because payment ${round2(amount)} exceeds 30000.';
+      if (amount > 50000.0) {
+        return 'Applicable under 194J because payment ${round2(amount)} exceeds 50000.';
       }
-      return 'Applicable under 194J because cumulative section amount ${round2(currentCumulative)} exceeds 30000.';
+      return 'Applicable under 194J because cumulative section amount ${round2(currentCumulative)} exceeds 50000.';
     }
 
     if (normalizedSection == '194I' ||
         normalizedSection == '194I_A' ||
         normalizedSection == '194I_B') {
       if (applicableAmount <= 0) {
-        return '194I threshold not crossed; cumulative section amount remained at ${round2(currentCumulative)}.';
+        return '194I threshold not crossed; monthly section amount remained at ${round2(currentCumulative)}.';
       }
-      return 'Applicable under 194I because cumulative section amount ${round2(currentCumulative)} exceeds 240000.';
+      return 'Applicable under 194I because monthly section amount ${round2(currentCumulative)} exceeds 50000.';
     }
 
     if (applicableAmount <= 0) {
@@ -1450,6 +1471,9 @@ class CalculationService {
     }
 
     if (expectedTds == 0 && rate == 0) {
+      if (normalizedSection == '194A' && applicableAmount <= 0) {
+        return 'Expected TDS is zero because the 194A threshold is not crossed.';
+      }
       if (normalizedSection == '194C' && applicableAmount <= 0) {
         return 'Expected TDS is zero because the 194C threshold is not crossed.';
       }

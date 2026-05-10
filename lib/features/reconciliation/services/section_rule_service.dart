@@ -45,6 +45,16 @@ class SectionRuleService {
           sellerPan: sellerPan,
         );
 
+      case '194A':
+        return _applyConfiguredRule(
+          config: SectionRuleRegistry.forSection('194A')!,
+          currentAmount: currentAmount,
+          sectionCumulative: sectionCumulative,
+          cumulativePurchase: cumulativePurchase,
+          previousCumulative: previousCumulative,
+          sellerPan: sellerPan,
+        );
+
       case '194C':
         return _applyConfiguredRule(
           config: SectionRuleRegistry.forSection('194C')!,
@@ -328,6 +338,7 @@ class SectionRuleService {
     if (v.contains('194J_A')) return '194J_A';
     if (v.contains('194J_B')) return '194J_B';
     if (v.contains('194Q')) return '194Q';
+    if (v.contains('194A')) return '194A';
     if (v.contains('194C')) return '194C';
     if (v.contains('194J')) return '194J';
     if (v.contains('194I')) return '194I';

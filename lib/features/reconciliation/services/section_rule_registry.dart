@@ -16,6 +16,19 @@ class SectionRuleRegistry {
           .excessOnlyOnCrossingThenFullAmountAfterThreshold,
       rateConfig: SectionRateConfig.fixed(0.001),
     ),
+    '194A': SectionRuleConfig(
+      section: '194A',
+      thresholds: [
+        SectionThresholdRule(
+          metric: SectionThresholdMetric.sectionCumulative,
+          comparison: SectionComparisonOperator.greaterThan,
+          value: 10000.0,
+        ),
+      ],
+      thresholdMatchMode: SectionThresholdMatchMode.any,
+      applicabilityMode: SectionApplicabilityMode.fullAmountWhenApplicable,
+      rateConfig: SectionRateConfig.fixed(0.10),
+    ),
     '194C': SectionRuleConfig(
       section: '194C',
       thresholds: [

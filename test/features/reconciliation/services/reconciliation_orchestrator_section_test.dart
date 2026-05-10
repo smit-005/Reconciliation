@@ -99,6 +99,29 @@ void main() {
       },
     );
 
+    test('194I threshold scope resets per month', () async {
+      final rows = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: 'RENTM1234A',
+        sourceRows: [
+          _sourceRow(section: '194I_A', amount: 30000, month: 'Apr-2024'),
+          _sourceRow(section: '194I_A', amount: 30000, month: 'May-2024'),
+        ],
+        tdsRows: const [],
+      );
+
+      expect(rows.rows, hasLength(2));
+      expect(rows.rows.every((row) => row.section == '194I_A'), isTrue);
+      expect(rows.rows.every((row) => row.applicableAmount == 0), isTrue);
+      expect(rows.rows.every((row) => row.expectedTds == 0), isTrue);
+      expect(
+        rows.rows.every(
+          (row) => row.status == ReconciliationStatus.belowThreshold,
+        ),
+        isTrue,
+      );
+    });
+
     test(
       'final matching flow does not cross-match different sections',
       () async {
@@ -343,11 +366,12 @@ NormalizedTransactionRow _sourceRow({
   String documentNo = 'BILL-DEFAULT',
   String partyName = 'Acme Traders',
   String panNumber = 'ABCPD1234F',
+  String month = 'Apr-2024',
 }) {
   return NormalizedTransactionRow(
     sourceType: 'purchase',
     transactionDateRaw: '2024-04-15',
-    month: 'Apr-2024',
+    month: month,
     financialYear: '2024-25',
     partyName: partyName,
     panNumber: panNumber,
@@ -358,7 +382,7 @@ NormalizedTransactionRow _sourceRow({
     taxableAmount: amount,
     tdsAmount: 0,
     section: section,
-    normalizedMonth: 'Apr-2024',
+    normalizedMonth: month,
     normalizedSection: section,
   );
 }
