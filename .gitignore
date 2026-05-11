@@ -24,6 +24,8 @@ analysis_output.txt
 test_upload.err.log
 test_upload.out.log
 tmp_*.log
+__pycache__/
+*.pyc
 
 # Flutter test/debug logs
 flutter_*.log
