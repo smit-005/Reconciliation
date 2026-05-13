@@ -20,6 +20,9 @@ typedef ImportColumnMappingOpener =
       required ExcelValidationResult validation,
       ImportSessionCache? sessionCache,
       String? preferredSheetName,
+      int? preferredHeaderRowIndex,
+      bool? preferredHeadersTrusted,
+      Map<String, String>? preferredColumnMapping,
     });
 
 class ImportWorkflowResponse<T> {
@@ -200,6 +203,7 @@ class ImportUploadFlowService {
     ImportSessionCache? sessionCache,
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
+    String? preferredSheetName,
   }) async {
     final preflightError = _preflightUploadFormat(fileName);
     if (preflightError != null) {
@@ -210,6 +214,7 @@ class ImportUploadFlowService {
       final inspectWatch = Stopwatch()..start();
       final purchasePreparation = await _preparePurchaseUploadInBackground(
         bytes: bytes,
+        preferredSheetName: preferredSheetName,
       );
       inspectWatch.stop();
       debugPrint(
@@ -218,10 +223,12 @@ class ImportUploadFlowService {
 
       if (purchasePreparation == null) {
         return ImportWorkflowResponse.failure(
-          _readFailureMessage(
-            fileName: fileName,
-            defaultMessage: 'Could not inspect 194Q source file',
-          ),
+          preferredSheetName == null
+              ? _readFailureMessage(
+                  fileName: fileName,
+                  defaultMessage: 'Could not inspect 194Q source file',
+                )
+              : 'Could not find valid purchase headers or data in "$preferredSheetName". Please choose the sheet that contains purchase rows.',
         );
       }
 
@@ -239,7 +246,7 @@ class ImportUploadFlowService {
         sampleSignature: signature,
       );
 
-      if (matchedProfile != null) {
+      if (matchedProfile != null && !forceColumnMapping) {
         final parseWatch = Stopwatch()..start();
         final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
           bytes: bytes,
@@ -296,17 +303,25 @@ class ImportUploadFlowService {
           validation: ExcelValidationResult.manualReview(
             detectedSheet: validation.detectedSheet ?? inspection.sheetName,
             headerRowIndex:
-                validation.headerRowIndex ?? inspection.headerRowIndex,
+                matchedProfile?.headerRowIndex ??
+                validation.headerRowIndex ??
+                inspection.headerRowIndex,
             detectedType: ExcelImportType.purchase,
-            mappedColumns: initialMappedColumns.isNotEmpty
-                ? initialMappedColumns
-                : validation.mappedColumns,
+            mappedColumns:
+                matchedProfile?.columnMapping ??
+                (initialMappedColumns.isNotEmpty
+                    ? initialMappedColumns
+                    : validation.mappedColumns),
             warnings: validation.warnings,
             confidenceScore: validation.confidenceScore,
             message: validation.message,
             unmappedRawHeaders: validation.unmappedRawHeaders,
           ),
           sessionCache: sessionCache,
+          preferredSheetName: inspection.sheetName,
+          preferredHeaderRowIndex: matchedProfile?.headerRowIndex,
+          preferredHeadersTrusted: matchedProfile?.headersTrusted,
+          preferredColumnMapping: matchedProfile?.columnMapping,
         );
 
         if (columnMappingResult == null) {
@@ -407,6 +422,7 @@ class ImportUploadFlowService {
     ImportSessionCache? sessionCache,
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
+    String? preferredSheetName,
   }) async {
     final preflightError = _preflightUploadFormat(fileName);
     if (preflightError != null) {
@@ -416,13 +432,16 @@ class ImportUploadFlowService {
     try {
       final inspection = await _inspectGenericLedgerFileInBackground(
         bytes: bytes,
+        preferredSheetName: preferredSheetName,
       );
       if (inspection == null) {
         return ImportWorkflowResponse.failure(
-          _readFailureMessage(
-            fileName: fileName,
-            defaultMessage: 'Could not inspect ledger workbook',
-          ),
+          preferredSheetName == null
+              ? _readFailureMessage(
+                  fileName: fileName,
+                  defaultMessage: 'Could not inspect ledger workbook',
+                )
+              : 'Could not find valid ledger headers or data in "$preferredSheetName". Please choose the sheet that contains ledger rows.',
         );
       }
 
@@ -437,7 +456,7 @@ class ImportUploadFlowService {
         sampleSignature: signature,
       );
 
-      if (matchedProfile != null) {
+      if (matchedProfile != null && !forceColumnMapping) {
         final parsedRows =
             await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
               sessionCache?.bytes ?? Uint8List.fromList(bytes),
@@ -471,6 +490,7 @@ class ImportUploadFlowService {
       final validation =
           await ExcelService.validateGenericLedgerFileInBackground(
             sessionCache?.bytes ?? Uint8List.fromList(bytes),
+            preferredSheetName: inspection.sheetName,
           );
       final shouldOpenColumnMapping =
           forceColumnMapping ||
@@ -485,18 +505,27 @@ class ImportUploadFlowService {
           fileName: fileName,
           fileType: ExcelImportType.genericLedger,
           validation: ExcelValidationResult.manualReview(
-            detectedSheet: validation.detectedSheet ?? '',
-            headerRowIndex: validation.headerRowIndex ?? 0,
+            detectedSheet: validation.detectedSheet ?? inspection.sheetName,
+            headerRowIndex:
+                matchedProfile?.headerRowIndex ??
+                validation.headerRowIndex ??
+                inspection.headerRowIndex,
             detectedType: ExcelImportType.genericLedger,
-            mappedColumns: initialMappedColumns.isNotEmpty
-                ? initialMappedColumns
-                : validation.mappedColumns,
+            mappedColumns:
+                matchedProfile?.columnMapping ??
+                (initialMappedColumns.isNotEmpty
+                    ? initialMappedColumns
+                    : validation.mappedColumns),
             warnings: validation.warnings,
             confidenceScore: validation.confidenceScore,
             message: validation.message,
             unmappedRawHeaders: validation.unmappedRawHeaders,
           ),
           sessionCache: sessionCache,
+          preferredSheetName: inspection.sheetName,
+          preferredHeaderRowIndex: matchedProfile?.headerRowIndex,
+          preferredHeadersTrusted: matchedProfile?.headersTrusted,
+          preferredColumnMapping: matchedProfile?.columnMapping,
         );
 
         if (columnMappingResult == null) {
@@ -539,6 +568,7 @@ class ImportUploadFlowService {
         sessionCache?.bytes ?? Uint8List.fromList(bytes),
         defaultSection: sectionCode,
         sourceFileName: fileName,
+        sheetName: inspection.sheetName,
       );
 
       return ImportWorkflowResponse.success(
@@ -566,8 +596,14 @@ class ImportUploadFlowService {
     }
   }
 
-  static Future<ExcelValidationResult> validateTds26QImport(Uint8List bytes) {
-    return ExcelService.validateTds26QFileInBackground(bytes);
+  static Future<ExcelValidationResult> validateTds26QImport(
+    Uint8List bytes, {
+    String? preferredSheetName,
+  }) {
+    return ExcelService.validateTds26QFileInBackground(
+      bytes,
+      preferredSheetName: preferredSheetName,
+    );
   }
 
   static Future<ImportWorkflowResponse<Tds26QImportPreparation>>
@@ -578,6 +614,7 @@ class ImportUploadFlowService {
     required ImportColumnMappingOpener openColumnMapping,
     ImportSessionCache? sessionCache,
     String? preferredSheetName,
+    bool forceColumnMapping = false,
   }) async {
     final preflightError = _preflightUploadFormat(fileName);
     if (preflightError != null) {
@@ -592,10 +629,11 @@ class ImportUploadFlowService {
               preferredSheetName: preferredSheetName,
             );
 
-      if (shouldAutoOpenColumnMapping(
-        validation: effectiveValidation,
-        fileType: ExcelImportType.tds26q,
-      )) {
+      if (forceColumnMapping ||
+          shouldAutoOpenColumnMapping(
+            validation: effectiveValidation,
+            fileType: ExcelImportType.tds26q,
+          )) {
         final selectedValidation = preferredSheetName == null
             ? effectiveValidation
             : ExcelValidationResult.manualReview(
@@ -1041,9 +1079,13 @@ Future<_PurchaseInspectionResult?> _inspectPurchaseFileInBackground({
 
 Future<_PurchaseInspectionResult?> _inspectGenericLedgerFileInBackground({
   required List<int> bytes,
+  String? preferredSheetName,
 }) async {
   final computeWatch = Stopwatch()..start();
-  final payload = await compute(_computeGenericLedgerInspectionPayload, bytes);
+  final payload = await compute(
+    _computeGenericLedgerInspectionPayload,
+    <String, dynamic>{'bytes': bytes, 'preferredSheetName': preferredSheetName},
+  );
   computeWatch.stop();
   if (payload == null) {
     _logUploadFreezePerformance(
@@ -1066,9 +1108,13 @@ Future<_PurchaseInspectionResult?> _inspectGenericLedgerFileInBackground({
 
 Future<_PurchaseUploadPreparation?> _preparePurchaseUploadInBackground({
   required List<int> bytes,
+  String? preferredSheetName,
 }) async {
   final computeWatch = Stopwatch()..start();
-  final payload = await compute(_computePurchaseUploadPayload, bytes);
+  final payload = await compute(
+    _computePurchaseUploadPayload,
+    <String, dynamic>{'bytes': bytes, 'preferredSheetName': preferredSheetName},
+  );
   computeWatch.stop();
   if (payload == null) {
     _logUploadFreezePerformance(
@@ -1144,8 +1190,13 @@ Future<List<Tds26QRow>> _parseTdsRowsWithProfileInBackground({
   return rows;
 }
 
-Map<String, dynamic>? _computePurchaseUploadPayload(List<int> bytes) {
-  final preparation = ExcelService.preparePurchaseUploadData(bytes);
+Map<String, dynamic>? _computePurchaseUploadPayload(
+  Map<String, dynamic> payload,
+) {
+  final preparation = ExcelService.preparePurchaseUploadData(
+    List<int>.from(payload['bytes'] as List),
+    preferredSheetName: payload['preferredSheetName'] as String?,
+  );
   if (preparation == null) {
     return null;
   }
@@ -1184,10 +1235,13 @@ Map<String, dynamic>? _computePurchaseInspectionPayload(
   ));
 }
 
-Map<String, dynamic>? _computeGenericLedgerInspectionPayload(List<int> bytes) {
+Map<String, dynamic>? _computeGenericLedgerInspectionPayload(
+  Map<String, dynamic> payload,
+) {
   final inspection = ExcelService.inspectExcelFile(
-    bytes,
+    List<int>.from(payload['bytes'] as List),
     forcedType: ExcelImportType.genericLedger,
+    preferredSheetName: payload['preferredSheetName'] as String?,
   );
   if (inspection == null) {
     return null;

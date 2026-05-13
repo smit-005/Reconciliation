@@ -230,10 +230,17 @@ class ExcelService {
   }
 
   static Future<ExcelValidationResult> validatePurchaseFileInBackground(
-    Uint8List bytes,
-  ) async {
+    Uint8List bytes, {
+    String? preferredSheetName,
+  }) async {
     final computeWatch = Stopwatch()..start();
-    final payload = await compute(_validatePurchaseFileInIsolate, bytes);
+    final payload = await compute(
+      _validatePurchaseFileInIsolate,
+      <String, dynamic>{
+        'bytes': bytes,
+        'preferredSheetName': preferredSheetName,
+      },
+    );
     computeWatch.stop();
     final result = _deserializeValidationForIsolate(payload);
     _logUploadFreezePerformance(
@@ -267,10 +274,17 @@ class ExcelService {
   }
 
   static Future<ExcelValidationResult> validateGenericLedgerFileInBackground(
-    Uint8List bytes,
-  ) async {
+    Uint8List bytes, {
+    String? preferredSheetName,
+  }) async {
     final computeWatch = Stopwatch()..start();
-    final payload = await compute(_validateGenericLedgerFileInIsolate, bytes);
+    final payload = await compute(
+      _validateGenericLedgerFileInIsolate,
+      <String, dynamic>{
+        'bytes': bytes,
+        'preferredSheetName': preferredSheetName,
+      },
+    );
     computeWatch.stop();
     final result = _deserializeValidationForIsolate(payload);
     _logUploadFreezePerformance(
@@ -295,10 +309,25 @@ class ExcelService {
     return sheets;
   }
 
+  static Future<List<String>> listWorkbookSheetNamesInBackground(
+    Uint8List bytes,
+  ) async {
+    final computeWatch = Stopwatch()..start();
+    final sheets = await compute(_listWorkbookSheetNamesInIsolate, bytes);
+    computeWatch.stop();
+    _logUploadFreezePerformance(
+      'parser_compute_list_workbook_sheets',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} sheets=${sheets.length}',
+    );
+    return sheets;
+  }
+
   static Future<List<NormalizedLedgerRow>> parseGenericLedgerRowsInBackground(
     Uint8List bytes, {
     required String defaultSection,
     String sourceFileName = '',
+    String? sheetName,
   }) async {
     final computeWatch = Stopwatch()..start();
     final payload =
@@ -306,6 +335,7 @@ class ExcelService {
           'bytes': bytes,
           'defaultSection': defaultSection,
           'sourceFileName': sourceFileName,
+          'sheetName': sheetName,
         });
     computeWatch.stop();
     final rows = _deserializeNormalizedLedgerRowsForIsolate(payload);
@@ -1066,6 +1096,7 @@ class ExcelService {
   })?
   preparePurchaseUploadData(
     List<int> bytes, {
+    String? preferredSheetName,
     ImportSessionCache? sessionCache,
   }) {
     final uploadWatch = Stopwatch()..start();
@@ -1078,6 +1109,7 @@ class ExcelService {
     final sheetInfo = _findBestSheetAndHeader(
       decoder,
       forcedType: ExcelImportType.purchase,
+      preferredSheetName: preferredSheetName,
     );
     if (sheetInfo == null) {
       return null;
@@ -1446,12 +1478,14 @@ class ExcelService {
     List<int> bytes, {
     required String defaultSection,
     String sourceFileName = '',
+    String? sheetName,
     ImportSessionCache? sessionCache,
   }) {
     return parseGenericLedgerRowsWithAudit(
       bytes,
       defaultSection: defaultSection,
       sourceFileName: sourceFileName,
+      sheetName: sheetName,
       sessionCache: sessionCache,
     ).rows;
   }
@@ -1563,6 +1597,7 @@ class ExcelService {
 
   static ExcelValidationResult validatePurchaseFile(
     List<int> bytes, {
+    String? preferredSheetName,
     ImportSessionCache? sessionCache,
   }) {
     final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
@@ -1576,6 +1611,7 @@ class ExcelService {
     final sheetInfo = _findBestSheetAndHeader(
       decoder,
       forcedType: ExcelImportType.purchase,
+      preferredSheetName: preferredSheetName,
     );
 
     if (sheetInfo == null) {
@@ -1895,6 +1931,7 @@ class ExcelService {
 
   static ExcelValidationResult validateGenericLedgerFile(
     List<int> bytes, {
+    String? preferredSheetName,
     ImportSessionCache? sessionCache,
   }) {
     final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
@@ -1908,6 +1945,7 @@ class ExcelService {
     final sheetInfo = _findBestSheetAndHeader(
       decoder,
       forcedType: ExcelImportType.genericLedger,
+      preferredSheetName: preferredSheetName,
     );
 
     if (sheetInfo == null) {
@@ -2415,6 +2453,14 @@ class ExcelService {
     final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
     if (decoder.tables.isEmpty) return const [];
     return _list26QSelectableSheetsFromDecoder(decoder);
+  }
+
+  static List<String> listWorkbookSheetNames(
+    List<int> bytes, {
+    ImportSessionCache? sessionCache,
+  }) {
+    final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
+    return decoder.tables.keys.toList();
   }
 
   static List<String> _list26QSelectableSheetsFromDecoder(
@@ -5314,6 +5360,7 @@ Future<List<Map<String, dynamic>>> _parseGenericLedgerRowsInIsolate(
       payload['bytes'] as Uint8List,
       defaultSection: payload['defaultSection'] as String,
       sourceFileName: payload['sourceFileName'] as String? ?? '',
+      sheetName: payload['sheetName'] as String?,
     ),
   );
 }
@@ -5335,10 +5382,13 @@ Future<List<Map<String, dynamic>>> _parseGenericLedgerRowsWithProfileInIsolate(
 }
 
 Future<Map<String, dynamic>> _validatePurchaseFileInIsolate(
-  Uint8List bytes,
+  Map<String, dynamic> payload,
 ) async {
   return ExcelService._serializeValidationForIsolate(
-    ExcelService.validatePurchaseFile(bytes),
+    ExcelService.validatePurchaseFile(
+      payload['bytes'] as Uint8List,
+      preferredSheetName: payload['preferredSheetName'] as String?,
+    ),
   );
 }
 
@@ -5354,13 +5404,20 @@ Future<Map<String, dynamic>> _validateTds26QFileInIsolate(
 }
 
 Future<Map<String, dynamic>> _validateGenericLedgerFileInIsolate(
-  Uint8List bytes,
+  Map<String, dynamic> payload,
 ) async {
   return ExcelService._serializeValidationForIsolate(
-    ExcelService.validateGenericLedgerFile(bytes),
+    ExcelService.validateGenericLedgerFile(
+      payload['bytes'] as Uint8List,
+      preferredSheetName: payload['preferredSheetName'] as String?,
+    ),
   );
 }
 
 Future<List<String>> _list26QSelectableSheetsInIsolate(Uint8List bytes) async {
   return ExcelService.list26QSelectableSheets(bytes);
+}
+
+Future<List<String>> _listWorkbookSheetNamesInIsolate(Uint8List bytes) async {
+  return ExcelService.listWorkbookSheetNames(bytes);
 }

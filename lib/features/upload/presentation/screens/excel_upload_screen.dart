@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -240,21 +241,45 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     required ExcelValidationResult validation,
     ImportSessionCache? sessionCache,
     String? preferredSheetName,
+    int? preferredHeaderRowIndex,
+    bool? preferredHeadersTrusted,
+    Map<String, String>? preferredColumnMapping,
   }) async {
-    final previewData = ExcelService.buildPreviewData(
-      bytes,
-      fileType: fileType,
-      fileName: fileName,
-      initialMappedColumns: validation.mappedColumns,
-      warnings: validation.warnings,
-      confidenceScore: validation.confidenceScore,
-      preferredSheetName: preferredSheetName,
-      sessionCache: sessionCache,
-    );
+    final profileSheetName = preferredSheetName ?? validation.detectedSheet;
+    final previewData =
+        preferredHeaderRowIndex != null &&
+            preferredHeadersTrusted != null &&
+            preferredColumnMapping != null &&
+            profileSheetName != null &&
+            profileSheetName.trim().isNotEmpty
+        ? ExcelService.buildPreviewDataWithProfile(
+            bytes,
+            fileType: fileType,
+            fileName: fileName,
+            sheetName: profileSheetName,
+            headerRowIndex: preferredHeaderRowIndex,
+            headersTrusted: preferredHeadersTrusted,
+            columnMapping: preferredColumnMapping,
+            warnings: validation.warnings,
+            confidenceScore: validation.confidenceScore,
+            sessionCache: sessionCache,
+          )
+        : ExcelService.buildPreviewData(
+            bytes,
+            fileType: fileType,
+            fileName: fileName,
+            initialMappedColumns: validation.mappedColumns,
+            warnings: validation.warnings,
+            confidenceScore: validation.confidenceScore,
+            preferredSheetName: preferredSheetName,
+            sessionCache: sessionCache,
+          );
 
     if (previewData == null) {
       if (!mounted) return null;
-      _showUploadSnackBar('Could not build mapping preview for this file');
+      _showUploadSnackBar(
+        'Could not find valid headers or data in the selected sheet.',
+      );
       return null;
     }
 
@@ -313,7 +338,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     return showColumnMappingScreen(previewData: previewData);
   }
 
-  Future<String?> _show26QSheetSelectionDialog(List<String> sheets) async {
+  Future<String?> _showSheetSelectionDialog({
+    required List<String> sheets,
+    required String title,
+  }) async {
     if (!mounted || sheets.isEmpty) return null;
 
     var selectedSheet = sheets.first;
@@ -324,27 +352,32 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         return StatefulBuilder(
           builder: (context, setLocalState) {
             return AlertDialog(
-              title: const Text('Select 26Q Sheet'),
+              title: Text(title),
               content: SizedBox(
                 width: 420,
-                child: RadioGroup<String>(
-                  groupValue: selectedSheet,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setLocalState(() {
-                      selectedSheet = value;
-                    });
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: sheets
-                        .map(
-                          (sheet) => RadioListTile<String>(
-                            value: sheet,
-                            title: Text(sheet),
-                          ),
-                        )
-                        .toList(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: SingleChildScrollView(
+                    child: RadioGroup<String>(
+                      groupValue: selectedSheet,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setLocalState(() {
+                          selectedSheet = value;
+                        });
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: sheets
+                            .map(
+                              (sheet) => RadioListTile<String>(
+                                value: sheet,
+                                title: Text(sheet),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -363,6 +396,37 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         );
       },
     );
+  }
+
+  Future<({String sheetName, bool hadMultipleSheets})?> _selectWorkbookSheet({
+    required List<int> bytes,
+    required String title,
+  }) async {
+    final sheetNames = await ExcelService.listWorkbookSheetNamesInBackground(
+      bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+    );
+    if (!mounted) return null;
+
+    if (sheetNames.isEmpty) {
+      _showUploadSnackBar('No sheets found in the selected Excel workbook.');
+      return null;
+    }
+
+    if (sheetNames.length == 1) {
+      return (sheetName: sheetNames.first, hadMultipleSheets: false);
+    }
+
+    final selectedSheet = await _showSheetSelectionDialog(
+      sheets: sheetNames,
+      title: title,
+    );
+    if (!mounted) return null;
+
+    if (selectedSheet == null || selectedSheet.trim().isEmpty) {
+      return null;
+    }
+
+    return (sheetName: selectedSheet, hadMultipleSheets: true);
   }
 
   Future<void> _saveProfileFromColumnMappingResult({
@@ -518,6 +582,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     String? existingFileId,
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
+    String? preferredSheetName,
   }) async {
     final parseWatch = Stopwatch()..start();
     debugPrint(
@@ -530,6 +595,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       openColumnMapping: _openImportColumnMapping,
       initialMappedColumns: initialMappedColumns,
       forceColumnMapping: forceColumnMapping,
+      preferredSheetName: preferredSheetName,
     );
     if (!mounted) return null;
 
@@ -600,6 +666,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     String? existingFileId,
     Map<String, String> initialMappedColumns = const {},
     bool forceColumnMapping = false,
+    String? preferredSheetName,
   }) async {
     final parseWatch = Stopwatch()..start();
     debugPrint(
@@ -613,6 +680,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       openColumnMapping: _openImportColumnMapping,
       initialMappedColumns: initialMappedColumns,
       forceColumnMapping: forceColumnMapping,
+      preferredSheetName: preferredSheetName,
     );
     if (!mounted) return null;
 
@@ -758,9 +826,22 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         _showUploadSnackBar('Could not read 194Q source file');
         return;
       }
+
+      final sheetSelection = await _selectWorkbookSheet(
+        bytes: bytes,
+        title: 'Select 194Q Purchase Sheet',
+      );
+      if (!mounted) return;
+      if (sheetSelection == null) {
+        _setSectionLoading('194Q', false);
+        return;
+      }
+
       final uploadFile = await _buildPurchaseUploadFile(
         pickedFile: pickedFile,
         bytes: bytes,
+        preferredSheetName: sheetSelection.sheetName,
+        forceColumnMapping: sheetSelection.hadMultipleSheets,
       );
       if (!mounted) return;
       if (uploadFile == null) {
@@ -813,10 +894,23 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         _showUploadSnackBar('Could not read $sectionCode source file');
         return;
       }
+
+      final sheetSelection = await _selectWorkbookSheet(
+        bytes: bytes,
+        title: 'Select $sectionCode Ledger Sheet',
+      );
+      if (!mounted) return;
+      if (sheetSelection == null) {
+        _setSectionLoading(sectionCode, false);
+        return;
+      }
+
       final uploadFile = await _buildGenericLedgerUploadFile(
         sectionCode: sectionCode,
         pickedFile: pickedFile,
         bytes: bytes,
+        preferredSheetName: sheetSelection.sheetName,
+        forceColumnMapping: sheetSelection.hadMultipleSheets,
       );
       if (!mounted) return;
       if (uploadFile == null) {
@@ -888,41 +982,33 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         'UPLOAD FREEZE PERF => step=tds_file_size file=${pickedFile.name} sizeBytes=${bytes.length}',
       );
 
+      final sheetSelection = await _selectWorkbookSheet(
+        bytes: bytes,
+        title: 'Select 26Q Sheet',
+      );
+      if (!mounted) return;
+      if (sheetSelection == null) {
+        setState(() => isLoadingTds = false);
+        return;
+      }
+
       final validationWatch = Stopwatch()..start();
       final validation = await ImportUploadFlowService.validateTds26QImport(
         bytes,
+        preferredSheetName: sheetSelection.sheetName,
       );
       if (!mounted) return;
       validationWatch.stop();
       debugPrint(
         'UPLOAD FREEZE PERF => step=tds_validation_total ms=${validationWatch.elapsedMilliseconds} valid=${validation.isValid} requiresSelection=${validation.requiresUserSelection}',
       );
-      String? preferredSheetName;
 
-      if (validation.requiresUserSelection) {
-        final sheetSelectionWatch = Stopwatch()..start();
-        setState(() => isLoadingTds = false);
-        final selectableSheets = validation.candidateSheets.isNotEmpty
-            ? validation.candidateSheets
-            : await ExcelService.list26QSelectableSheetsInBackground(bytes);
-        if (!mounted) return;
-        preferredSheetName = await _show26QSheetSelectionDialog(
-          selectableSheets,
-        );
-        if (!mounted) return;
-        sheetSelectionWatch.stop();
-        debugPrint(
-          'UPLOAD FREEZE PERF => step=tds_sheet_selection_dialog ms=${sheetSelectionWatch.elapsedMilliseconds} sheets=${selectableSheets.length} selected=${preferredSheetName != null}',
-        );
-        if (preferredSheetName == null || preferredSheetName.trim().isEmpty) {
-          return;
-        }
-      }
-
-      final shouldOpenColumnMapping = _shouldAutoOpenColumnMapping(
-        validation: validation,
-        fileType: ExcelImportType.tds26q,
-      );
+      final shouldOpenColumnMapping =
+          sheetSelection.hadMultipleSheets ||
+          _shouldAutoOpenColumnMapping(
+            validation: validation,
+            fileType: ExcelImportType.tds26q,
+          );
       if (shouldOpenColumnMapping) {
         setState(() => isLoadingTds = false);
       }
@@ -933,7 +1019,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         fileName: pickedFile.name,
         validation: validation,
         openColumnMapping: _openImportColumnMapping,
-        preferredSheetName: preferredSheetName,
+        preferredSheetName: sheetSelection.sheetName,
+        forceColumnMapping: sheetSelection.hadMultipleSheets,
       );
       if (!mounted) return;
       prepareWatch.stop();
