@@ -472,6 +472,9 @@ class ExcelService {
           (row) => <String, dynamic>{
             'sourceType': row.sourceType,
             'sourceFileName': row.sourceFileName,
+            'sourceLedgerFileId': row.sourceLedgerFileId,
+            'sourceLedgerUploadedAt': row.sourceLedgerUploadedAt
+                ?.toIso8601String(),
             'sectionCode': row.sectionCode,
             'transactionDateRaw': row.transactionDateRaw,
             'month': row.month,
@@ -499,6 +502,10 @@ class ExcelService {
           (row) => NormalizedLedgerRow(
             sourceType: row['sourceType'] as String? ?? '',
             sourceFileName: row['sourceFileName'] as String? ?? '',
+            sourceLedgerFileId: row['sourceLedgerFileId'] as String? ?? '',
+            sourceLedgerUploadedAt: DateTime.tryParse(
+              row['sourceLedgerUploadedAt'] as String? ?? '',
+            ),
             sectionCode: row['sectionCode'] as String? ?? '',
             transactionDateRaw: row['transactionDateRaw'] as String? ?? '',
             month: row['month'] as String? ?? '',

@@ -9,6 +9,9 @@ class ReconciliationRow {
   final String sellerName;
   final String sellerPan;
   final String section;
+  final List<String> sourceLedgerFileIds;
+  final List<String> sourceLedgerFileNames;
+  final List<String> sourceLedgerUploadedAtIso;
   final String resolvedSellerId;
   final String resolvedSellerName;
   final String resolvedPan;
@@ -47,6 +50,9 @@ class ReconciliationRow {
     required this.sellerName,
     required this.sellerPan,
     required this.section,
+    this.sourceLedgerFileIds = const [],
+    this.sourceLedgerFileNames = const [],
+    this.sourceLedgerUploadedAtIso = const [],
     this.resolvedSellerId = '',
     this.resolvedSellerName = '',
     this.resolvedPan = '',
@@ -80,6 +86,9 @@ class ReconciliationRow {
     String? sellerName,
     String? sellerPan,
     String? section,
+    List<String>? sourceLedgerFileIds,
+    List<String>? sourceLedgerFileNames,
+    List<String>? sourceLedgerUploadedAtIso,
     String? resolvedSellerId,
     String? resolvedSellerName,
     String? resolvedPan,
@@ -112,6 +121,11 @@ class ReconciliationRow {
       sellerName: sellerName ?? this.sellerName,
       sellerPan: sellerPan ?? this.sellerPan,
       section: section ?? this.section,
+      sourceLedgerFileIds: sourceLedgerFileIds ?? this.sourceLedgerFileIds,
+      sourceLedgerFileNames:
+          sourceLedgerFileNames ?? this.sourceLedgerFileNames,
+      sourceLedgerUploadedAtIso:
+          sourceLedgerUploadedAtIso ?? this.sourceLedgerUploadedAtIso,
       resolvedSellerId: resolvedSellerId ?? this.resolvedSellerId,
       resolvedSellerName: resolvedSellerName ?? this.resolvedSellerName,
       resolvedPan: resolvedPan ?? this.resolvedPan,
@@ -147,6 +161,9 @@ class ReconciliationRow {
       'Seller Name': sellerName,
       'Seller PAN': sellerPan,
       'Section': section,
+      'Source Ledger File IDs': sourceLedgerFileIds.join(' | '),
+      'Source Ledger Files': sourceLedgerFileNames.join(' | '),
+      'Source Ledger Uploaded At': sourceLedgerUploadedAtIso.join(' | '),
       'Resolved Seller Id': resolvedSellerId,
       'Resolved Seller Name': resolvedSellerName,
       'Resolved PAN': resolvedPan,

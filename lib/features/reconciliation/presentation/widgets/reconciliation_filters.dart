@@ -10,16 +10,20 @@ class ReconciliationFilters extends StatelessWidget {
   final String selectedFinancialYear;
   final String selectedSection;
   final String selectedStatus;
+  final String selectedLedgerSource;
 
   final List<String> sellerOptions;
   final List<String> financialYearOptions;
   final List<String> sectionOptions;
   final List<String> statusOptions;
+  final List<String> ledgerSourceOptions;
+  final String Function(String value) ledgerSourceLabelBuilder;
 
   final ValueChanged<String> onSellerChanged;
   final ValueChanged<String> onFinancialYearChanged;
   final ValueChanged<String> onSectionChanged;
   final ValueChanged<String> onStatusChanged;
+  final ValueChanged<String> onLedgerSourceChanged;
   final bool showSectionFilter;
 
   const ReconciliationFilters({
@@ -28,14 +32,18 @@ class ReconciliationFilters extends StatelessWidget {
     required this.selectedFinancialYear,
     required this.selectedSection,
     required this.selectedStatus,
+    required this.selectedLedgerSource,
     required this.sellerOptions,
     required this.financialYearOptions,
     required this.sectionOptions,
     required this.statusOptions,
+    required this.ledgerSourceOptions,
+    required this.ledgerSourceLabelBuilder,
     required this.onSellerChanged,
     required this.onFinancialYearChanged,
     required this.onSectionChanged,
     required this.onStatusChanged,
+    required this.onLedgerSourceChanged,
     this.showSectionFilter = true,
   });
 
@@ -51,6 +59,7 @@ class ReconciliationFilters extends StatelessWidget {
         final financialYearFieldWidth = isCompact ? normalizedWidth : 200.0;
         final statusFieldWidth = isCompact ? normalizedWidth : 190.0;
         final sectionFieldWidth = isCompact ? normalizedWidth : 190.0;
+        final ledgerFieldWidth = isCompact ? normalizedWidth : 230.0;
 
         return AppFilterBar(
           spacing: AppSpacing.sm,
@@ -86,6 +95,16 @@ class ReconciliationFilters extends StatelessWidget {
                   onChanged: onSectionChanged,
                 ),
               ),
+            _buildField(
+              width: ledgerFieldWidth,
+              child: AppCompactSelectField(
+                value: selectedLedgerSource,
+                options: ledgerSourceOptions,
+                labelText: 'Ledger',
+                valueLabelBuilder: ledgerSourceLabelBuilder,
+                onChanged: onLedgerSourceChanged,
+              ),
+            ),
             _buildField(
               width: statusFieldWidth,
               child: AppCompactSelectField(

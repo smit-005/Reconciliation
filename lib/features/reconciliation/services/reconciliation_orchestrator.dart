@@ -95,6 +95,9 @@ class _PurchaseComputation {
 
 class _ResolvedSourceRow {
   final String sourceType;
+  final String sourceLedgerFileId;
+  final String sourceLedgerFileName;
+  final String sourceLedgerUploadedAtIso;
   final String buyerPan;
   final String originalSellerName;
   final String mappedSellerName;
@@ -110,6 +113,9 @@ class _ResolvedSourceRow {
 
   const _ResolvedSourceRow({
     required this.sourceType,
+    required this.sourceLedgerFileId,
+    required this.sourceLedgerFileName,
+    required this.sourceLedgerUploadedAtIso,
     required this.buyerPan,
     required this.originalSellerName,
     required this.mappedSellerName,
@@ -142,6 +148,9 @@ class _MonthlyPurchaseBucket {
   final Set<String> originalSellerNames = <String>{};
   final Set<String> normalizedSellerNames = <String>{};
   final Set<String> originalPans = <String>{};
+  final Set<String> sourceLedgerFileIds = <String>{};
+  final Set<String> sourceLedgerFileNames = <String>{};
+  final Set<String> sourceLedgerUploadedAtIso = <String>{};
   final Set<String> applicableReasons = <String>{};
   final Set<String> expectedReasons = <String>{};
   final Set<String> identityFlags = <String>{};
@@ -699,6 +708,12 @@ class CalculationService {
 
     return _ResolvedSourceRow(
       sourceType: row.sourceType,
+      sourceLedgerFileId: row.sourceLedgerFileId.trim().isNotEmpty
+          ? row.sourceLedgerFileId.trim()
+          : row.sourceLedgerFileName.trim(),
+      sourceLedgerFileName: row.sourceLedgerFileName.trim(),
+      sourceLedgerUploadedAtIso:
+          row.sourceLedgerUploadedAt?.toIso8601String() ?? '',
       buyerPan: buyerPan,
       originalSellerName: row.partyName,
       mappedSellerName: mappedName,
@@ -759,6 +774,9 @@ class CalculationService {
 
     return _ResolvedSourceRow(
       sourceType: 'tds26q',
+      sourceLedgerFileId: '',
+      sourceLedgerFileName: '',
+      sourceLedgerUploadedAtIso: '',
       buyerPan: buyerPan,
       originalSellerName: row.deducteeName,
       mappedSellerName: mappedName,
@@ -985,6 +1003,15 @@ class CalculationService {
         sellerName: identity.resolvedSellerName,
         sellerPan: identity.resolvedPan,
         section: key.section,
+        sourceLedgerFileIds: _sortedValues(
+          purchase?.sourceLedgerFileIds ?? const <String>{},
+        ),
+        sourceLedgerFileNames: _sortedValues(
+          purchase?.sourceLedgerFileNames ?? const <String>{},
+        ),
+        sourceLedgerUploadedAtIso: _sortedValues(
+          purchase?.sourceLedgerUploadedAtIso ?? const <String>{},
+        ),
         resolvedSellerId: identity.resolvedSellerId,
         resolvedSellerName: identity.resolvedSellerName,
         resolvedPan: identity.resolvedPan,
@@ -1026,6 +1053,15 @@ class CalculationService {
             ...?purchase?.originalPans,
             ...?tds?.originalPans,
           }),
+          sourceLedgerFileIds: _sortedValues(
+            purchase?.sourceLedgerFileIds ?? const <String>{},
+          ),
+          sourceLedgerFileNames: _sortedValues(
+            purchase?.sourceLedgerFileNames ?? const <String>{},
+          ),
+          sourceLedgerUploadedAtIso: _sortedValues(
+            purchase?.sourceLedgerUploadedAtIso ?? const <String>{},
+          ),
           resolvedSellerId: identity.resolvedSellerId,
           resolvedIdentitySource: identity.identitySource,
           section: key.section,
@@ -1091,6 +1127,21 @@ class CalculationService {
     final originalPan = normalizePan(computation.source.originalPan);
     if (originalPan.isNotEmpty) {
       bucket.originalPans.add(originalPan);
+    }
+    if (computation.source.sourceLedgerFileId.trim().isNotEmpty) {
+      bucket.sourceLedgerFileIds.add(
+        computation.source.sourceLedgerFileId.trim(),
+      );
+    }
+    if (computation.source.sourceLedgerFileName.trim().isNotEmpty) {
+      bucket.sourceLedgerFileNames.add(
+        computation.source.sourceLedgerFileName.trim(),
+      );
+    }
+    if (computation.source.sourceLedgerUploadedAtIso.trim().isNotEmpty) {
+      bucket.sourceLedgerUploadedAtIso.add(
+        computation.source.sourceLedgerUploadedAtIso.trim(),
+      );
     }
     if (computation.applicableAmountReason.trim().isNotEmpty) {
       bucket.applicableReasons.add(computation.applicableAmountReason.trim());

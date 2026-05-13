@@ -6,6 +6,7 @@ import 'package:reconciliation_app/features/reconciliation/models/normalized/nor
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/ledger_source_visibility.dart';
 import 'package:reconciliation_app/features/reconciliation/services/reconciliation_orchestrator.dart';
 import 'package:reconciliation_app/features/reconciliation/services/seller_mapping_service.dart';
 
@@ -96,6 +97,61 @@ void main() {
         expect(row.expectedTds, 1000);
         expect(row.actualTds, 1000);
         expect(row.status, ReconciliationStatus.matched);
+      },
+    );
+
+    test(
+      'multi-ledger same-section aggregation keeps source visibility metadata',
+      () async {
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: 'SRCID1234A',
+          sourceRows: [
+            _sourceRow(
+              section: '194C',
+              amount: 40000,
+              documentNo: 'BILL-A',
+              sourceLedgerFileId: 'ledger-a-id',
+              sourceLedgerFileName: 'contractor-april.xlsx',
+            ),
+            _sourceRow(
+              section: '194C',
+              amount: 70000,
+              documentNo: 'BILL-B',
+              sourceLedgerFileId: 'ledger-b-id',
+              sourceLedgerFileName: 'contractor-may.xlsx',
+            ),
+          ],
+          tdsRows: [
+            _tdsRow(section: '194C', deductedAmount: 110000, tds: 1100),
+          ],
+        );
+
+        expect(rows.rows, hasLength(1));
+        final row = rows.rows.single;
+        expect(row.basicAmount, 110000);
+        expect(row.applicableAmount, 110000);
+        expect(
+          row.sourceLedgerFileIds,
+          containsAll(['ledger-a-id', 'ledger-b-id']),
+        );
+        expect(
+          row.sourceLedgerFileNames,
+          containsAll(['contractor-april.xlsx', 'contractor-may.xlsx']),
+        );
+        expect(
+          reconciliationRowMatchesLedgerSource(row, 'ledger-a-id'),
+          isTrue,
+        );
+        expect(
+          reconciliationRowMatchesLedgerSource(row, 'ledger-b-id'),
+          isTrue,
+        );
+        expect(
+          row.basicAmount,
+          110000,
+          reason: 'Ledger source filtering is a visibility layer only.',
+        );
       },
     );
 
@@ -367,9 +423,13 @@ NormalizedTransactionRow _sourceRow({
   String partyName = 'Acme Traders',
   String panNumber = 'ABCPD1234F',
   String month = 'Apr-2024',
+  String sourceLedgerFileId = '',
+  String sourceLedgerFileName = '',
 }) {
   return NormalizedTransactionRow(
     sourceType: 'purchase',
+    sourceLedgerFileId: sourceLedgerFileId,
+    sourceLedgerFileName: sourceLedgerFileName,
     transactionDateRaw: '2024-04-15',
     month: month,
     financialYear: '2024-25',

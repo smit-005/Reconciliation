@@ -17,7 +17,9 @@ import 'package:reconciliation_app/features/reconciliation/models/result/reconci
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/ledger_source_visibility.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/utils/pan_propagation_mapping.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_export_row_scope.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_view_visibility.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_analysis_panel.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_bottom_action_bar.dart';
@@ -150,6 +152,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   List<String> sellerOptions = [];
   List<String> financialYearOptions = ['All FY'];
   List<String> sectionOptions = ['All Sections'];
+  List<String> ledgerSourceOptions = const [allLedgerSourcesFilterValue];
+  Map<String, String> _ledgerSourceLabels = const {
+    allLedgerSourcesFilterValue: 'All Ledgers',
+  };
 
   Map<String, String> manualNameMapping = {};
 
@@ -157,6 +163,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   String selectedFinancialYear = 'All FY';
   String selectedSection = 'All Sections';
   String selectedStatus = 'All Status';
+  String selectedLedgerSource = allLedgerSourcesFilterValue;
   String activeSectionTab = 'All';
   ReconciliationViewMode _viewMode = ReconciliationViewMode.summary;
   _SellerExceptionFilter? _activeSellerExceptionFilter;
@@ -688,6 +695,21 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
               _isSupportedSectionTab(normalizedPrevSection)
           ? normalizedPrevSection
           : 'All Sections';
+      final nextActiveTab = nextSelectedSection == 'All Sections'
+          ? 'All'
+          : nextSelectedSection;
+      final nextLedgerLabels = <String, String>{
+        allLedgerSourcesFilterValue: 'All Ledgers',
+        ...ledgerSourceLabelsForSections(
+          sourceRowsBySection: widget.sourceRowsBySection,
+          activeSection: nextActiveTab,
+        ),
+      };
+      final nextLedgerOptions = nextLedgerLabels.keys.toList();
+      final nextSelectedLedgerSource =
+          nextLedgerOptions.contains(selectedLedgerSource)
+          ? selectedLedgerSource
+          : allLedgerSourcesFilterValue;
 
       final filterWatch = Stopwatch()..start();
       final nextFilteredRows = _filterRows(
@@ -696,6 +718,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         selectedFinancialYearValue: nextSelectedFinancialYear,
         selectedSectionValue: nextSelectedSection,
         selectedStatusValue: nextSelectedStatus,
+        selectedLedgerSourceValue: nextSelectedLedgerSource,
       );
       final nextTableRows = _filterTableRows(
         rows: freshRows,
@@ -703,13 +726,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         selectedFinancialYearValue: nextSelectedFinancialYear,
         selectedSectionValue: nextSelectedSection,
         selectedStatusValue: nextSelectedStatus,
+        selectedLedgerSourceValue: nextSelectedLedgerSource,
       );
       filterWatch.stop();
       _logPerformance(
         'filtering',
         filterWatch,
         details:
-            'summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length} activeTab=${nextSelectedSection == 'All Sections' ? 'All' : nextSelectedSection}',
+            'summaryRows=${nextFilteredRows.length} tableRows=${nextTableRows.length} activeTab=$nextActiveTab',
       );
 
       final metricsWatch = Stopwatch()..start();
@@ -733,7 +757,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       _sectionOptionsCache.clear();
       final exportAvailability = _buildExportAvailabilitySnapshot(
         rows: freshRows,
-        currentFilteredRows: nextFilteredRows,
+        currentViewRows: nextTableRows,
         selectedFinancialYearValue: nextSelectedFinancialYear,
         selectedSectionValue: nextSelectedSection,
       );
@@ -749,14 +773,15 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         sellerOptions = nextSellerOptions;
         financialYearOptions = nextFinancialYearOptions;
         sectionOptions = nextSectionOptions;
+        ledgerSourceOptions = nextLedgerOptions;
+        _ledgerSourceLabels = nextLedgerLabels;
 
         selectedSeller = nextSelectedSeller;
         selectedFinancialYear = nextSelectedFinancialYear;
         selectedSection = nextSelectedSection;
         selectedStatus = nextSelectedStatus;
-        activeSectionTab = nextSelectedSection == 'All Sections'
-            ? 'All'
-            : nextSelectedSection;
+        selectedLedgerSource = nextSelectedLedgerSource;
+        activeSectionTab = nextActiveTab;
         _filteredMetrics = nextFilteredMetrics;
         _applyExportAvailabilitySnapshot(exportAvailability);
       });
@@ -819,6 +844,21 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
             _isSupportedSectionTab(normalizedSelectedSection)
         ? normalizedSelectedSection
         : 'All Sections';
+    final nextActiveTab = nextSelectedSection == 'All Sections'
+        ? 'All'
+        : nextSelectedSection;
+    final nextLedgerLabels = <String, String>{
+      allLedgerSourcesFilterValue: 'All Ledgers',
+      ...ledgerSourceLabelsForSections(
+        sourceRowsBySection: widget.sourceRowsBySection,
+        activeSection: nextActiveTab,
+      ),
+    };
+    final nextLedgerOptions = nextLedgerLabels.keys.toList();
+    final nextSelectedLedgerSource =
+        nextLedgerOptions.contains(selectedLedgerSource)
+        ? selectedLedgerSource
+        : allLedgerSourcesFilterValue;
 
     final nextFilteredRows = _filterRows(
       rows: allRows,
@@ -826,6 +866,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: nextSelectedFinancialYear,
       selectedSectionValue: nextSelectedSection,
       selectedStatusValue: selectedStatus,
+      selectedLedgerSourceValue: nextSelectedLedgerSource,
     );
     final nextTableRows = _filterTableRows(
       rows: allRows,
@@ -833,10 +874,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: nextSelectedFinancialYear,
       selectedSectionValue: nextSelectedSection,
       selectedStatusValue: selectedStatus,
+      selectedLedgerSourceValue: nextSelectedLedgerSource,
     );
-    final nextActiveTab = nextSelectedSection == 'All Sections'
-        ? 'All'
-        : nextSelectedSection;
 
     final metricsWatch = Stopwatch()..start();
     final nextFilteredMetrics = _buildFilteredMetrics(
@@ -853,7 +892,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     final exportAvailability = _buildExportAvailabilitySnapshot(
       rows: allRows,
-      currentFilteredRows: nextFilteredRows,
+      currentViewRows: nextTableRows,
       selectedFinancialYearValue: nextSelectedFinancialYear,
       selectedSectionValue: nextSelectedSection,
     );
@@ -862,9 +901,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       sellerOptions = nextSellerOptions;
       financialYearOptions = nextFinancialYearOptions;
       sectionOptions = nextSectionOptions;
+      ledgerSourceOptions = nextLedgerOptions;
+      _ledgerSourceLabels = nextLedgerLabels;
       selectedSeller = nextSelectedSeller;
       selectedFinancialYear = nextSelectedFinancialYear;
       selectedSection = nextSelectedSection;
+      selectedLedgerSource = nextSelectedLedgerSource;
       activeSectionTab = nextActiveTab;
       filteredRows = nextFilteredRows;
       tableRows = nextTableRows;
@@ -1000,6 +1042,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: selectedFinancialYearValue,
       selectedSectionValue: 'All Sections',
       selectedStatusValue: selectedStatusValue,
+      selectedLedgerSourceValue: allLedgerSourcesFilterValue,
     );
 
     final sections = scopedRows
@@ -1018,6 +1061,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedFinancialYearValue,
     required String selectedSectionValue,
     required String selectedStatusValue,
+    required String selectedLedgerSourceValue,
   }) {
     if (identical(rows, allRows)) {
       final cacheKey = _filterRowsCacheKey(
@@ -1025,6 +1069,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         selectedFinancialYearValue: selectedFinancialYearValue,
         selectedSectionValue: selectedSectionValue,
         selectedStatusValue: selectedStatusValue,
+        selectedLedgerSourceValue: selectedLedgerSourceValue,
       );
       final cachedRows = _filterRowsCache[cacheKey];
       if (cachedRows != null) {
@@ -1037,6 +1082,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         selectedFinancialYearValue: selectedFinancialYearValue,
         selectedSectionValue: selectedSectionValue,
         selectedStatusValue: selectedStatusValue,
+        selectedLedgerSourceValue: selectedLedgerSourceValue,
         preserveVisibleSellerHistory: false,
         sellerExceptionFilter: null,
       );
@@ -1050,6 +1096,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: selectedFinancialYearValue,
       selectedSectionValue: selectedSectionValue,
       selectedStatusValue: selectedStatusValue,
+      selectedLedgerSourceValue: selectedLedgerSourceValue,
       preserveVisibleSellerHistory: false,
       sellerExceptionFilter: null,
     );
@@ -1061,6 +1108,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedFinancialYearValue,
     required String selectedSectionValue,
     required String selectedStatusValue,
+    required String selectedLedgerSourceValue,
   }) {
     return _computeFilteredRows(
       rows: rows,
@@ -1068,6 +1116,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: selectedFinancialYearValue,
       selectedSectionValue: selectedSectionValue,
       selectedStatusValue: selectedStatusValue,
+      selectedLedgerSourceValue: selectedLedgerSourceValue,
       preserveVisibleSellerHistory: true,
       sellerExceptionFilter: _activeSellerExceptionFilter,
     );
@@ -1078,6 +1127,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedFinancialYearValue,
     required String selectedSectionValue,
     required String selectedStatusValue,
+    required String selectedLedgerSourceValue,
   }) {
     return [
       _viewMode.name,
@@ -1085,6 +1135,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue,
       selectedSectionValue,
       selectedStatusValue,
+      selectedLedgerSourceValue,
     ].join('\u0001');
   }
 
@@ -1161,6 +1212,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String selectedFinancialYearValue,
     required String selectedSectionValue,
     required String selectedStatusValue,
+    required String selectedLedgerSourceValue,
     required bool preserveVisibleSellerHistory,
     required _SellerExceptionFilter? sellerExceptionFilter,
   }) {
@@ -1189,6 +1241,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     } else if (selectedSectionValue != 'All Sections') {
       baseRows = baseRows
           .where((row) => row.section.trim() == selectedSectionValue)
+          .toList();
+    }
+
+    if (selectedLedgerSourceValue != allLedgerSourcesFilterValue) {
+      baseRows = baseRows
+          .where(
+            (row) => reconciliationRowMatchesLedgerSource(
+              row,
+              selectedLedgerSourceValue,
+            ),
+          )
           .toList();
     }
 
@@ -1752,16 +1815,11 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     final fy = selectedFinancialYearValue ?? selectedFinancialYear;
     final sourceRows = rows ?? allRows;
-    final exportRows = sourceRows.where((row) {
-      if (row.section.trim() != section) return false;
-      if (fy != 'All FY' && row.financialYear.trim() != fy.trim()) {
-        return false;
-      }
-      return true;
-    }).toList();
-
-    _sortExportRows(exportRows);
-    return exportRows;
+    return ReconciliationExportRowScope.sectionRows(
+      allRows: sourceRows,
+      selectedSection: section,
+      selectedFinancialYear: fy,
+    );
   }
 
   List<ReconciliationRow> _rowsForReportExport({
@@ -1770,38 +1828,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }) {
     final fy = selectedFinancialYearValue ?? selectedFinancialYear;
     final sourceRows = rows ?? allRows;
-    final exportRows = sourceRows.where((row) {
-      if (fy != 'All FY' && row.financialYear.trim() != fy.trim()) {
-        return false;
-      }
-      return true;
-    }).toList();
-
-    _sortExportRows(exportRows);
-    return exportRows;
-  }
-
-  void _sortExportRows(List<ReconciliationRow> rows) {
-    rows.sort((a, b) {
-      final sectionCompare = TdsSectionCatalog.compare(
-        a.section.trim(),
-        b.section.trim(),
-      );
-      if (sectionCompare != 0) return sectionCompare;
-
-      final sellerCompare = _sellerFilterLabel(a)
-          .trim()
-          .toUpperCase()
-          .compareTo(_sellerFilterLabel(b).trim().toUpperCase());
-      if (sellerCompare != 0) return sellerCompare;
-
-      final fyCompare = a.financialYear.trim().compareTo(
-        b.financialYear.trim(),
-      );
-      if (fyCompare != 0) return fyCompare;
-
-      return CalculationService.compareMonthLabels(a.month, b.month);
-    });
+    return ReconciliationExportRowScope.reportRows(
+      allRows: sourceRows,
+      selectedFinancialYear: fy,
+    );
   }
 
   ({
@@ -1814,7 +1844,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   })
   _buildExportAvailabilitySnapshot({
     required List<ReconciliationRow> rows,
-    required List<ReconciliationRow> currentFilteredRows,
+    required List<ReconciliationRow> currentViewRows,
     required String selectedFinancialYearValue,
     required String selectedSectionValue,
   }) {
@@ -1831,14 +1861,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     watch.stop();
     debugPrint(
       'RECON PERF => export availability cache rebuild ms=${watch.elapsedMilliseconds} '
-      'currentRows=${currentFilteredRows.length} sectionRows=${sectionRows.length} reportRows=${reportRows.length}',
+      'currentRows=${currentViewRows.length} sectionRows=${sectionRows.length} reportRows=${reportRows.length}',
     );
 
     return (
-      hasCurrentViewExportRows: currentFilteredRows.isNotEmpty,
+      hasCurrentViewExportRows: currentViewRows.isNotEmpty,
       hasSectionExportRows: sectionRows.isNotEmpty,
       hasReportExportRows: reportRows.isNotEmpty,
-      currentViewExportRowCount: currentFilteredRows.length,
+      currentViewExportRowCount: currentViewRows.length,
       sectionExportRowCount: sectionRows.length,
       reportExportRowCount: reportRows.length,
     );
@@ -1874,7 +1904,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       );
       if (!mounted) return;
       final filePath = await ExcelExportService.exportCurrentViewExcel(
-        rows: filteredRows,
+        rows: ReconciliationExportRowScope.currentViewRows(
+          visibleTableRows: tableRows,
+        ),
         buyerName: widget.buyerName,
         buyerPan: widget.buyerPan,
         gstNo: widget.gstNo,
@@ -2140,10 +2172,13 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYear: selectedFinancialYear,
       selectedSection: selectedSection,
       selectedStatus: selectedStatus,
+      selectedLedgerSource: selectedLedgerSource,
       sellerOptions: sellerOptions,
       financialYearOptions: financialYearOptions,
       sectionOptions: sectionOptions,
       statusOptions: statusOptions,
+      ledgerSourceOptions: ledgerSourceOptions,
+      ledgerSourceLabelBuilder: (value) => _ledgerSourceLabels[value] ?? value,
       showSectionFilter: false,
       onSellerChanged: (value) {
         setState(() => selectedSeller = value);
@@ -2162,6 +2197,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       },
       onStatusChanged: (value) {
         setState(() => selectedStatus = value);
+        _applyFilters();
+      },
+      onLedgerSourceChanged: (value) {
+        setState(() => selectedLedgerSource = value);
         _applyFilters();
       },
     );

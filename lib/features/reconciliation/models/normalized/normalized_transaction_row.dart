@@ -6,6 +6,9 @@ import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_ro
 
 class NormalizedTransactionRow {
   final String sourceType;
+  final String sourceLedgerFileId;
+  final String sourceLedgerFileName;
+  final DateTime? sourceLedgerUploadedAt;
   final String transactionDateRaw;
   final String month;
   final String financialYear;
@@ -25,6 +28,9 @@ class NormalizedTransactionRow {
 
   NormalizedTransactionRow({
     required this.sourceType,
+    this.sourceLedgerFileId = '',
+    this.sourceLedgerFileName = '',
+    this.sourceLedgerUploadedAt,
     required this.transactionDateRaw,
     required this.month,
     required this.financialYear,
@@ -49,6 +55,8 @@ class NormalizedTransactionRow {
   factory NormalizedTransactionRow.fromPurchaseRow(PurchaseRow row) {
     return NormalizedTransactionRow(
       sourceType: 'purchase',
+      sourceLedgerFileId: '',
+      sourceLedgerFileName: '',
       transactionDateRaw: row.date,
       month: row.month,
       financialYear: financialYearFromMonthKey(row.month),
@@ -71,6 +79,8 @@ class NormalizedTransactionRow {
   factory NormalizedTransactionRow.fromTds26QRow(Tds26QRow row) {
     return NormalizedTransactionRow(
       sourceType: 'tds26q',
+      sourceLedgerFileId: '',
+      sourceLedgerFileName: '',
       transactionDateRaw: row.month,
       month: row.month,
       financialYear: row.financialYear,
@@ -95,6 +105,9 @@ class NormalizedTransactionRow {
   ) {
     return NormalizedTransactionRow(
       sourceType: row.sourceType,
+      sourceLedgerFileId: row.sourceLedgerFileId,
+      sourceLedgerFileName: row.sourceFileName,
+      sourceLedgerUploadedAt: row.sourceLedgerUploadedAt,
       transactionDateRaw: row.transactionDateRaw,
       month: row.month,
       financialYear: row.financialYear,
@@ -116,6 +129,9 @@ class NormalizedTransactionRow {
 
   NormalizedTransactionRow copyWith({
     String? sourceType,
+    String? sourceLedgerFileId,
+    String? sourceLedgerFileName,
+    DateTime? sourceLedgerUploadedAt,
     String? transactionDateRaw,
     String? month,
     String? financialYear,
@@ -135,6 +151,10 @@ class NormalizedTransactionRow {
   }) {
     return NormalizedTransactionRow(
       sourceType: sourceType ?? this.sourceType,
+      sourceLedgerFileId: sourceLedgerFileId ?? this.sourceLedgerFileId,
+      sourceLedgerFileName: sourceLedgerFileName ?? this.sourceLedgerFileName,
+      sourceLedgerUploadedAt:
+          sourceLedgerUploadedAt ?? this.sourceLedgerUploadedAt,
       transactionDateRaw: transactionDateRaw ?? this.transactionDateRaw,
       month: month ?? this.month,
       financialYear: financialYear ?? this.financialYear,

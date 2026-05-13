@@ -8,12 +8,11 @@ import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'reconciliation_orchestrator.dart';
+import 'section_rule_export_text.dart';
 
 enum ExcelExportMode { currentView, section, pivotReport, detailedReport }
 
 class ExcelExportService {
-  static const double _thresholdAmount = 5000000;
-
   static void _logPerformance(
     String step,
     Stopwatch watch, {
@@ -318,7 +317,21 @@ class ExcelExportService {
       gstNo: gstNo,
     );
 
-    _writeSectionPivotSheets(workbook, grouped: grouped);
+    final sectionPivotSheetNames = _writeSectionPivotSheets(
+      workbook,
+      grouped: grouped,
+    );
+    _writeLedgerSourcePivotSheets(
+      workbook,
+      grouped: grouped,
+      usedSheetNames: {
+        'Workbook Summary',
+        'Section Summary',
+        ...sectionPivotSheetNames,
+        'Exceptions',
+        'TDS Section Info',
+      },
+    );
 
     final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
     _writeExceptionsSheet(exceptionsSheet, rows: rows);
@@ -359,6 +372,9 @@ class ExcelExportService {
 
     _writeSectionPivotSheets(workbook, grouped: grouped);
 
+    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
+    _writeExceptionsSheet(exceptionsSheet, rows: rows);
+
     final detailSheet = workbook.worksheets.addWithName('Raw Reconciliation');
     _writeTitle(detailSheet, 'RAW RECONCILIATION');
     _writeSummarySection(
@@ -374,10 +390,11 @@ class ExcelExportService {
     _writeTdsSectionInfoSheet(infoSheet);
   }
 
-  static void _writeSectionPivotSheets(
+  static Set<String> _writeSectionPivotSheets(
     xlsio.Workbook workbook, {
     required Map<String, List<ReconciliationRow>> grouped,
   }) {
+    final sheetNames = <String>{};
     final sortedSections = grouped.keys.toList()
       ..sort(TdsSectionCatalog.compare);
 
@@ -387,6 +404,7 @@ class ExcelExportService {
 
       final sectionRows = grouped[section]!;
       final sheetName = _safeSheetName('$cleanSection Pivot');
+      sheetNames.add(sheetName);
       final sheet = workbook.worksheets.addWithName(sheetName);
       _writeTimedPivotSummarySheet(
         sheet,
@@ -394,6 +412,114 @@ class ExcelExportService {
         title: '$cleanSection PIVOT',
       );
     }
+
+    return sheetNames;
+  }
+
+  static void _writeLedgerSourcePivotSheets(
+    xlsio.Workbook workbook, {
+    required Map<String, List<ReconciliationRow>> grouped,
+    required Set<String> usedSheetNames,
+  }) {
+    final sortedSections = grouped.keys.toList()
+      ..sort(TdsSectionCatalog.compare);
+    final usedNames = Set<String>.of(usedSheetNames);
+
+    for (final section in sortedSections) {
+      final cleanSection = section.trim().toUpperCase();
+      if (cleanSection == 'NO SECTION') continue;
+
+      final rowsByLedger = _groupRowsByLedgerSource(grouped[section]!);
+      if (rowsByLedger.isEmpty) continue;
+
+      final ledgerGroups = rowsByLedger.values.toList()
+        ..sort((a, b) {
+          final nameCompare = a.displayName.toUpperCase().compareTo(
+            b.displayName.toUpperCase(),
+          );
+          if (nameCompare != 0) return nameCompare;
+          return a.sourceKey.compareTo(b.sourceKey);
+        });
+
+      for (final ledgerGroup in ledgerGroups) {
+        if (ledgerGroup.rows.isEmpty) continue;
+        final sheetName = _safeUniqueSheetName(
+          '${cleanSection}_${_stripWorkbookExtension(ledgerGroup.displayName)}',
+          usedNames,
+        );
+        usedNames.add(sheetName);
+        final sheet = workbook.worksheets.addWithName(sheetName);
+        _writeTimedPivotSummarySheet(
+          sheet,
+          rows: ledgerGroup.rows,
+          title: '$cleanSection ${ledgerGroup.displayName} PIVOT',
+          showLedgerSourceInSellerHeader: false,
+        );
+      }
+    }
+  }
+
+  static Map<String, _LedgerSourcePivotGroup> _groupRowsByLedgerSource(
+    List<ReconciliationRow> rows,
+  ) {
+    final grouped = <String, _LedgerSourcePivotGroup>{};
+
+    for (final row in rows) {
+      final sources = _ledgerSourcesForRow(row);
+      for (final source in sources) {
+        grouped
+            .putIfAbsent(
+              source.sourceKey,
+              () => _LedgerSourcePivotGroup(
+                sourceKey: source.sourceKey,
+                displayName: source.displayName,
+              ),
+            )
+            .rows
+            .add(row);
+      }
+    }
+
+    return grouped;
+  }
+
+  static List<_LedgerSourceReference> _ledgerSourcesForRow(
+    ReconciliationRow row,
+  ) {
+    final names = row.sourceLedgerFileNames
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    final ids = row.sourceLedgerFileIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+
+    if (names.isEmpty && ids.isEmpty) return const <_LedgerSourceReference>[];
+
+    final sources = <_LedgerSourceReference>[];
+    if (names.isNotEmpty) {
+      for (var i = 0; i < names.length; i++) {
+        final id = i < ids.length ? ids[i] : '';
+        final name = names[i];
+        sources.add(
+          _LedgerSourceReference(
+            sourceKey: id.isNotEmpty ? id : name,
+            displayName: name,
+          ),
+        );
+      }
+    } else {
+      for (final id in ids) {
+        sources.add(_LedgerSourceReference(sourceKey: id, displayName: id));
+      }
+    }
+
+    final unique = <String, _LedgerSourceReference>{};
+    for (final source in sources) {
+      unique[source.sourceKey] = source;
+    }
+    return unique.values.toList();
   }
 
   static void _writeExceptionsSheet(
@@ -431,9 +557,15 @@ class ExcelExportService {
     xlsio.Worksheet sheet, {
     required List<ReconciliationRow> rows,
     String? title,
+    bool showLedgerSourceInSellerHeader = true,
   }) {
     final pivotWatch = Stopwatch()..start();
-    _writePivotSummarySheet(sheet, rows: rows, title: title);
+    _writePivotSummarySheet(
+      sheet,
+      rows: rows,
+      title: title,
+      showLedgerSourceInSellerHeader: showLedgerSourceInSellerHeader,
+    );
     pivotWatch.stop();
     _logPerformance(
       'pivot_writing',
@@ -500,7 +632,7 @@ class ExcelExportService {
   }
 
   static void _writeTitle(xlsio.Worksheet sheet, String title) {
-    sheet.getRangeByName('A1:Q1').merge();
+    sheet.getRangeByName('A1:U1').merge();
     sheet.getRangeByName('A1').setText(title);
     sheet.getRangeByName('A1').cellStyle.bold = true;
     sheet.getRangeByName('A1').cellStyle.fontSize = 16;
@@ -536,6 +668,9 @@ class ExcelExportService {
     final totalAmountDifference = _round2(
       rows.fold(0.0, (sum, row) => sum + row.amountDifference),
     );
+    final ruleText = SectionRuleExportText.summaryTextForSections(
+      rows.map((row) => row.section),
+    );
 
     sheet.getRangeByName('A3').setText('Buyer Name');
     sheet.getRangeByName('B3').setText(buyerName.isEmpty ? '-' : buyerName);
@@ -546,8 +681,8 @@ class ExcelExportService {
     sheet.getRangeByName('G3').setText('GST No');
     sheet.getRangeByName('H3').setText(gstNo.isEmpty ? '-' : gstNo);
 
-    sheet.getRangeByName('A4').setText('Threshold');
-    sheet.getRangeByName('B4').setNumber(_thresholdAmount);
+    sheet.getRangeByName('A4').setText('Rule Text');
+    sheet.getRangeByName('B4').setText(ruleText);
 
     sheet.getRangeByName('D4').setText('Total Basic Amount');
     sheet.getRangeByName('E4').setNumber(totalBasic);
@@ -608,10 +743,14 @@ class ExcelExportService {
       '26Q Amount',
       'Expected TDS',
       'Actual TDS',
+      'TDS Rate Used',
       'TDS Difference',
       'Amount Difference',
       'Status',
       'Risk Level',
+      'Source Ledger File IDs',
+      'Source Ledger Files',
+      'Source Ledger Uploaded At',
       'Remarks',
     ];
 
@@ -651,17 +790,27 @@ class ExcelExportService {
       sheet.getRangeByIndex(rowIndex, 10).setNumber(_round2(row.tds26QAmount));
       sheet.getRangeByIndex(rowIndex, 11).setNumber(_round2(row.expectedTds));
       sheet.getRangeByIndex(rowIndex, 12).setNumber(_round2(row.actualTds));
-      sheet.getRangeByIndex(rowIndex, 13).setNumber(_round2(row.tdsDifference));
+      sheet.getRangeByIndex(rowIndex, 13).setNumber(row.tdsRateUsed);
+      sheet.getRangeByIndex(rowIndex, 14).setNumber(_round2(row.tdsDifference));
       sheet
-          .getRangeByIndex(rowIndex, 14)
+          .getRangeByIndex(rowIndex, 15)
           .setNumber(_round2(row.amountDifference));
-      sheet.getRangeByIndex(rowIndex, 15).setText(row.status);
-      sheet.getRangeByIndex(rowIndex, 16).setText(getRiskLevel(row.status));
+      sheet.getRangeByIndex(rowIndex, 16).setText(row.status);
+      sheet.getRangeByIndex(rowIndex, 17).setText(getRiskLevel(row.status));
       sheet
-          .getRangeByIndex(rowIndex, 17)
+          .getRangeByIndex(rowIndex, 18)
+          .setText(row.sourceLedgerFileIds.join(' | '));
+      sheet
+          .getRangeByIndex(rowIndex, 19)
+          .setText(row.sourceLedgerFileNames.join(' | '));
+      sheet
+          .getRangeByIndex(rowIndex, 20)
+          .setText(row.sourceLedgerUploadedAtIso.join(' | '));
+      sheet
+          .getRangeByIndex(rowIndex, 21)
           .setText(row.remarks.trim().isEmpty ? '-' : row.remarks);
 
-      final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 17);
+      final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 21);
       rowRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
 
       if (row.status == ReconciliationStatus.matched) {
@@ -709,18 +858,19 @@ class ExcelExportService {
     sheet
         .getRangeByIndex(rowIndex, 12)
         .setNumber(_round2(rows.fold(0.0, (sum, row) => sum + row.actualTds)));
+    sheet.getRangeByIndex(rowIndex, 13).setText('');
     sheet
-        .getRangeByIndex(rowIndex, 13)
+        .getRangeByIndex(rowIndex, 14)
         .setNumber(
           _round2(rows.fold(0.0, (sum, row) => sum + row.tdsDifference)),
         );
     sheet
-        .getRangeByIndex(rowIndex, 14)
+        .getRangeByIndex(rowIndex, 15)
         .setNumber(
           _round2(rows.fold(0.0, (sum, row) => sum + row.amountDifference)),
         );
 
-    final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 17);
+    final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 21);
     totalRange.cellStyle.bold = true;
     totalRange.cellStyle.backColor = '#FFF3CD';
     totalRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
@@ -731,10 +881,14 @@ class ExcelExportService {
       10,
       11,
       12,
-      13,
       14,
+      15,
     ]);
-    _autoFitUsefulColumns(sheet, 17);
+    if (rows.isNotEmpty) {
+      sheet.getRangeByIndex(startRow + 1, 13, rowIndex - 1, 13).numberFormat =
+          '0.00%';
+    }
+    _autoFitUsefulColumns(sheet, 21);
   }
 
   static void _writeCompactSummarySheet(
@@ -773,12 +927,15 @@ class ExcelExportService {
     final totalAmountDifference = _round2(
       rows.fold(0.0, (sum, row) => sum + row.amountDifference),
     );
+    final ruleText = SectionRuleExportText.summaryTextForSections(
+      rows.map((row) => row.section),
+    );
 
     final labels = [
       'Buyer Name',
       'Buyer PAN',
       'GST No',
-      'Threshold',
+      'Rule Text',
       'Total Basic Amount',
       'Applicable Amount',
       '26Q Amount',
@@ -799,7 +956,7 @@ class ExcelExportService {
       buyerName.isEmpty ? '-' : buyerName,
       buyerPan.isEmpty ? '-' : buyerPan,
       gstNo.isEmpty ? '-' : gstNo,
-      _thresholdAmount.toStringAsFixed(2),
+      ruleText,
       totalBasic.toStringAsFixed(2),
       totalApplicable.toStringAsFixed(2),
       total26QAmount.toStringAsFixed(2),
@@ -860,7 +1017,7 @@ class ExcelExportService {
     required String buyerPan,
     required String gstNo,
   }) {
-    sheet.getRangeByName('A1:J1').merge();
+    sheet.getRangeByName('A1:K1').merge();
     sheet.getRangeByName('A1').setText('Section-wise Summary');
     sheet.getRangeByName('A1').cellStyle.bold = true;
     sheet.getRangeByName('A1').cellStyle.fontSize = 16;
@@ -883,6 +1040,7 @@ class ExcelExportService {
 
     final headers = [
       'Section',
+      'Rule Text',
       'Rows',
       'Basic Amount',
       'Applicable Amount',
@@ -891,7 +1049,7 @@ class ExcelExportService {
       'Actual TDS',
       'TDS Difference',
       'Amount Difference',
-      'Mismatch Rows',
+      'Non-Matched Rows',
     ];
 
     const startRow = 5;
@@ -912,30 +1070,33 @@ class ExcelExportService {
       final rows = grouped[section]!;
 
       sheet.getRangeByIndex(rowIndex, 1).setText(section);
-      sheet.getRangeByIndex(rowIndex, 2).setNumber(rows.length.toDouble());
       sheet
-          .getRangeByIndex(rowIndex, 3)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.basicAmount)));
+          .getRangeByIndex(rowIndex, 2)
+          .setText(SectionRuleExportText.summaryTextForSections([section]));
+      sheet.getRangeByIndex(rowIndex, 3).setNumber(rows.length.toDouble());
       sheet
           .getRangeByIndex(rowIndex, 4)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.applicableAmount)));
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.basicAmount)));
       sheet
           .getRangeByIndex(rowIndex, 5)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tds26QAmount)));
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.applicableAmount)));
       sheet
           .getRangeByIndex(rowIndex, 6)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.expectedTds)));
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tds26QAmount)));
       sheet
           .getRangeByIndex(rowIndex, 7)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.actualTds)));
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.expectedTds)));
       sheet
           .getRangeByIndex(rowIndex, 8)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tdsDifference)));
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.actualTds)));
       sheet
           .getRangeByIndex(rowIndex, 9)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.amountDifference)));
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tdsDifference)));
       sheet
           .getRangeByIndex(rowIndex, 10)
+          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.amountDifference)));
+      sheet
+          .getRangeByIndex(rowIndex, 11)
           .setNumber(
             rows
                 .where((e) => e.status != ReconciliationStatus.matched)
@@ -943,93 +1104,36 @@ class ExcelExportService {
                 .toDouble(),
           );
 
-      final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
+      final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
       rowRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
 
       rowIndex++;
     }
 
     _applyNumberFormat(sheet, startRow + 1, rowIndex - 1, [
-      3,
       4,
       5,
       6,
       7,
       8,
       9,
+      10,
     ]);
-    _autoFitUsefulColumns(sheet, 10);
+    _autoFitUsefulColumns(sheet, 11);
   }
 
   static void _writeTdsSectionInfoSheet(xlsio.Worksheet sheet) {
     final headers = [
       'Section',
       'Nature of Payment',
-      'Limit / Threshold',
+      'Threshold Rule',
       'Rate of TDS',
+      'Applicability',
       'Who Deducts? (Payer)',
     ];
+    final data = SectionRuleExportText.allRules();
 
-    final data = [
-      [
-        '194Q',
-        'Purchase of Goods',
-        'Exceeding Rs.50 Lakhs in FY',
-        '0.1% on excess over Rs.50 Lakhs',
-        'Buyer',
-      ],
-      [
-        '194A',
-        'Interest other than Securities',
-        'Exceeding Rs.10,000',
-        '10%',
-        'Any payer',
-      ],
-      [
-        '194C',
-        'Payment to Contractors',
-        'Single > Rs.30k / Annual > Rs.1L',
-        '1% (Ind/HUF) / 2% (Other)',
-        'Any payer',
-      ],
-      [
-        '194J_A',
-        'Technical Services',
-        'Exceeding Rs.50,000',
-        '2%',
-        'Any payer',
-      ],
-      [
-        '194J_B',
-        'Professional Services',
-        'Exceeding Rs.50,000',
-        '10%',
-        'Any payer',
-      ],
-      [
-        '194I_A',
-        'Rent (Plant & Machinery)',
-        'Exceeding Rs.50,000 per month',
-        '2%',
-        'Any payer',
-      ],
-      [
-        '194I_B',
-        'Rent (Land & Building)',
-        'Exceeding Rs.50,000 per month',
-        '10%',
-        'Any payer',
-      ],
-      [
-        '194H',
-        'Commission/Brokerage',
-        'Exceeding Rs.20,000',
-        '2%',
-        'Any payer',
-      ],
-    ];
-
-    sheet.getRangeByName('A1:E1').merge();
+    sheet.getRangeByName('A1:F1').merge();
     sheet.getRangeByName('A1').setText('TDS Section Info');
     sheet.getRangeByName('A1').cellStyle.bold = true;
     sheet.getRangeByName('A1').cellStyle.fontSize = 16;
@@ -1046,20 +1150,31 @@ class ExcelExportService {
     }
 
     for (int i = 0; i < data.length; i++) {
-      for (int j = 0; j < data[i].length; j++) {
-        final cell = sheet.getRangeByIndex(i + 4, j + 1);
-        cell.setText(data[i][j]);
+      final info = data[i];
+      final row = i + 4;
+      final values = [
+        info.section,
+        info.natureOfPayment,
+        info.thresholdText,
+        info.rateText,
+        info.applicabilityText,
+        info.deductorText,
+      ];
+      for (int j = 0; j < values.length; j++) {
+        final cell = sheet.getRangeByIndex(row, j + 1);
+        cell.setText(values[j]);
         cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
       }
     }
 
-    _autoFitUsefulColumns(sheet, 5);
+    _autoFitUsefulColumns(sheet, 6);
   }
 
   static void _writePivotSummarySheet(
     xlsio.Worksheet sheet, {
     required List<ReconciliationRow> rows,
     String? title,
+    bool showLedgerSourceInSellerHeader = true,
   }) {
     final sortedRows = List<ReconciliationRow>.from(rows)
       ..sort((a, b) {
@@ -1074,7 +1189,7 @@ class ExcelExportService {
 
     final grouped = _groupRowsForPivot(sortedRows);
 
-    sheet.getRangeByName('A1:J1').merge();
+    sheet.getRangeByName('A1:K1').merge();
     sheet
         .getRangeByName('A1')
         .setText(
@@ -1089,7 +1204,7 @@ class ExcelExportService {
     sheet.getRangeByName('A1').cellStyle.vAlign = xlsio.VAlignType.center;
     sheet.getRangeByName('A1').cellStyle.backColor = '#D9E1F2';
 
-    sheet.getRangeByName('A2:J2').merge();
+    sheet.getRangeByName('A2:K2').merge();
     sheet
         .getRangeByName('A2')
         .setText(
@@ -1113,19 +1228,29 @@ class ExcelExportService {
 
     for (final seller in grouped.keys) {
       final fyMap = grouped[seller]!;
+      final sellerRows = fyMap.values.expand((rows) => rows).toList();
+      final ledgerContext = showLedgerSourceInSellerHeader
+          ? _ledgerSourceContextForRows(sellerRows)
+          : '';
+      final sellerHeader = ledgerContext.isEmpty
+          ? seller.toUpperCase()
+          : '${seller.toUpperCase()}    $ledgerContext';
 
-      sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).merge();
-      sheet.getRangeByIndex(rowIndex, 1).setText(seller.toUpperCase());
+      sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).merge();
+      sheet.getRangeByIndex(rowIndex, 1).setText(sellerHeader);
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 15;
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
           xlsio.HAlignType.left;
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.vAlign =
           xlsio.VAlignType.center;
+      sheet.getRangeByIndex(rowIndex, 1).cellStyle.wrapText = true;
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#E2EFDA';
       sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
           xlsio.LineStyle.thin;
-      sheet.getRangeByIndex(rowIndex, 1).rowHeight = 24;
+      sheet.getRangeByIndex(rowIndex, 1).rowHeight = ledgerContext.isEmpty
+          ? 24
+          : 30;
       rowIndex++;
 
       for (final fy in fyMap.keys) {
@@ -1147,7 +1272,7 @@ class ExcelExportService {
         grandTdsDiff += fyTdsDiff;
         grandAmtDiff += fyAmtDiff;
 
-        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).merge();
+        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).merge();
         sheet.getRangeByIndex(rowIndex, 1).setText('FY $fy');
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
         sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 12;
@@ -1173,16 +1298,17 @@ class ExcelExportService {
               .setNumber(_round2(r.amountDifference));
           sheet.getRangeByIndex(rowIndex, 6).setNumber(_round2(r.expectedTds));
           sheet.getRangeByIndex(rowIndex, 7).setNumber(_round2(r.actualTds));
+          sheet.getRangeByIndex(rowIndex, 8).setNumber(r.tdsRateUsed);
           sheet
-              .getRangeByIndex(rowIndex, 8)
+              .getRangeByIndex(rowIndex, 9)
               .setNumber(_round2(r.tdsDifference));
-          sheet.getRangeByIndex(rowIndex, 9).setText(r.status);
+          sheet.getRangeByIndex(rowIndex, 10).setText(r.status);
           sheet
-              .getRangeByIndex(rowIndex, 10)
+              .getRangeByIndex(rowIndex, 11)
               .setText(r.remarks.trim().isEmpty ? '-' : r.remarks);
 
-          final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
-          sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 20;
+          final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
+          sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).rowHeight = 20;
           if (r.status == ReconciliationStatus.matched) {
             range.cellStyle.backColor = '#E2F0D9';
           } else if (r.status == ReconciliationStatus.shortDeduction) {
@@ -1202,22 +1328,22 @@ class ExcelExportService {
           range.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
           range.cellStyle.vAlign = xlsio.VAlignType.center;
 
-          for (int col = 2; col <= 8; col++) {
+          for (int col = 2; col <= 9; col++) {
             sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
                 xlsio.HAlignType.right;
           }
 
           sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
               xlsio.HAlignType.left;
-          sheet.getRangeByIndex(rowIndex, 9).cellStyle.hAlign =
-              xlsio.HAlignType.center;
           sheet.getRangeByIndex(rowIndex, 10).cellStyle.hAlign =
+              xlsio.HAlignType.center;
+          sheet.getRangeByIndex(rowIndex, 11).cellStyle.hAlign =
               xlsio.HAlignType.left;
 
           if (r.tdsDifference < 0) {
-            sheet.getRangeByIndex(rowIndex, 8).cellStyle.fontColor = '#FF0000';
+            sheet.getRangeByIndex(rowIndex, 9).cellStyle.fontColor = '#FF0000';
           } else if (r.tdsDifference > 0) {
-            sheet.getRangeByIndex(rowIndex, 8).cellStyle.fontColor = '#008000';
+            sheet.getRangeByIndex(rowIndex, 9).cellStyle.fontColor = '#008000';
           }
           if (r.amountDifference < 0) {
             sheet.getRangeByIndex(rowIndex, 5).cellStyle.fontColor = '#FF0000';
@@ -1235,16 +1361,17 @@ class ExcelExportService {
         sheet.getRangeByIndex(rowIndex, 5).setNumber(_round2(fyAmtDiff));
         sheet.getRangeByIndex(rowIndex, 6).setNumber(_round2(fyExpected));
         sheet.getRangeByIndex(rowIndex, 7).setNumber(_round2(fyActual));
-        sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(fyTdsDiff));
+        sheet.getRangeByIndex(rowIndex, 8).setText('');
+        sheet.getRangeByIndex(rowIndex, 9).setNumber(_round2(fyTdsDiff));
 
-        final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
+        final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
         totalRange.cellStyle.bold = true;
         totalRange.cellStyle.fontSize = 11;
         totalRange.cellStyle.backColor = '#FFF2CC';
         totalRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 22;
+        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).rowHeight = 22;
 
-        for (int col = 2; col <= 8; col++) {
+        for (int col = 2; col <= 9; col++) {
           sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
               xlsio.HAlignType.right;
         }
@@ -1260,21 +1387,23 @@ class ExcelExportService {
     sheet.getRangeByIndex(rowIndex, 5).setNumber(_round2(grandAmtDiff));
     sheet.getRangeByIndex(rowIndex, 6).setNumber(_round2(grandExpected));
     sheet.getRangeByIndex(rowIndex, 7).setNumber(_round2(grandActual));
-    sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(grandTdsDiff));
+    sheet.getRangeByIndex(rowIndex, 8).setText('');
+    sheet.getRangeByIndex(rowIndex, 9).setNumber(_round2(grandTdsDiff));
 
-    final grandRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10);
+    final grandRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
     grandRange.cellStyle.bold = true;
     grandRange.cellStyle.fontSize = 12;
     grandRange.cellStyle.backColor = '#FFD966';
     grandRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-    sheet.getRangeByIndex(rowIndex, 1, rowIndex, 10).rowHeight = 24;
+    sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).rowHeight = 24;
 
-    for (int col = 2; col <= 8; col++) {
+    for (int col = 2; col <= 9; col++) {
       sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
           xlsio.HAlignType.right;
     }
 
-    _applyNumberFormat(sheet, 1, rowIndex, [2, 3, 4, 5, 6, 7, 8]);
+    _applyNumberFormat(sheet, 1, rowIndex, [2, 3, 4, 5, 6, 7, 9]);
+    sheet.getRangeByIndex(1, 8, rowIndex, 8).numberFormat = '0.00%';
     _autoFitPivot(sheet);
   }
 
@@ -1292,6 +1421,21 @@ class ExcelExportService {
     return map;
   }
 
+  static String _ledgerSourceContextForRows(List<ReconciliationRow> rows) {
+    final names =
+        rows
+            .expand((row) => row.sourceLedgerFileNames)
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toUpperCase().compareTo(b.toUpperCase()));
+
+    if (names.isEmpty) return '';
+    if (names.length == 1) return 'Ledger: ${names.single}';
+    return '${names.length} ledgers: ${names.join(' | ')}';
+  }
+
   static void _writePivotHeader(xlsio.Worksheet sheet, int row) {
     final headers = [
       'Month',
@@ -1301,6 +1445,7 @@ class ExcelExportService {
       'Amount Diff',
       'Expected TDS',
       'Actual TDS',
+      'TDS Rate Used',
       'TDS Diff',
       'Status',
       'Remarks',
@@ -1328,9 +1473,10 @@ class ExcelExportService {
     sheet.setColumnWidthInPixels(5, 95); // Amt Diff
     sheet.setColumnWidthInPixels(6, 100); // Exp TDS
     sheet.setColumnWidthInPixels(7, 95); // Actual TDS
-    sheet.setColumnWidthInPixels(8, 90); // TDS Diff
-    sheet.setColumnWidthInPixels(9, 130); // Status
-    sheet.setColumnWidthInPixels(10, 280); // Remarks
+    sheet.setColumnWidthInPixels(8, 95); // Rate
+    sheet.setColumnWidthInPixels(9, 90); // TDS Diff
+    sheet.setColumnWidthInPixels(10, 130); // Status
+    sheet.setColumnWidthInPixels(11, 280); // Remarks
   }
 
   static String getRiskLevel(String status) {
@@ -1395,6 +1541,45 @@ class ExcelExportService {
     if (cleaned.isEmpty) return 'Sheet';
     if (cleaned.length <= 31) return cleaned;
     return cleaned.substring(0, 31);
+  }
+
+  static String _safeUniqueSheetName(String value, Set<String> usedNames) {
+    final base = _safeLedgerSheetBase(value);
+    var candidate = base;
+    var counter = 2;
+    while (usedNames.contains(candidate)) {
+      final suffix = '_$counter';
+      final maxBaseLength = 31 - suffix.length;
+      final prefixLength = base.length < maxBaseLength
+          ? base.length
+          : maxBaseLength;
+      candidate = '${base.substring(0, prefixLength)}$suffix';
+      counter += 1;
+    }
+    return candidate;
+  }
+
+  static String _safeLedgerSheetBase(String value) {
+    final cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'[:\\/?*\[\]]'), '_')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+
+    final fallback = cleaned.isEmpty ? 'Ledger' : cleaned;
+    if (fallback.length <= 31) return fallback;
+    return fallback.substring(0, 31);
+  }
+
+  static String _stripWorkbookExtension(String value) {
+    final trimmed = value.trim();
+    final extensionMatch = RegExp(
+      r'\.(xlsx|xlsm|xls|csv|ods)$',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+    if (extensionMatch == null) return trimmed;
+    return trimmed.substring(0, extensionMatch.start);
   }
 
   static String _safeFileName(String value) {
@@ -1498,4 +1683,22 @@ class ExcelExportService {
   static double _round2(double value) {
     return double.parse(value.toStringAsFixed(2));
   }
+}
+
+class _LedgerSourceReference {
+  final String sourceKey;
+  final String displayName;
+
+  const _LedgerSourceReference({
+    required this.sourceKey,
+    required this.displayName,
+  });
+}
+
+class _LedgerSourcePivotGroup {
+  final String sourceKey;
+  final String displayName;
+  final List<ReconciliationRow> rows = <ReconciliationRow>[];
+
+  _LedgerSourcePivotGroup({required this.sourceKey, required this.displayName});
 }

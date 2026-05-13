@@ -204,6 +204,8 @@ class _ReconciliationTableSectionState
                         icon: Icons.insights_rounded,
                         tone: _statusTone(group.finalStatus),
                       ),
+                      if (group.ledgerSourceNames.isNotEmpty)
+                        _ledgerSourceChip(group.ledgerSourceNames),
                       _inlineMeta('PAN', group.sellerPan),
                       _inlineMeta('Rows', group.rowCount.toString()),
                       _inlineMeta(
@@ -296,6 +298,7 @@ class _ReconciliationTableSectionState
 
       final fyKeys = fyGroups.keys.toList()..sort();
       final skippedImpact = _matchSkippedImpact(sellerRows);
+      final ledgerSourceNames = _ledgerSourceNames(sellerRows);
 
       return _SellerGroupViewModel(
         sellerName: displayRow.resolvedSellerName.trim().isEmpty
@@ -317,6 +320,7 @@ class _ReconciliationTableSectionState
           (sum, row) => sum + row.expectedTds,
         ),
         totalActual: sellerRows.fold(0.0, (sum, row) => sum + row.actualTds),
+        ledgerSourceNames: ledgerSourceNames,
         skippedRowImpact: skippedImpact,
         financialYearGroups: fyKeys
             .map(
@@ -612,6 +616,73 @@ class _ReconciliationTableSectionState
     return '-';
   }
 
+  List<String> _ledgerSourceNames(List<ReconciliationRow> rows) {
+    final names =
+        rows
+            .expand((row) => row.sourceLedgerFileNames)
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toUpperCase().compareTo(b.toUpperCase()));
+
+    if (names.isNotEmpty) return names;
+
+    return rows
+        .expand((row) => row.sourceLedgerFileIds)
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toUpperCase().compareTo(b.toUpperCase()));
+  }
+
+  Widget _ledgerSourceChip(List<String> sourceNames) {
+    final label = sourceNames.length == 1
+        ? sourceNames.single
+        : '${sourceNames.length} ledgers';
+    final tooltip = sourceNames.join('\n');
+
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 230, minHeight: 26),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: 5,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: AppColorScheme.info.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.source_rounded,
+              size: 13,
+              color: AppColorScheme.info,
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColorScheme.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _inlineMeta(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -675,6 +746,7 @@ class _SellerGroupViewModel {
   final double total26Q;
   final double totalExpected;
   final double totalActual;
+  final List<String> ledgerSourceNames;
   final SkippedSellerImpact? skippedRowImpact;
   final List<_FinancialYearGroupViewModel> financialYearGroups;
 
@@ -688,6 +760,7 @@ class _SellerGroupViewModel {
     required this.total26Q,
     required this.totalExpected,
     required this.totalActual,
+    required this.ledgerSourceNames,
     this.skippedRowImpact,
     required this.financialYearGroups,
   });

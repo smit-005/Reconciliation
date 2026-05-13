@@ -1,11 +1,11 @@
-# Graph Report - E:\reconciliation_app_codex  (2026-05-11)
+# Graph Report - E:\reconciliation_app_codex  (2026-05-13)
 
 ## Corpus Check
-- 205 files · ~138,280 words
+- 210 files · ~142,518 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1830 nodes · 2245 edges · 89 communities detected
+- 1878 nodes · 2307 edges · 89 communities detected
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 41 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -102,121 +102,121 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `package:flutter/material.dart` - 61 edges
-2. `package:flutter_test/flutter_test.dart` - 24 edges
+2. `package:flutter_test/flutter_test.dart` - 26 edges
 3. `package:reconciliation_app/core/utils/normalize_utils.dart` - 23 edges
 4. `package:reconciliation_app/core/theme/app_color_scheme.dart` - 23 edges
 5. `package:reconciliation_app/core/theme/app_spacing.dart` - 18 edges
-6. `package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart` - 17 edges
-7. `package:reconciliation_app/data/local/db_helper.dart` - 16 edges
-8. `package:sqflite_common_ffi/sqflite_ffi.dart` - 15 edges
-9. `package:reconciliation_app/features/reconciliation/models/seller_mapping.dart` - 15 edges
-10. `generate_rows_for_section()` - 14 edges
+6. `package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart` - 17 edges
+7. `package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart` - 17 edges
+8. `package:reconciliation_app/data/local/db_helper.dart` - 16 edges
+9. `package:sqflite_common_ffi/sqflite_ffi.dart` - 15 edges
+10. `package:reconciliation_app/features/reconciliation/models/seller_mapping.dart` - 15 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `RegisterPlugins()` --calls--> `OnCreate()`  [INFERRED]
   E:\reconciliation_app_codex\windows\flutter\generated_plugin_registrant.cc → E:\reconciliation_app_codex\windows\runner\flutter_window.cpp
-- `ResizeChannel()` --calls--> `GetInstance()`  [INFERRED]
-  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\core_implementations.cc → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\plugin_registrar.cc
-- `SetChannelWarnsOnOverflow()` --calls--> `GetInstance()`  [INFERRED]
-  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\core_implementations.cc → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\plugin_registrar.cc
 - `SetNextFrameCallback()` --calls--> `OnCreate()`  [INFERRED]
   E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\flutter_engine.cc → E:\reconciliation_app_codex\windows\runner\flutter_window.cpp
 - `ForceRedraw()` --calls--> `OnCreate()`  [INFERRED]
   E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\flutter_view_controller.cc → E:\reconciliation_app_codex\windows\runner\flutter_window.cpp
+- `GetInstance()` --calls--> `Create()`  [INFERRED]
+  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\plugin_registrar.cc → E:\reconciliation_app_codex\windows\runner\win32_window.cpp
+- `GetInstance()` --calls--> `Destroy()`  [INFERRED]
+  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\plugin_registrar.cc → E:\reconciliation_app_codex\windows\runner\win32_window.cpp
 
 ## Communities
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (156): buyer_repository.dart, build, MaterialApp, ReconciliationApp, BuyerFinancialYearRepository, BuyerFinancialYearStore, BuyerStore, load (+148 more)
+Nodes (150): extractPanFromGstin, isLegacyUnsupportedSection, looksLikePan, normalizeName, normalizePan, normalizeSection, sectionDisplayLabel, buildSellerDisplayKey (+142 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (124): app_loading.dart, AppRoutes, MaterialPageRoute, AppColorScheme, AppCompactSelectField, build, _displayLabel, Function (+116 more)
+Nodes (100): app_color_scheme.dart, app_loading.dart, app_radius.dart, app_section_card.dart, app_spacing.dart, app_status_badge.dart, app_text_styles.dart, AppRoutes (+92 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
-Nodes (97): app/app.dart, ../../core/utils/normalize_utils.dart, dart:convert, dart:io, app_settings, buyer_financial_years, buyers, _createAppSettingsTable (+89 more)
+Nodes (113): _acceptSuggestedMapping, addDeleted, _addDeletedMappingsTargeting, _allSectionRows, _applyAutoMap, AppSectionSelectorItem, AutoMapDecision, build (+105 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.02
-Nodes (100): dart:async, BatchMappingReviewItem, copyWith, LedgerUploadFile, AlertDialog, AppPageScaffold, AppSectionSelector, AppSectionSelectorItem (+92 more)
+Nodes (104): ImportStagingRepository, staged_26q_rows, copyWith, NormalizedLedgerRow, copyWith, NormalizedTransactionRow, PurchaseRow, applyNameMapping (+96 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.02
-Nodes (103): _acceptSuggestedMapping, addDeleted, _addDeletedMappingsTargeting, _allSectionRows, _applyAutoMap, AppSectionSelectorItem, AutoMapDecision, build (+95 more)
+Nodes (100): AppCompactSelectField, build, _displayLabel, Function, Icon, LayoutBuilder, SizedBox, Align (+92 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.03
-Nodes (81): copyWith, isSellerMappingReviewMarker, normalizeSellerMappingSectionCode, SellerMapping, _normalizeMappingKey, AutoMapDecision, CandidateScore, resolveLedgerSellerTitle (+73 more)
+Cohesion: 0.02
+Nodes (95): _extractSectionFromText, _inferSection, _isKnownSection, Tds26QRow, _toDouble, copyWith, isSellerMappingReviewMarker, normalizeSellerMappingSectionCode (+87 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.02
-Nodes (84): ImportStagingRepository, staged_26q_rows, NormalizedLedgerRow, copyWith, NormalizedTransactionRow, PurchaseRow, applyNameMapping, DateTime (+76 more)
+Nodes (101): dart:async, BatchMappingReviewItem, copyWith, LedgerUploadFile, AlertDialog, AppPageScaffold, AppSectionSelector, AppSectionSelectorItem (+93 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.02
-Nodes (89): addScore, _appendGenericLedgerNarration, _buildPreviewData, _buildPreviewDataWithProfile, buildSampleSignature, _classifyGenericLedgerRow, _columnScoreCacheKey, compute (+81 more)
+Nodes (90): build, Center, Column, _CompletionBanner, Container, Divider, _EmptyReviewState, fromRows (+82 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.03
-Nodes (73): _activeSourceFileCount, _activeSourceRowCount, _allowLoadingFrame, _applicableButNo26QCount, _applicableButNo26QSellerCount, _applyExportAvailabilitySnapshot, _applyFilters, AppSectionSelector (+65 more)
+Cohesion: 0.02
+Nodes (89): addScore, _appendGenericLedgerNarration, _buildPreviewData, _buildPreviewDataWithProfile, buildSampleSignature, _classifyGenericLedgerRow, _columnScoreCacheKey, compute (+81 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.03
-Nodes (61): app_section_card.dart, app_status_badge.dart, AppCompactMetricCard, build, Container, SizedBox, AppEmptyState, build (+53 more)
+Cohesion: 0.02
+Nodes (86): build, MaterialApp, ReconciliationApp, addFinancialYear, AlertDialog, AppEmptyState, AppSectionCard, build (+78 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.03
-Nodes (63): copyWith, ReconciliationRow, build, _buildComputedDifference, _buildExplanation, _buildIdentityImpact, Function, _reasonCategory (+55 more)
+Nodes (70): app/app.dart, buyer_repository.dart, ../../core/utils/normalize_utils.dart, dart:convert, dart:io, app_settings, buyer_financial_years, buyers (+62 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.03
-Nodes (68): _ActionColumnLayout, addCandidate, addMapped, build, _buildActionColumn, _buildAllSellerLedgerList, _buildEmptyState, _buildLedgerCandidateList (+60 more)
+Nodes (74): _ActionButtonSlot, AppStickyActionBar, build, Column, DecoratedBox, ReconciliationBottomActionBar, SizedBox, Text (+66 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.03
-Nodes (65): build, _buildPaginationControls, _buildSkippedImpactStrip, _buildTable, Column, Container, DecoratedBox, didUpdateWidget (+57 more)
+Cohesion: 0.05
+Nodes (34): flutter(), ResizeChannel(), Send(), SendResponseData(), SetChannelWarnsOnOverflow(), SetMessageHandler(), flutter(), flutter() (+26 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.03
-Nodes (54): extractPanFromGstin, isLegacyUnsupportedSection, looksLikePan, normalizeName, normalizePan, normalizeSection, sectionDisplayLabel, buildSellerDisplayKey (+46 more)
-
-### Community 14 - "Community 14"
-Cohesion: 0.05
-Nodes (38): FlutterEngine(), RelinquishEngine(), ReloadSystemFonts(), SetNextFrameCallback(), ShutDown(), FlutterViewController(), ForceRedraw(), HandleTopLevelWindowProc() (+30 more)
-
-### Community 15 - "Community 15"
 Cohesion: 0.04
 Nodes (48): dart:typed_data, build, _chip, Container, FileInfoCard, SizedBox, build, Container (+40 more)
 
-### Community 16 - "Community 16"
+### Community 14 - "Community 14"
 Cohesion: 0.06
-Nodes (30): flutter(), ResizeChannel(), Send(), SendResponseData(), SetChannelWarnsOnOverflow(), SetMessageHandler(), flutter(), flutter() (+22 more)
+Nodes (34): FlutterEngine(), RelinquishEngine(), ReloadSystemFonts(), SetNextFrameCallback(), ShutDown(), FlutterViewController(), ForceRedraw(), HandleTopLevelWindowProc() (+26 more)
+
+### Community 15 - "Community 15"
+Cohesion: 0.04
+Nodes (46): build, _buildPaginationControls, _buildSkippedImpactStrip, _buildTable, Column, Container, DecoratedBox, didUpdateWidget (+38 more)
+
+### Community 16 - "Community 16"
+Cohesion: 0.04
+Nodes (42): applyBelowThresholdClassification, buildBaseStatus, buildComputedAmounts, buildRemarks, buildRow, buildStatusAndRemarks, chooseSellerName, chooseSellerPan (+34 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.04
-Nodes (42): dart:math, _autoMapBestGuess, BoxDecoration, build, _buildFieldCard, _buildFieldsPanel, _buildFileInfoCard, _buildInfoChip (+34 more)
+Nodes (44): _applyNumberFormat, _autoFitPivot, _autoFitUsefulColumns, _buildCurrentViewWorkbook, _buildDetailedReportWorkbook, buildExportFileName, buildPivotReportFileName, _buildPivotReportWorkbook (+36 more)
 
 ### Community 18 - "Community 18"
+Cohesion: 0.04
+Nodes (42): dart:math, _autoMapBestGuess, BoxDecoration, build, _buildFieldCard, _buildFieldsPanel, _buildFileInfoCard, _buildInfoChip (+34 more)
+
+### Community 19 - "Community 19"
 Cohesion: 0.11
 Nodes (36): join, manualReview, ReconciliationRemarkTemplates, allocate_counts(), amount_for(), bill_amount_for(), build_ledger_row(), build_tds_row() (+28 more)
 
-### Community 19 - "Community 19"
-Cohesion: 0.06
-Nodes (32): applyBelowThresholdClassification, buildBaseStatus, buildComputedAmounts, buildRemarks, buildRow, buildStatusAndRemarks, chooseSellerName, chooseSellerPan (+24 more)
-
 ### Community 20 - "Community 20"
-Cohesion: 0.06
-Nodes (32): build, Center, Column, _CompletionBanner, Container, Divider, _EmptyReviewState, fromRows (+24 more)
-
-### Community 21 - "Community 21"
 Cohesion: 0.07
 Nodes (29): Architecture Rules, Candidate Rules, Centralized UI, Core Architecture, Core Workflow Rules, Data Handling, Demo Philosophy, Exception Handling (+21 more)
 
+### Community 21 - "Community 21"
+Cohesion: 0.1
+Nodes (19): build, Container, ReconciliationAnalyticsPanel, SizedBox, Text, build, _buildApplicableNo26QSummary, _buildFooterNote (+11 more)
+
 ### Community 22 - "Community 22"
-Cohesion: 0.15
-Nodes (11): app_color_scheme.dart, app_radius.dart, app_spacing.dart, app_text_styles.dart, AppTextStyles, AppTheme, ButtonStyle, _filledButtonStyle (+3 more)
+Cohesion: 0.14
+Nodes (13): addAll, autoMapParties, AutoMappingBatchResult, AutoMappingResult, AutoMappingService, _buildProfile, _levenshteinDistance, _levenshteinSimilarity (+5 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.17
@@ -483,7 +483,7 @@ Cohesion: 1.0
 Nodes (0): 
 
 ## Knowledge Gaps
-- **1372 isolated node(s):** `MainActivity`, `main`, `app/app.dart`, `ReconciliationApp`, `build` (+1367 more)
+- **1412 isolated node(s):** `MainActivity`, `main`, `app/app.dart`, `ReconciliationApp`, `build` (+1407 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 37`** (2 nodes): `MainActivity.kt`, `MainActivity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -593,14 +593,14 @@ Nodes (0):
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `package:flutter/material.dart` connect `Community 1` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 15`, `Community 17`, `Community 20`, `Community 22`?**
-  _High betweenness centrality (0.282) - this node is a cross-community bridge._
-- **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 5` to `Community 3`, `Community 4`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 12`, `Community 13`, `Community 18`, `Community 19`?**
-  _High betweenness centrality (0.127) - this node is a cross-community bridge._
-- **Why does `package:reconciliation_app/core/config/tds_section_catalog.dart` connect `Community 13` to `Community 3`, `Community 4`, `Community 6`, `Community 7`, `Community 8`, `Community 15`?**
-  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+- **Why does `package:flutter/material.dart` connect `Community 1` to `Community 0`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 9`, `Community 10`, `Community 11`, `Community 13`, `Community 15`, `Community 18`, `Community 21`?**
+  _High betweenness centrality (0.248) - this node is a cross-community bridge._
+- **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 5` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 6`, `Community 8`, `Community 11`, `Community 15`, `Community 16`, `Community 19`?**
+  _High betweenness centrality (0.096) - this node is a cross-community bridge._
+- **Why does `package:reconciliation_app/core/config/tds_section_catalog.dart` connect `Community 0` to `Community 2`, `Community 3`, `Community 5`, `Community 6`, `Community 8`, `Community 13`, `Community 16`, `Community 17`?**
+  _High betweenness centrality (0.075) - this node is a cross-community bridge._
 - **What connects `MainActivity`, `main`, `app/app.dart` to the rest of the system?**
-  _1372 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1412 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.01 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**

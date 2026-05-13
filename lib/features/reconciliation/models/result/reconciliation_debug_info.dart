@@ -2,6 +2,9 @@ class ReconciliationDebugInfo {
   final List<String> originalSellerNames;
   final List<String> normalizedSellerNames;
   final List<String> originalPans;
+  final List<String> sourceLedgerFileIds;
+  final List<String> sourceLedgerFileNames;
+  final List<String> sourceLedgerUploadedAtIso;
   final String resolvedSellerId;
   final String resolvedIdentitySource;
   final String section;
@@ -22,6 +25,9 @@ class ReconciliationDebugInfo {
     this.originalSellerNames = const [],
     this.normalizedSellerNames = const [],
     this.originalPans = const [],
+    this.sourceLedgerFileIds = const [],
+    this.sourceLedgerFileNames = const [],
+    this.sourceLedgerUploadedAtIso = const [],
     this.resolvedSellerId = '',
     this.resolvedIdentitySource = '',
     this.section = '',
@@ -43,6 +49,9 @@ class ReconciliationDebugInfo {
     List<String>? originalSellerNames,
     List<String>? normalizedSellerNames,
     List<String>? originalPans,
+    List<String>? sourceLedgerFileIds,
+    List<String>? sourceLedgerFileNames,
+    List<String>? sourceLedgerUploadedAtIso,
     String? resolvedSellerId,
     String? resolvedIdentitySource,
     String? section,
@@ -64,6 +73,11 @@ class ReconciliationDebugInfo {
       normalizedSellerNames:
           normalizedSellerNames ?? this.normalizedSellerNames,
       originalPans: originalPans ?? this.originalPans,
+      sourceLedgerFileIds: sourceLedgerFileIds ?? this.sourceLedgerFileIds,
+      sourceLedgerFileNames:
+          sourceLedgerFileNames ?? this.sourceLedgerFileNames,
+      sourceLedgerUploadedAtIso:
+          sourceLedgerUploadedAtIso ?? this.sourceLedgerUploadedAtIso,
       resolvedSellerId: resolvedSellerId ?? this.resolvedSellerId,
       resolvedIdentitySource:
           resolvedIdentitySource ?? this.resolvedIdentitySource,
@@ -91,6 +105,9 @@ class ReconciliationDebugInfo {
       'Debug Original Seller Names': originalSellerNames.join(' | '),
       'Debug Normalized Seller Names': normalizedSellerNames.join(' | '),
       'Debug Original PANs': originalPans.join(' | '),
+      'Debug Source Ledger IDs': sourceLedgerFileIds.join(' | '),
+      'Debug Source Ledger Files': sourceLedgerFileNames.join(' | '),
+      'Debug Source Upload Timestamps': sourceLedgerUploadedAtIso.join(' | '),
       'Debug Resolved Seller Id': resolvedSellerId,
       'Debug Identity Source': resolvedIdentitySource,
       'Debug FY': financialYear,

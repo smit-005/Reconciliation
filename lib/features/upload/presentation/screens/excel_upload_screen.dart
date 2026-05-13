@@ -553,14 +553,17 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       if (!mounted) return null;
     }
 
+    final uploadedAt = DateTime.now();
     final fileId =
         existingFileId ??
-        '194Q_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}';
+        '194Q_${uploadedAt.microsecondsSinceEpoch}_${pickedFile.name}';
     final normalizedRows = result.parsedRows
         .map(
           (row) => NormalizedLedgerRow.fromPurchaseRow(
             row,
             sourceFileName: pickedFile.name,
+            sourceLedgerFileId: fileId,
+            sourceLedgerUploadedAt: uploadedAt,
           ),
         )
         .toList();
@@ -578,7 +581,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       fileName: pickedFile.name,
       bytes: bytes,
       rowCount: result.parsedRows.length,
-      uploadedAt: DateTime.now(),
+      uploadedAt: uploadedAt,
       parserType: 'purchase',
       rows: normalizedRows,
       mappingStatus: result.mappingStatus,
@@ -631,17 +634,29 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       'mappingStatus=${result.mappingStatus}',
     );
 
+    final uploadedAt = DateTime.now();
+    final fileId =
+        existingFileId ??
+        '${sectionCode}_${uploadedAt.microsecondsSinceEpoch}_${pickedFile.name}';
+    final rowsWithSource = result.parsedRows
+        .map(
+          (row) => row.copyWith(
+            sourceFileName: pickedFile.name,
+            sourceLedgerFileId: fileId,
+            sourceLedgerUploadedAt: uploadedAt,
+          ),
+        )
+        .toList();
+
     return LedgerUploadFile(
-      id:
-          existingFileId ??
-          '${sectionCode}_${DateTime.now().microsecondsSinceEpoch}_${pickedFile.name}',
+      id: fileId,
       sectionCode: sectionCode,
       fileName: pickedFile.name,
       bytes: bytes,
       rowCount: result.parsedRows.length,
-      uploadedAt: DateTime.now(),
+      uploadedAt: uploadedAt,
       parserType: 'genericLedger',
-      rows: result.parsedRows,
+      rows: rowsWithSource,
       mappingStatus: result.mappingStatus,
       wasManuallyMapped: result.wasManuallyMapped,
       sheetName: result.sheetName,
