@@ -217,9 +217,40 @@ class ExcelExportService {
     required String buyerPan,
     required String gstNo,
   }) {
-    final detailSheet = workbook.worksheets[0];
-    detailSheet.name = 'Current View';
-    _writeTitle(detailSheet, 'CURRENT VIEW');
+    final summarySheet = workbook.worksheets[0];
+    summarySheet.name = 'Summary';
+    _writeCompactSummarySheet(
+      summarySheet,
+      rows: rows,
+      buyerName: buyerName,
+      buyerPan: buyerPan,
+      gstNo: gstNo,
+      title: 'Working View Summary',
+    );
+
+    final pivotSheet = workbook.worksheets.addWithName('Pivot');
+    _writeTimedPivotSummarySheet(
+      pivotSheet,
+      rows: rows,
+      title: 'WORKING VIEW PIVOT',
+    );
+
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Missing_In_Books'),
+      rows: rows,
+      title: 'MISSING IN BOOKS',
+      predicate: _isMissingInBooksRow,
+    );
+
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Timing_Difference'),
+      rows: rows,
+      title: 'TIMING DIFFERENCE',
+      predicate: _isTimingDifferenceRow,
+    );
+
+    final detailSheet = workbook.worksheets.addWithName('Raw_Data');
+    _writeTitle(detailSheet, 'WORKING VIEW RAW DATA');
     _writeSummarySection(
       detailSheet,
       rows: rows,
@@ -229,17 +260,7 @@ class ExcelExportService {
     );
     _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
 
-    final summarySheet = workbook.worksheets.addWithName('View Summary');
-    _writeCompactSummarySheet(
-      summarySheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-      title: 'View Summary',
-    );
-
-    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
     _writeTdsSectionInfoSheet(infoSheet);
   }
 
@@ -253,7 +274,7 @@ class ExcelExportService {
   }) {
     final grouped = _groupBySection(rows);
     final sectionSummarySheet = workbook.worksheets[0];
-    sectionSummarySheet.name = 'Section Summary';
+    sectionSummarySheet.name = 'Section_Summary';
     _writeSectionSummarySheet(
       sectionSummarySheet,
       grouped: grouped,
@@ -262,17 +283,38 @@ class ExcelExportService {
       gstNo: gstNo,
     );
 
-    final pivotSheet = workbook.worksheets.addWithName('Seller Pivot');
+    final pivotSheet = workbook.worksheets.addWithName('Section_Pivot');
     _writeTimedPivotSummarySheet(
       pivotSheet,
       rows: rows,
       title: 'SECTION $section SELLER PIVOT',
     );
 
-    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
-    _writeExceptionsSheet(exceptionsSheet, rows: rows);
+    final ledgerPivotSheet = workbook.worksheets.addWithName('Ledger_Pivot');
+    _writeLedgerPivotSheet(
+      ledgerPivotSheet,
+      rows: rows,
+      title: 'SECTION $section LEDGER PIVOT',
+    );
 
-    final detailSheet = workbook.worksheets.addWithName('Detail');
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Missing_In_Books'),
+      rows: rows,
+      title: 'MISSING IN BOOKS',
+      predicate: _isMissingInBooksRow,
+    );
+
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Timing_Difference'),
+      rows: rows,
+      title: 'TIMING DIFFERENCE',
+      predicate: _isTimingDifferenceRow,
+    );
+
+    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
+    _writeExceptionsSheet(exceptionsSheet, rows: rows, remainingOnly: true);
+
+    final detailSheet = workbook.worksheets.addWithName('Raw_Data');
     _writeTitle(detailSheet, 'SECTION $section DETAIL');
     _writeSummarySection(
       detailSheet,
@@ -283,7 +325,7 @@ class ExcelExportService {
     );
     _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
 
-    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
     _writeTdsSectionInfoSheet(infoSheet);
   }
 
@@ -296,18 +338,18 @@ class ExcelExportService {
   }) {
     final grouped = _groupBySection(rows);
     final workbookSummarySheet = workbook.worksheets[0];
-    workbookSummarySheet.name = 'Workbook Summary';
+    workbookSummarySheet.name = 'Master_Summary';
     _writeCompactSummarySheet(
       workbookSummarySheet,
       rows: rows,
       buyerName: buyerName,
       buyerPan: buyerPan,
       gstNo: gstNo,
-      title: 'Workbook Summary',
+      title: 'Master Summary',
     );
 
     final sectionSummarySheet = workbook.worksheets.addWithName(
-      'Section Summary',
+      'Section_Summary',
     );
     _writeSectionSummarySheet(
       sectionSummarySheet,
@@ -317,26 +359,35 @@ class ExcelExportService {
       gstNo: gstNo,
     );
 
-    final sectionPivotSheetNames = _writeSectionPivotSheets(
-      workbook,
-      grouped: grouped,
-    );
-    _writeLedgerSourcePivotSheets(
-      workbook,
-      grouped: grouped,
-      usedSheetNames: {
-        'Workbook Summary',
-        'Section Summary',
-        ...sectionPivotSheetNames,
-        'Exceptions',
-        'TDS Section Info',
-      },
+    _writeSectionPivotSheets(workbook, grouped: grouped);
+
+    final ledgerPivotSheet = workbook.worksheets.addWithName('Ledger_Pivot');
+    _writeLedgerPivotSheet(
+      ledgerPivotSheet,
+      rows: rows,
+      title: 'FINAL LEDGER PIVOT',
     );
 
-    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
-    _writeExceptionsSheet(exceptionsSheet, rows: rows);
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Final_Missing_In_Books'),
+      rows: rows,
+      title: 'FINAL MISSING IN BOOKS',
+      predicate: _isMissingInBooksRow,
+    );
 
-    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Final_Timing_Difference'),
+      rows: rows,
+      title: 'FINAL TIMING DIFFERENCE',
+      predicate: _isTimingDifferenceRow,
+    );
+
+    final exceptionSummarySheet = workbook.worksheets.addWithName(
+      'Exception_Summary',
+    );
+    _writeExceptionSummarySheet(exceptionSummarySheet, rows: rows);
+
+    final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
     _writeTdsSectionInfoSheet(infoSheet);
   }
 
@@ -349,18 +400,18 @@ class ExcelExportService {
   }) {
     final grouped = _groupBySection(rows);
     final workbookSummarySheet = workbook.worksheets[0];
-    workbookSummarySheet.name = 'Workbook Summary';
+    workbookSummarySheet.name = 'Master_Summary';
     _writeCompactSummarySheet(
       workbookSummarySheet,
       rows: rows,
       buyerName: buyerName,
       buyerPan: buyerPan,
       gstNo: gstNo,
-      title: 'Workbook Summary',
+      title: 'Master Summary',
     );
 
     final sectionSummarySheet = workbook.worksheets.addWithName(
-      'Section Summary',
+      'Section_Summary',
     );
     _writeSectionSummarySheet(
       sectionSummarySheet,
@@ -372,10 +423,33 @@ class ExcelExportService {
 
     _writeSectionPivotSheets(workbook, grouped: grouped);
 
-    final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
-    _writeExceptionsSheet(exceptionsSheet, rows: rows);
+    final ledgerPivotSheet = workbook.worksheets.addWithName('Ledger_Pivot');
+    _writeLedgerPivotSheet(
+      ledgerPivotSheet,
+      rows: rows,
+      title: 'FINAL LEDGER PIVOT',
+    );
 
-    final detailSheet = workbook.worksheets.addWithName('Raw Reconciliation');
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Final_Missing_In_Books'),
+      rows: rows,
+      title: 'FINAL MISSING IN BOOKS',
+      predicate: _isMissingInBooksRow,
+    );
+
+    _writeFilteredDetailSheet(
+      workbook.worksheets.addWithName('Final_Timing_Difference'),
+      rows: rows,
+      title: 'FINAL TIMING DIFFERENCE',
+      predicate: _isTimingDifferenceRow,
+    );
+
+    final exceptionSummarySheet = workbook.worksheets.addWithName(
+      'Exception_Summary',
+    );
+    _writeExceptionSummarySheet(exceptionSummarySheet, rows: rows);
+
+    final detailSheet = workbook.worksheets.addWithName('Raw_Reconciliation');
     _writeTitle(detailSheet, 'RAW RECONCILIATION');
     _writeSummarySection(
       detailSheet,
@@ -386,7 +460,21 @@ class ExcelExportService {
     );
     _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
 
-    final infoSheet = workbook.worksheets.addWithName('TDS Section Info');
+    final exceptionDetailsSheet = workbook.worksheets.addWithName(
+      'Exception_Details',
+    );
+    _writeExceptionsSheet(
+      exceptionDetailsSheet,
+      rows: rows,
+      remainingOnly: false,
+    );
+
+    final technicalDetailsSheet = workbook.worksheets.addWithName(
+      'Technical_Details',
+    );
+    _writeTechnicalDetailsSheet(technicalDetailsSheet, rows: rows);
+
+    final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
     _writeTdsSectionInfoSheet(infoSheet);
   }
 
@@ -414,73 +502,6 @@ class ExcelExportService {
     }
 
     return sheetNames;
-  }
-
-  static void _writeLedgerSourcePivotSheets(
-    xlsio.Workbook workbook, {
-    required Map<String, List<ReconciliationRow>> grouped,
-    required Set<String> usedSheetNames,
-  }) {
-    final sortedSections = grouped.keys.toList()
-      ..sort(TdsSectionCatalog.compare);
-    final usedNames = Set<String>.of(usedSheetNames);
-
-    for (final section in sortedSections) {
-      final cleanSection = section.trim().toUpperCase();
-      if (cleanSection == 'NO SECTION') continue;
-
-      final rowsByLedger = _groupRowsByLedgerSource(grouped[section]!);
-      if (rowsByLedger.isEmpty) continue;
-
-      final ledgerGroups = rowsByLedger.values.toList()
-        ..sort((a, b) {
-          final nameCompare = a.displayName.toUpperCase().compareTo(
-            b.displayName.toUpperCase(),
-          );
-          if (nameCompare != 0) return nameCompare;
-          return a.sourceKey.compareTo(b.sourceKey);
-        });
-
-      for (final ledgerGroup in ledgerGroups) {
-        if (ledgerGroup.rows.isEmpty) continue;
-        final sheetName = _safeUniqueSheetName(
-          '${cleanSection}_${_stripWorkbookExtension(ledgerGroup.displayName)}',
-          usedNames,
-        );
-        usedNames.add(sheetName);
-        final sheet = workbook.worksheets.addWithName(sheetName);
-        _writeTimedPivotSummarySheet(
-          sheet,
-          rows: ledgerGroup.rows,
-          title: '$cleanSection ${ledgerGroup.displayName} PIVOT',
-          showLedgerSourceInSellerHeader: false,
-        );
-      }
-    }
-  }
-
-  static Map<String, _LedgerSourcePivotGroup> _groupRowsByLedgerSource(
-    List<ReconciliationRow> rows,
-  ) {
-    final grouped = <String, _LedgerSourcePivotGroup>{};
-
-    for (final row in rows) {
-      final sources = _ledgerSourcesForRow(row);
-      for (final source in sources) {
-        grouped
-            .putIfAbsent(
-              source.sourceKey,
-              () => _LedgerSourcePivotGroup(
-                sourceKey: source.sourceKey,
-                displayName: source.displayName,
-              ),
-            )
-            .rows
-            .add(row);
-      }
-    }
-
-    return grouped;
   }
 
   static List<_LedgerSourceReference> _ledgerSourcesForRow(
@@ -522,11 +543,195 @@ class ExcelExportService {
     return unique.values.toList();
   }
 
+  static void _writeLedgerPivotSheet(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    required String title,
+  }) {
+    _writeTitle(sheet, title);
+
+    final headers = [
+      'Ledger',
+      'Section',
+      'Seller Name',
+      'Financial Year',
+      'Rows',
+      'Basic Amount',
+      'Applicable Amount',
+      '26Q Amount',
+      'Expected TDS',
+      'Actual TDS',
+      'TDS Difference',
+      'Amount Difference',
+      'Statuses',
+    ];
+
+    const headerRow = 3;
+    for (var i = 0; i < headers.length; i++) {
+      final cell = sheet.getRangeByIndex(headerRow, i + 1);
+      cell.setText(headers[i]);
+      cell.cellStyle.bold = true;
+      cell.cellStyle.backColor = '#D9EAF7';
+      cell.cellStyle.hAlign = xlsio.HAlignType.center;
+      cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+    }
+
+    final groups = <String, _LedgerPivotGroup>{};
+    for (final row in rows) {
+      final sources = _ledgerSourcesForRow(row);
+      final rowSources = sources.isEmpty
+          ? const [
+              _LedgerSourceReference(
+                sourceKey: 'NO_LEDGER_SOURCE',
+                displayName: 'No Ledger Source',
+              ),
+            ]
+          : sources;
+
+      for (final source in rowSources) {
+        final seller = _sellerLabel(row);
+        final key = [
+          source.sourceKey,
+          row.section.trim(),
+          seller,
+          row.financialYear.trim(),
+        ].join('\u0001');
+        groups
+            .putIfAbsent(
+              key,
+              () => _LedgerPivotGroup(
+                ledgerName: source.displayName,
+                section: row.section.trim().isEmpty
+                    ? 'No Section'
+                    : row.section.trim(),
+                sellerName: seller,
+                financialYear: row.financialYear.trim(),
+              ),
+            )
+            .rows
+            .add(row);
+      }
+    }
+
+    final sortedGroups = groups.values.toList()
+      ..sort((a, b) {
+        final ledgerCompare = a.ledgerName.toUpperCase().compareTo(
+          b.ledgerName.toUpperCase(),
+        );
+        if (ledgerCompare != 0) return ledgerCompare;
+
+        final sectionCompare = TdsSectionCatalog.compare(a.section, b.section);
+        if (sectionCompare != 0) return sectionCompare;
+
+        final sellerCompare = a.sellerName.toUpperCase().compareTo(
+          b.sellerName.toUpperCase(),
+        );
+        if (sellerCompare != 0) return sellerCompare;
+
+        return a.financialYear.compareTo(b.financialYear);
+      });
+
+    var rowIndex = headerRow + 1;
+    for (final group in sortedGroups) {
+      final groupRows = group.rows;
+      sheet.getRangeByIndex(rowIndex, 1).setText(group.ledgerName);
+      sheet.getRangeByIndex(rowIndex, 2).setText(group.section);
+      sheet.getRangeByIndex(rowIndex, 3).setText(group.sellerName);
+      sheet.getRangeByIndex(rowIndex, 4).setText(group.financialYear);
+      sheet.getRangeByIndex(rowIndex, 5).setNumber(groupRows.length.toDouble());
+      sheet
+          .getRangeByIndex(rowIndex, 6)
+          .setNumber(
+            _round2(groupRows.fold(0.0, (sum, row) => sum + row.basicAmount)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 7)
+          .setNumber(
+            _round2(
+              groupRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
+            ),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 8)
+          .setNumber(
+            _round2(groupRows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 9)
+          .setNumber(
+            _round2(groupRows.fold(0.0, (sum, row) => sum + row.expectedTds)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 10)
+          .setNumber(
+            _round2(groupRows.fold(0.0, (sum, row) => sum + row.actualTds)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 11)
+          .setNumber(
+            _round2(groupRows.fold(0.0, (sum, row) => sum + row.tdsDifference)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 12)
+          .setNumber(
+            _round2(
+              groupRows.fold(0.0, (sum, row) => sum + row.amountDifference),
+            ),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 13)
+          .setText(
+            groupRows
+                .map((row) => row.status.trim())
+                .where((status) => status.isNotEmpty)
+                .toSet()
+                .join(' | '),
+          );
+
+      final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 13);
+      range.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+      rowIndex++;
+    }
+
+    sheet.autoFilters.filterRange = sheet.getRangeByIndex(
+      headerRow,
+      1,
+      headerRow,
+      headers.length,
+    );
+    _applyNumberFormat(sheet, headerRow + 1, rowIndex - 1, [
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+    ]);
+    _autoFitUsefulColumns(sheet, headers.length);
+  }
+
+  static void _writeFilteredDetailSheet(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+    required String title,
+    required bool Function(ReconciliationRow row) predicate,
+  }) {
+    final filteredRows = rows.where(predicate).toList();
+    _writeTitle(sheet, title);
+    _writeTimedDetailTable(sheet, rows: filteredRows, startRow: 3);
+  }
+
   static void _writeExceptionsSheet(
     xlsio.Worksheet sheet, {
     required List<ReconciliationRow> rows,
+    bool remainingOnly = false,
   }) {
-    final exceptionRows = rows.where(_isExceptionRow).toList();
+    final exceptionRows = rows.where((row) {
+      if (!_isExceptionRow(row)) return false;
+      if (!remainingOnly) return true;
+      return !_isMissingInBooksRow(row) && !_isTimingDifferenceRow(row);
+    }).toList();
     _writeTitle(sheet, 'EXCEPTIONS');
     _writeTimedDetailTable(sheet, rows: exceptionRows, startRow: 3);
   }
@@ -536,6 +741,20 @@ class ExcelExportService {
     return status != ReconciliationStatus.matched &&
         status != ReconciliationStatus.belowThreshold &&
         status != ReconciliationStatus.noDeductionRequired;
+  }
+
+  static bool _isMissingInBooksRow(ReconciliationRow row) {
+    return row.status.trim() == ReconciliationStatus.onlyIn26Q ||
+        (!row.purchasePresent && row.tdsPresent);
+  }
+
+  static bool _isTimingDifferenceRow(ReconciliationRow row) {
+    return row.status.trim() == ReconciliationStatus.timingDifference;
+  }
+
+  static String _sellerLabel(ReconciliationRow row) {
+    final resolved = row.resolvedSellerName.trim();
+    return resolved.isEmpty ? row.sellerName.trim() : resolved;
   }
 
   static void _writeTimedDetailTable(
@@ -1122,6 +1341,186 @@ class ExcelExportService {
     _autoFitUsefulColumns(sheet, 11);
   }
 
+  static void _writeExceptionSummarySheet(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+  }) {
+    final exceptionRows = rows
+        .where(
+          (row) =>
+              _isExceptionRow(row) &&
+              !_isMissingInBooksRow(row) &&
+              !_isTimingDifferenceRow(row),
+        )
+        .toList();
+    final grouped = <String, List<ReconciliationRow>>{};
+    for (final row in exceptionRows) {
+      final status = row.status.trim().isEmpty ? 'Unclassified' : row.status;
+      grouped.putIfAbsent(status, () => <ReconciliationRow>[]).add(row);
+    }
+
+    sheet.getRangeByName('A1:I1').merge();
+    sheet.getRangeByName('A1').setText('Exception Summary');
+    sheet.getRangeByName('A1').cellStyle.bold = true;
+    sheet.getRangeByName('A1').cellStyle.fontSize = 16;
+    sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
+    sheet.getRangeByName('A1').cellStyle.backColor = '#EDE7F6';
+
+    final headers = [
+      'Status',
+      'Rows',
+      'Basic Amount',
+      'Applicable Amount',
+      '26Q Amount',
+      'Expected TDS',
+      'Actual TDS',
+      'TDS Difference',
+      'Amount Difference',
+    ];
+    const startRow = 3;
+    for (var i = 0; i < headers.length; i++) {
+      final cell = sheet.getRangeByIndex(startRow, i + 1);
+      cell.setText(headers[i]);
+      cell.cellStyle.bold = true;
+      cell.cellStyle.backColor = '#D9EAF7';
+      cell.cellStyle.hAlign = xlsio.HAlignType.center;
+      cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+    }
+
+    var rowIndex = startRow + 1;
+    final statuses = grouped.keys.toList()..sort();
+    for (final status in statuses) {
+      final statusRows = grouped[status]!;
+      sheet.getRangeByIndex(rowIndex, 1).setText(status);
+      sheet
+          .getRangeByIndex(rowIndex, 2)
+          .setNumber(statusRows.length.toDouble());
+      sheet
+          .getRangeByIndex(rowIndex, 3)
+          .setNumber(
+            _round2(statusRows.fold(0.0, (sum, row) => sum + row.basicAmount)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 4)
+          .setNumber(
+            _round2(
+              statusRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
+            ),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 5)
+          .setNumber(
+            _round2(statusRows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 6)
+          .setNumber(
+            _round2(statusRows.fold(0.0, (sum, row) => sum + row.expectedTds)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 7)
+          .setNumber(
+            _round2(statusRows.fold(0.0, (sum, row) => sum + row.actualTds)),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 8)
+          .setNumber(
+            _round2(
+              statusRows.fold(0.0, (sum, row) => sum + row.tdsDifference),
+            ),
+          );
+      sheet
+          .getRangeByIndex(rowIndex, 9)
+          .setNumber(
+            _round2(
+              statusRows.fold(0.0, (sum, row) => sum + row.amountDifference),
+            ),
+          );
+
+      sheet
+              .getRangeByIndex(rowIndex, 1, rowIndex, headers.length)
+              .cellStyle
+              .borders
+              .all
+              .lineStyle =
+          xlsio.LineStyle.thin;
+      rowIndex++;
+    }
+
+    _applyNumberFormat(sheet, startRow + 1, rowIndex - 1, [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+    ]);
+    _autoFitUsefulColumns(sheet, headers.length);
+  }
+
+  static void _writeTechnicalDetailsSheet(
+    xlsio.Worksheet sheet, {
+    required List<ReconciliationRow> rows,
+  }) {
+    final maps = rows.map((row) => row.toMap()).toList();
+    final headers =
+        maps
+            .expand((map) => map.keys)
+            .map((key) => key.toString())
+            .toSet()
+            .toList()
+          ..sort();
+
+    sheet.getRangeByName('A1:Z1').merge();
+    sheet.getRangeByName('A1').setText('Technical Details');
+    sheet.getRangeByName('A1').cellStyle.bold = true;
+    sheet.getRangeByName('A1').cellStyle.fontSize = 16;
+    sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
+    sheet.getRangeByName('A1').cellStyle.backColor = '#EDE7F6';
+
+    const startRow = 3;
+    for (var i = 0; i < headers.length; i++) {
+      final cell = sheet.getRangeByIndex(startRow, i + 1);
+      cell.setText(headers[i]);
+      cell.cellStyle.bold = true;
+      cell.cellStyle.backColor = '#D9EAF7';
+      cell.cellStyle.hAlign = xlsio.HAlignType.center;
+      cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+    }
+
+    for (var rowOffset = 0; rowOffset < maps.length; rowOffset++) {
+      final rowIndex = startRow + 1 + rowOffset;
+      final map = maps[rowOffset];
+      for (var col = 0; col < headers.length; col++) {
+        final value = map[headers[col]];
+        final cell = sheet.getRangeByIndex(rowIndex, col + 1);
+        if (value is num) {
+          cell.setNumber(value.toDouble());
+        } else {
+          cell.setText(value?.toString() ?? '');
+        }
+      }
+      sheet
+              .getRangeByIndex(rowIndex, 1, rowIndex, headers.length)
+              .cellStyle
+              .borders
+              .all
+              .lineStyle =
+          xlsio.LineStyle.thin;
+    }
+
+    if (headers.isNotEmpty) {
+      sheet.autoFilters.filterRange = sheet.getRangeByIndex(
+        startRow,
+        1,
+        startRow,
+        headers.length,
+      );
+      _autoFitUsefulColumns(sheet, headers.length);
+    }
+  }
+
   static void _writeTdsSectionInfoSheet(xlsio.Worksheet sheet) {
     final headers = [
       'Section',
@@ -1514,6 +1913,7 @@ class ExcelExportService {
     int toRow,
     List<int> columns,
   ) {
+    if (toRow < fromRow) return;
     for (final col in columns) {
       sheet.getRangeByIndex(fromRow, col, toRow, col).numberFormat = '#,##0.00';
     }
@@ -1541,45 +1941,6 @@ class ExcelExportService {
     if (cleaned.isEmpty) return 'Sheet';
     if (cleaned.length <= 31) return cleaned;
     return cleaned.substring(0, 31);
-  }
-
-  static String _safeUniqueSheetName(String value, Set<String> usedNames) {
-    final base = _safeLedgerSheetBase(value);
-    var candidate = base;
-    var counter = 2;
-    while (usedNames.contains(candidate)) {
-      final suffix = '_$counter';
-      final maxBaseLength = 31 - suffix.length;
-      final prefixLength = base.length < maxBaseLength
-          ? base.length
-          : maxBaseLength;
-      candidate = '${base.substring(0, prefixLength)}$suffix';
-      counter += 1;
-    }
-    return candidate;
-  }
-
-  static String _safeLedgerSheetBase(String value) {
-    final cleaned = value
-        .trim()
-        .replaceAll(RegExp(r'[:\\/?*\[\]]'), '_')
-        .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^_+|_+$'), '');
-
-    final fallback = cleaned.isEmpty ? 'Ledger' : cleaned;
-    if (fallback.length <= 31) return fallback;
-    return fallback.substring(0, 31);
-  }
-
-  static String _stripWorkbookExtension(String value) {
-    final trimmed = value.trim();
-    final extensionMatch = RegExp(
-      r'\.(xlsx|xlsm|xls|csv|ods)$',
-      caseSensitive: false,
-    ).firstMatch(trimmed);
-    if (extensionMatch == null) return trimmed;
-    return trimmed.substring(0, extensionMatch.start);
   }
 
   static String _safeFileName(String value) {
@@ -1614,14 +1975,14 @@ class ExcelExportService {
 
     switch (mode) {
       case ExcelExportMode.currentView:
-        segments.add('Current_View');
+        segments.add('Working_View');
       case ExcelExportMode.section:
         final sectionSegment = section?.trim() ?? '';
         segments.add(sectionSegment.isEmpty ? 'Section' : sectionSegment);
       case ExcelExportMode.pivotReport:
-        segments.add('Pivot_Report');
+        segments.add('Final_Export');
       case ExcelExportMode.detailedReport:
-        segments.add('Detailed_Report');
+        segments.add('Detailed_Audit_Export');
     }
 
     final fySegment = _financialYearFileSegment(financialYear ?? '');
@@ -1695,10 +2056,17 @@ class _LedgerSourceReference {
   });
 }
 
-class _LedgerSourcePivotGroup {
-  final String sourceKey;
-  final String displayName;
+class _LedgerPivotGroup {
+  final String ledgerName;
+  final String section;
+  final String sellerName;
+  final String financialYear;
   final List<ReconciliationRow> rows = <ReconciliationRow>[];
 
-  _LedgerSourcePivotGroup({required this.sourceKey, required this.displayName});
+  _LedgerPivotGroup({
+    required this.ledgerName,
+    required this.section,
+    required this.sellerName,
+    required this.financialYear,
+  });
 }

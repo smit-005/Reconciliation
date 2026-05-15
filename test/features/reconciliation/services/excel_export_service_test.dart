@@ -43,7 +43,7 @@ void main() {
         buyerName: 'Radha Industries',
         financialYear: 'FY 2025-26',
       ),
-      'Radha_Industries_Current_View_FY_2025-26.xlsx',
+      'Radha_Industries_Working_View_FY_2025-26.xlsx',
     );
 
     expect(
@@ -62,7 +62,7 @@ void main() {
         buyerName: 'Radha Industries',
         financialYear: '2025-26',
       ),
-      'Radha_Industries_Pivot_Report_FY_2025-26.xlsx',
+      'Radha_Industries_Final_Export_FY_2025-26.xlsx',
     );
 
     expect(
@@ -71,21 +71,21 @@ void main() {
         buyerName: 'Radha Industries',
         financialYear: '2025-26',
       ),
-      'Radha_Industries_Detailed_Report_FY_2025-26.xlsx',
+      'Radha_Industries_Detailed_Audit_Export_FY_2025-26.xlsx',
     );
   });
 
-  test('legacy pivot filename builder uses readable pivot report name', () {
+  test('legacy pivot filename builder uses readable final export name', () {
     final fileName = ExcelExportService.buildPivotReportFileName(
       buyerName: 'Radha Industries',
       financialYear: '2026-27',
       generatedAt: DateTime(2026, 5, 6, 18, 44, 55),
     );
 
-    expect(fileName, 'Radha_Industries_Pivot_Report_FY_2026-27.xlsx');
+    expect(fileName, 'Radha_Industries_Final_Export_FY_2026-27.xlsx');
   });
 
-  test('current view export contains only current view sheets', () async {
+  test('working view export contains working package sheets', () async {
     final outputDir = await _tempDir();
 
     final path = await ExcelExportService.exportCurrentViewExcel(
@@ -96,10 +96,20 @@ void main() {
       financialYear: '2025-26',
     );
 
-    expect(p.basename(path), 'Radha_Industries_Current_View_FY_2025-26.xlsx');
+    expect(p.basename(path), 'Radha_Industries_Working_View_FY_2025-26.xlsx');
 
     final sheets = await _sheetNames(path);
-    expect(sheets, containsAll(['Current View', 'View Summary']));
+    expect(
+      sheets,
+      orderedEquals([
+        'Summary',
+        'Pivot',
+        'Missing_In_Books',
+        'Timing_Difference',
+        'Raw_Data',
+        'TDS_Section_Info',
+      ]),
+    );
     expect(sheets, isNot(contains('Pivot Summary')));
     expect(sheets, isNot(contains('194A')));
     expect(sheets, isNot(contains('194A Pivot')));
@@ -122,7 +132,7 @@ void main() {
         financialYear: '2025-26',
       );
 
-      final currentViewRows = await _sheetRows(path, 'Current View');
+      final currentViewRows = await _sheetRows(path, 'Raw_Data');
       expect(
         _sheetContainsText(currentViewRows, 'Visible Contractor A'),
         isTrue,
@@ -158,7 +168,7 @@ void main() {
         financialYear: '2025-26',
       );
 
-      final currentViewRows = await _sheetRows(path, 'Current View');
+      final currentViewRows = await _sheetRows(path, 'Raw_Data');
       expect(
         _sheetContainsText(currentViewRows, 'Visible Contractor A'),
         isTrue,
@@ -189,11 +199,14 @@ void main() {
     expect(
       sheets,
       containsAll([
-        'Section Summary',
-        'Seller Pivot',
+        'Section_Summary',
+        'Section_Pivot',
+        'Ledger_Pivot',
+        'Missing_In_Books',
+        'Timing_Difference',
         'Exceptions',
-        'Detail',
-        'TDS Section Info',
+        'Raw_Data',
+        'TDS_Section_Info',
       ]),
     );
     expect(sheets, isNot(contains('Pivot Summary')));
@@ -226,7 +239,7 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final detailRows = await _sheetRows(path, 'Detail');
+    final detailRows = await _sheetRows(path, 'Raw_Data');
     expect(
       _sheetContainsText(detailRows, 'Below Threshold Contractor'),
       isTrue,
@@ -238,7 +251,7 @@ void main() {
   });
 
   test(
-    'pivot report omits combined pivot and raw section detail sheets',
+    'final export keeps summary pivots and omits raw reconciliation',
     () async {
       final outputDir = await _tempDir();
 
@@ -253,24 +266,27 @@ void main() {
         financialYear: '2025-26',
       );
 
-      expect(p.basename(path), 'Radha_Industries_Pivot_Report_FY_2025-26.xlsx');
+      expect(p.basename(path), 'Radha_Industries_Final_Export_FY_2025-26.xlsx');
 
       final sheets = await _sheetNames(path);
       expect(
         sheets,
         containsAll([
-          'Workbook Summary',
-          'Section Summary',
+          'Master_Summary',
+          'Section_Summary',
           '194A Pivot',
           '194C Pivot',
-          'Exceptions',
-          'TDS Section Info',
+          'Ledger_Pivot',
+          'Final_Missing_In_Books',
+          'Final_Timing_Difference',
+          'Exception_Summary',
+          'TDS_Section_Info',
         ]),
       );
       expect(sheets, isNot(contains('Pivot Summary')));
       expect(sheets, isNot(contains('194A')));
       expect(sheets, isNot(contains('194C')));
-      expect(sheets, isNot(contains('Raw Reconciliation')));
+      expect(sheets, isNot(contains('Raw_Reconciliation')));
     },
   );
 
@@ -307,103 +323,75 @@ void main() {
     );
   });
 
-  test(
-    'pivot report includes ledger-specific sheets filtered by source ledger',
-    () async {
-      final outputDir = await _tempDir();
+  test('final export includes ledger pivot grouped by source ledger', () async {
+    final outputDir = await _tempDir();
 
-      final path = await ExcelExportService.exportPivotReportExcel(
-        rows: [
-          _row(
-            section: '194C',
-            sellerName: 'Transport Only Contractor',
-            sourceLedgerFileIds: const ['ledger-transport'],
-            sourceLedgerFileNames: const ['Transport_April.xlsx'],
-          ),
-          _row(
-            section: '194C',
-            sellerName: 'Labour Only Contractor',
-            sourceLedgerFileIds: const ['ledger-labour'],
-            sourceLedgerFileNames: const ['Labour_Contractor.xlsx'],
-          ),
-          _row(
-            section: '194C',
-            sellerName: 'Multi Source Contractor',
-            sourceLedgerFileIds: const ['ledger-transport', 'ledger-labour'],
-            sourceLedgerFileNames: const [
-              'Transport_April.xlsx',
-              'Labour_Contractor.xlsx',
-            ],
-          ),
-        ],
-        buyerName: 'Radha Industries',
-        buyerPan: 'ABCDE1234F',
-        outputFolderPath: outputDir.path,
-        financialYear: '2025-26',
-      );
-
-      final sheets = await _sheetNames(path);
-      expect(sheets, contains('194C Pivot'));
-      expect(sheets, contains('194C_Transport_April'));
-      expect(sheets, contains('194C_Labour_Contractor'));
-
-      final sectionPivotRows = await _sheetRows(path, '194C Pivot');
-      expect(
-        _sheetContainsTextContaining(
-          sectionPivotRows,
-          'Ledger: Transport_April.xlsx',
+    final path = await ExcelExportService.exportPivotReportExcel(
+      rows: [
+        _row(
+          section: '194C',
+          sellerName: 'Transport Only Contractor',
+          sourceLedgerFileIds: const ['ledger-transport'],
+          sourceLedgerFileNames: const ['Transport_April.xlsx'],
         ),
-        isTrue,
-      );
-      expect(
-        _sheetContainsTextContaining(sectionPivotRows, '2 ledgers:'),
-        isTrue,
-      );
-      expect(
-        _sheetContainsTextContaining(
-          sectionPivotRows,
-          'Labour_Contractor.xlsx',
+        _row(
+          section: '194C',
+          sellerName: 'Labour Only Contractor',
+          sourceLedgerFileIds: const ['ledger-labour'],
+          sourceLedgerFileNames: const ['Labour_Contractor.xlsx'],
         ),
-        isTrue,
-      );
-      expect(
-        _sheetContainsText(sectionPivotRows, 'Source Ledger Files'),
-        isFalse,
-      );
-
-      final transportRows = await _sheetRows(path, '194C_Transport_April');
-      expect(
-        _sheetContainsText(transportRows, 'TRANSPORT ONLY CONTRACTOR'),
-        isTrue,
-      );
-      expect(
-        _sheetContainsTextContaining(
-          transportRows,
-          'Ledger: Transport_April.xlsx',
+        _row(
+          section: '194C',
+          sellerName: 'Multi Source Contractor',
+          sourceLedgerFileIds: const ['ledger-transport', 'ledger-labour'],
+          sourceLedgerFileNames: const [
+            'Transport_April.xlsx',
+            'Labour_Contractor.xlsx',
+          ],
         ),
-        isFalse,
-      );
-      expect(
-        _sheetContainsText(transportRows, 'MULTI SOURCE CONTRACTOR'),
-        isTrue,
-      );
-      expect(
-        _sheetContainsText(transportRows, 'LABOUR ONLY CONTRACTOR'),
-        isFalse,
-      );
+      ],
+      buyerName: 'Radha Industries',
+      buyerPan: 'ABCDE1234F',
+      outputFolderPath: outputDir.path,
+      financialYear: '2025-26',
+    );
 
-      final labourRows = await _sheetRows(path, '194C_Labour_Contractor');
-      expect(_sheetContainsText(labourRows, 'LABOUR ONLY CONTRACTOR'), isTrue);
-      expect(_sheetContainsText(labourRows, 'MULTI SOURCE CONTRACTOR'), isTrue);
-      expect(
-        _sheetContainsText(labourRows, 'TRANSPORT ONLY CONTRACTOR'),
-        isFalse,
-      );
-    },
-  );
+    final sheets = await _sheetNames(path);
+    expect(sheets, contains('194C Pivot'));
+    expect(sheets, contains('Ledger_Pivot'));
+    expect(sheets, isNot(contains('194C_Transport_April')));
+    expect(sheets, isNot(contains('194C_Labour_Contractor')));
+
+    final sectionPivotRows = await _sheetRows(path, '194C Pivot');
+    expect(
+      _sheetContainsTextContaining(
+        sectionPivotRows,
+        'Ledger: Transport_April.xlsx',
+      ),
+      isTrue,
+    );
+    expect(
+      _sheetContainsTextContaining(sectionPivotRows, '2 ledgers:'),
+      isTrue,
+    );
+    expect(
+      _sheetContainsTextContaining(sectionPivotRows, 'Labour_Contractor.xlsx'),
+      isTrue,
+    );
+    expect(
+      _sheetContainsText(sectionPivotRows, 'Source Ledger Files'),
+      isFalse,
+    );
+
+    final ledgerRows = await _sheetRows(path, 'Ledger_Pivot');
+    expect(_sheetContainsText(ledgerRows, 'Transport_April.xlsx'), isTrue);
+    expect(_sheetContainsText(ledgerRows, 'Labour_Contractor.xlsx'), isTrue);
+    expect(_sheetContainsText(ledgerRows, 'Transport Only Contractor'), isTrue);
+    expect(_sheetContainsText(ledgerRows, 'Multi Source Contractor'), isTrue);
+  });
 
   test(
-    'pivot report ledger-specific sheet names are sanitized truncated and unique',
+    'final export keeps one ledger pivot sheet for sanitized ledger names',
     () async {
       final outputDir = await _tempDir();
 
@@ -433,22 +421,32 @@ void main() {
       );
 
       final sheets = await _sheetNames(path);
-      final ledgerSheets = sheets
-          .where((sheet) => sheet.startsWith('194C_Transport_April'))
-          .toList();
-
-      expect(ledgerSheets, hasLength(2));
-      expect(ledgerSheets.toSet(), hasLength(2));
-      expect(ledgerSheets.every((sheet) => sheet.length <= 31), isTrue);
+      expect(sheets.where((sheet) => sheet == 'Ledger_Pivot'), hasLength(1));
       expect(
-        ledgerSheets.every((sheet) => !RegExp(r'[:\\/?*\[\]]').hasMatch(sheet)),
+        sheets.where((sheet) => sheet.startsWith('194C_Transport_April')),
+        isEmpty,
+      );
+
+      final ledgerRows = await _sheetRows(path, 'Ledger_Pivot');
+      expect(
+        _sheetContainsText(
+          ledgerRows,
+          'Transport:April Very Very Long Name.xlsx',
+        ),
+        isTrue,
+      );
+      expect(
+        _sheetContainsText(
+          ledgerRows,
+          'Transport?April Very Very Long Name.xlsx',
+        ),
         isTrue,
       );
     },
   );
 
   test(
-    'ledger-specific sheets are only generated for pivot report exports',
+    'ledger pivot sheet is generated for section and final-style exports',
     () async {
       final outputDir = await _tempDir();
       final rows = [
@@ -485,16 +483,10 @@ void main() {
 
       expect(
         await _sheetNames(currentViewPath),
-        isNot(contains('194C_Transport_April')),
+        isNot(contains('Ledger_Pivot')),
       );
-      expect(
-        await _sheetNames(sectionPath),
-        isNot(contains('194C_Transport_April')),
-      );
-      expect(
-        await _sheetNames(detailedPath),
-        isNot(contains('194C_Transport_April')),
-      );
+      expect(await _sheetNames(sectionPath), contains('Ledger_Pivot'));
+      expect(await _sheetNames(detailedPath), contains('Ledger_Pivot'));
     },
   );
 
@@ -514,20 +506,25 @@ void main() {
 
     expect(
       p.basename(path),
-      'Radha_Industries_Detailed_Report_FY_2025-26.xlsx',
+      'Radha_Industries_Detailed_Audit_Export_FY_2025-26.xlsx',
     );
 
     final sheets = await _sheetNames(path);
     expect(
       sheets,
       containsAll([
-        'Workbook Summary',
-        'Section Summary',
+        'Master_Summary',
+        'Section_Summary',
         '194A Pivot',
         '194C Pivot',
-        'Exceptions',
-        'Raw Reconciliation',
-        'TDS Section Info',
+        'Ledger_Pivot',
+        'Final_Missing_In_Books',
+        'Final_Timing_Difference',
+        'Exception_Summary',
+        'Raw_Reconciliation',
+        'Exception_Details',
+        'Technical_Details',
+        'TDS_Section_Info',
       ]),
     );
     expect(sheets, isNot(contains('Pivot Summary')));
@@ -562,7 +559,7 @@ void main() {
         financialYear: '2025-26',
       );
 
-      final rawRows = await _sheetRows(path, 'Raw Reconciliation');
+      final rawRows = await _sheetRows(path, 'Raw_Reconciliation');
       expect(_sheetContainsText(rawRows, 'Below Threshold Contractor'), isTrue);
       expect(
         _sheetContainsText(rawRows, ReconciliationStatus.belowThreshold),
@@ -589,8 +586,8 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final detailRows = await _sheetRows(path, 'Detail');
-    final pivotRows = await _sheetRows(path, 'Seller Pivot');
+    final detailRows = await _sheetRows(path, 'Raw_Data');
+    final pivotRows = await _sheetRows(path, 'Section_Pivot');
 
     expect(_sheetContainsText(detailRows, 'TDS Rate Used'), isTrue);
     expect(_sheetContainsText(pivotRows, 'TDS Rate Used'), isTrue);
@@ -618,7 +615,7 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final detailRows = await _sheetRows(path, 'Detail');
+    final detailRows = await _sheetRows(path, 'Raw_Data');
     expect(_sheetContainsText(detailRows, 'Source Ledger File IDs'), isTrue);
     expect(_sheetContainsText(detailRows, 'Source Ledger Files'), isTrue);
     expect(_sheetContainsText(detailRows, 'Source Ledger Uploaded At'), isTrue);
@@ -644,7 +641,7 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final rawRows = await _sheetRows(path, 'Raw Reconciliation');
+    final rawRows = await _sheetRows(path, 'Raw_Reconciliation');
     expect(_sheetContainsText(rawRows, 'Source Ledger File IDs'), isTrue);
     expect(_sheetContainsText(rawRows, 'Source Ledger Files'), isTrue);
     expect(_sheetContainsText(rawRows, 'ledger-raw'), isTrue);
@@ -666,7 +663,7 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final summaryRows = await _sheetRows(path, 'Section Summary');
+    final summaryRows = await _sheetRows(path, 'Section_Summary');
     expect(_sheetContainsText(summaryRows, 'Non-Matched Rows'), isTrue);
     expect(_sheetContainsText(summaryRows, 'Mismatch Rows'), isFalse);
   });
@@ -683,8 +680,8 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final detailRows = await _sheetRows(path, 'Detail');
-    final sectionSummaryRows = await _sheetRows(path, 'Section Summary');
+    final detailRows = await _sheetRows(path, 'Raw_Data');
+    final sectionSummaryRows = await _sheetRows(path, 'Section_Summary');
 
     expect(_sheetContainsText(detailRows, 'Rule Text'), isTrue);
     expect(_sheetContainsText(detailRows, 'Threshold'), isFalse);

@@ -1917,8 +1917,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       if (!mounted) return;
       _showSnackBar(
         workingDirectory == null
-            ? 'Workspace unavailable. Exported to Downloads: $filePath'
-            : 'Current view export saved to workspace: $filePath',
+            ? 'Workspace unavailable. Working view exported to Downloads: $filePath'
+            : 'Working view export saved to workspace: $filePath',
       );
     } catch (e) {
       if (!mounted) return;
@@ -1987,12 +1987,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       if (!mounted) return;
       _showSnackBar(
         finalExportsDirectory == null
-            ? 'Workspace unavailable. Exported to Downloads: $filePath'
-            : 'Pivot report exported to workspace: $filePath',
+            ? 'Workspace unavailable. Final export saved to Downloads: $filePath'
+            : 'Final export saved to workspace: $filePath',
       );
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar('Pivot export failed: $e');
+      _showSnackBar('Final export failed: $e');
     }
   }
 
@@ -2019,12 +2019,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       if (!mounted) return;
       _showSnackBar(
         finalExportsDirectory == null
-            ? 'Workspace unavailable. Exported to Downloads: $filePath'
-            : 'Detailed report exported to workspace: $filePath',
+            ? 'Workspace unavailable. Detailed audit export saved to Downloads: $filePath'
+            : 'Detailed audit export saved to workspace: $filePath',
       );
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar('Detailed report export failed: $e');
+      _showSnackBar('Detailed audit export failed: $e');
     }
   }
 

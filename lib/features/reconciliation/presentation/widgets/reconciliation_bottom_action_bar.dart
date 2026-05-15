@@ -35,35 +35,51 @@ class ReconciliationBottomActionBar extends StatelessWidget {
           final stacked = constraints.maxWidth < 860;
           final actions = [
             _ActionButtonSlot(
-              child: AppPrimaryButton(
-                key: const ValueKey('export_current_button'),
-                onPressed: onExportCurrentView,
-                icon: Icons.download_rounded,
-                label: 'Export Current View',
+              child: Tooltip(
+                message:
+                    'Export the current filtered working view to the Working folder.',
+                child: AppPrimaryButton(
+                  key: const ValueKey('export_current_button'),
+                  onPressed: onExportCurrentView,
+                  icon: Icons.download_rounded,
+                  label: 'Export Working View',
+                ),
               ),
             ),
             _ActionButtonSlot(
-              child: AppSecondaryButton(
-                key: const ValueKey('export_section_button'),
-                onPressed: onExportSection,
-                icon: Icons.download_for_offline_rounded,
-                label: 'Export Section',
+              child: Tooltip(
+                message:
+                    'Export the full selected section package to the Working folder.',
+                child: AppSecondaryButton(
+                  key: const ValueKey('export_section_button'),
+                  onPressed: onExportSection,
+                  icon: Icons.download_for_offline_rounded,
+                  label: 'Export Section',
+                ),
               ),
             ),
             _ActionButtonSlot(
-              child: AppSecondaryButton(
-                key: const ValueKey('export_pivot_button'),
-                onPressed: onExportPivotReport,
-                icon: Icons.table_chart_rounded,
-                label: 'Export Pivot Report',
+              child: Tooltip(
+                message:
+                    'Export the final reconciliation workbook to Final_Exports.',
+                child: AppSecondaryButton(
+                  key: const ValueKey('export_pivot_button'),
+                  onPressed: onExportPivotReport,
+                  icon: Icons.table_chart_rounded,
+                  label: 'Final Export',
+                ),
               ),
             ),
             _ActionButtonSlot(
-              child: AppSecondaryButton(
-                key: const ValueKey('export_detailed_button'),
-                onPressed: onExportDetailedReport,
-                icon: Icons.article_rounded,
-                label: 'Export Detailed Report',
+              child: Tooltip(
+                message:
+                    'Export the detailed audit workbook with raw reconciliation data.',
+                child: AppSecondaryButton(
+                  key: const ValueKey('export_detailed_button'),
+                  onPressed: onExportDetailedReport,
+                  icon: Icons.article_rounded,
+                  label: 'Detailed Audit Export',
+                ),
               ),
             ),
           ];
