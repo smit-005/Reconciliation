@@ -17,27 +17,22 @@ class ReconciliationViewModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFE),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColorScheme.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: ReconciliationViewMode.values.map((mode) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact =
+            constraints.maxWidth.isFinite && constraints.maxWidth < 280;
+        final items = ReconciliationViewMode.values.map((mode) {
           final isSelected = mode == value;
-          return Padding(
+          final item = Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: InkWell(
               borderRadius: BorderRadius.circular(AppRadius.md),
               onTap: () => onChanged(mode),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: 10,
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? AppSpacing.sm : AppSpacing.md,
+                  vertical: compact ? AppSpacing.xs : 10,
                 ),
                 decoration: BoxDecoration(
                   gradient: isSelected
@@ -56,9 +51,11 @@ class ReconciliationViewModeToggle extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  mode.label,
+                  compact ? mode.shortLabel : mode.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: compact ? 12 : 12.5,
                     fontWeight: FontWeight.w800,
                     color: isSelected
                         ? Colors.white
@@ -68,8 +65,24 @@ class ReconciliationViewModeToggle extends StatelessWidget {
               ),
             ),
           );
-        }).toList(),
-      ),
+
+          return compact ? Expanded(child: item) : item;
+        }).toList();
+
+        return Container(
+          width: compact ? double.infinity : null,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FBFE),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColorScheme.divider),
+          ),
+          child: Row(
+            mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+            children: items,
+          ),
+        );
+      },
     );
   }
 }

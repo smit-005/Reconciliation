@@ -80,37 +80,65 @@ class _ReconciliationTableSectionState
             horizontal: AppSpacing.xs,
             vertical: AppSpacing.xxs,
           ),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Reconciliation Table',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppColorScheme.textPrimary,
-                  ),
-                ),
-              ),
-              if (widget.filteredRows.isNotEmpty) ...[
-                _buildPaginationControls(),
-                const SizedBox(width: AppSpacing.sm),
-              ],
-              AppStatusBadge(
-                label:
-                    '${visiblePage.rowCount}/${widget.filteredRows.length} rows',
-                icon: Icons.table_rows_rounded,
-              ),
-              if (widget.isRecalculating) ...[
-                const SizedBox(width: AppSpacing.sm),
-                AppInlineLoadingIndicator(color: Colors.indigo.shade700),
-              ],
-            ],
-          ),
+          child: _buildHeader(visiblePage),
         ),
         const SizedBox(height: AppSpacing.xs),
         Expanded(child: _buildTable(context)),
       ],
+    );
+  }
+
+  Widget _buildHeader(_SellerGroupPage visiblePage) {
+    final rowCountBadge = AppStatusBadge(
+      label: '${visiblePage.rowCount}/${widget.filteredRows.length} rows',
+      icon: Icons.table_rows_rounded,
+    );
+
+    final trailingControls = Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (widget.filteredRows.isNotEmpty) _buildPaginationControls(),
+        rowCountBadge,
+        if (widget.isRecalculating)
+          AppInlineLoadingIndicator(color: Colors.indigo.shade700),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact =
+            constraints.maxWidth.isFinite && constraints.maxWidth < 620;
+        const title = Text(
+          'Reconciliation Table',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: AppColorScheme.textPrimary,
+          ),
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              title,
+              const SizedBox(height: AppSpacing.xs),
+              trailingControls,
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: title),
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(child: trailingControls),
+          ],
+        );
+      },
     );
   }
 

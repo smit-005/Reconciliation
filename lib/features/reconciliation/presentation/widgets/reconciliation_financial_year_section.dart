@@ -16,6 +16,7 @@ const double _statusColumnWidth = 132;
 const double _remarksColumnWidth = 240;
 const double _columnGap = 12;
 const double _rowHorizontalPadding = 10;
+const double _tableOuterPadding = AppSpacing.xxs;
 const double _cellMinHeight = 26;
 const double _minimumTableWidth =
     _monthColumnWidth +
@@ -25,6 +26,8 @@ const double _minimumTableWidth =
     _remarksColumnWidth +
     (_columnGap * 10) +
     (_rowHorizontalPadding * 2);
+const double _minimumTableContainerWidth =
+    _minimumTableWidth + (_tableOuterPadding * 2);
 
 class ReconciliationFinancialYearSection extends StatelessWidget {
   final String financialYear;
@@ -144,18 +147,18 @@ class ReconciliationFinancialYearSection extends StatelessWidget {
                 final hasBoundedWidth = constraints.maxWidth.isFinite;
                 final effectiveWidth = hasBoundedWidth
                     ? constraints.maxWidth
-                    : _minimumTableWidth;
-                final tableWidth = effectiveWidth < _minimumTableWidth
-                    ? _minimumTableWidth
+                    : _minimumTableContainerWidth;
+                final tableWidth = effectiveWidth < _minimumTableContainerWidth
+                    ? _minimumTableContainerWidth
                     : effectiveWidth;
                 final needsHorizontalScroll = hasBoundedWidth
-                    ? constraints.maxWidth < _minimumTableWidth
+                    ? constraints.maxWidth < _minimumTableContainerWidth
                     : true;
 
                 final tableContent = SizedBox(
                   width: tableWidth,
                   child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xxs),
+                    padding: const EdgeInsets.all(_tableOuterPadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,

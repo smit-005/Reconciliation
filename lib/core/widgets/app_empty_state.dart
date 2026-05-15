@@ -22,41 +22,91 @@ class AppEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColorScheme.border),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 34, color: AppColorScheme.textMuted),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColorScheme.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final hasTightHeight = constraints.maxHeight.isFinite;
+          final isCompact = hasTightHeight && constraints.maxHeight < 180;
+          final isVeryCompact = hasTightHeight && constraints.maxHeight < 130;
+
+          final content = Padding(
+            padding: EdgeInsets.all(
+              isVeryCompact
+                  ? AppSpacing.xs
+                  : isCompact
+                  ? AppSpacing.md
+                  : AppSpacing.xl,
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColorScheme.textSecondary,
-              fontSize: 13,
-              height: 1.45,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: isVeryCompact
+                      ? 22
+                      : isCompact
+                      ? 28
+                      : 34,
+                  color: AppColorScheme.textMuted,
+                ),
+                SizedBox(
+                  height: isVeryCompact
+                      ? AppSpacing.xxs
+                      : isCompact
+                      ? AppSpacing.xs
+                      : AppSpacing.sm,
+                ),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: isVeryCompact ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColorScheme.textPrimary,
+                    fontSize: isVeryCompact
+                        ? 14
+                        : isCompact
+                        ? 16
+                        : 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: isVeryCompact ? 3 : 6),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  maxLines: isVeryCompact ? 2 : 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColorScheme.textSecondary,
+                    fontSize: isVeryCompact
+                        ? 11
+                        : isCompact
+                        ? 12
+                        : 13,
+                    height: isVeryCompact ? 1.25 : 1.45,
+                  ),
+                ),
+                if (action != null) ...[
+                  SizedBox(
+                    height: isVeryCompact ? AppSpacing.xs : AppSpacing.md,
+                  ),
+                  action!,
+                ],
+              ],
             ),
-          ),
-          if (action != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            action!,
-          ],
-        ],
+          );
+
+          if (!hasTightHeight) {
+            return content;
+          }
+
+          return SingleChildScrollView(primary: false, child: content);
+        },
       ),
     );
   }
