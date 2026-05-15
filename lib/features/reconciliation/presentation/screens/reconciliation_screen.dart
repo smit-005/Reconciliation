@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
@@ -104,6 +105,16 @@ class _FilteredMetrics {
 
 enum _SellerExceptionFilter { skippedRows, missing26Q }
 
+class _ExportResult {
+  final String filePath;
+  final bool workspaceAvailable;
+
+  const _ExportResult({
+    required this.filePath,
+    required this.workspaceAvailable,
+  });
+}
+
 class ReconciliationScreen extends StatefulWidget {
   final Map<String, List<NormalizedTransactionRow>> sourceRowsBySection;
   final Map<String, int> sourceFileCountBySection;
@@ -169,6 +180,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   _SellerExceptionFilter? _activeSellerExceptionFilter;
 
   bool _isRecalculating = false;
+  String? _activeExportMode;
   bool _hasCompletedInitialLoad = false;
   bool _hasCurrentViewExportRows = false;
   bool _hasSectionExportRows = false;
@@ -206,6 +218,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
   bool get _canExportReports =>
       _hasReportExportRows && _reportExportRowCount > 0;
+
+  bool get _isExporting => _activeExportMode != null;
 
   @override
   void initState() {
@@ -1893,37 +1907,88 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     _reportExportRowCount = snapshot.reportExportRowCount;
   }
 
-  Future<void> _exportCurrentViewExcel() async {
-    try {
-      final workingDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'current_view',
-        resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
-          buyerId: widget.selectedBuyerId,
-          financialYearId: widget.selectedFinancialYearId,
-        ),
-      );
-      if (!mounted) return;
-      final filePath = await ExcelExportService.exportCurrentViewExcel(
-        rows: ReconciliationExportRowScope.currentViewRows(
-          visibleTableRows: tableRows,
-        ),
-        buyerName: widget.buyerName,
-        buyerPan: widget.buyerPan,
-        gstNo: widget.gstNo,
-        outputFolderPath: workingDirectory?.path,
-        financialYear: _exportFinancialYearLabel(),
-      );
+  Future<void> _runExportWithFeedback({
+    required String mode,
+    required String name,
+    required Future<_ExportResult> Function() exportAction,
+    required String Function(_ExportResult result) successMessage,
+    required String errorPrefix,
+  }) async {
+    if (_isExporting) return;
 
-      if (!mounted) return;
-      _showSnackBar(
-        workingDirectory == null
-            ? 'Workspace unavailable. Working view exported to Downloads: $filePath'
-            : 'Working view export saved to workspace: $filePath',
+    final totalWatch = Stopwatch()..start();
+    debugPrint('RECON EXPORT => export_start mode=$mode name="$name"');
+
+    setState(() {
+      _activeExportMode = mode;
+    });
+    _showExportLoadingSnackBar(name);
+    await _allowExportFeedbackFrame();
+    if (!mounted) return;
+
+    try {
+      final result = await exportAction();
+      totalWatch.stop();
+      debugPrint(
+        'RECON EXPORT => total_export_ms=${totalWatch.elapsedMilliseconds} mode=$mode name="$name" path=${result.filePath}',
       );
-    } catch (e) {
       if (!mounted) return;
-      _showSnackBar('Export failed: $e');
+      _showExportSuccessSnackBar(successMessage(result), result.filePath);
+    } catch (e, stackTrace) {
+      totalWatch.stop();
+      debugPrint(
+        'RECON EXPORT => export_error mode=$mode name="$name" total_export_ms=${totalWatch.elapsedMilliseconds} error=$e\n$stackTrace',
+      );
+      if (!mounted) return;
+      _showSnackBar('$errorPrefix: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _activeExportMode = null;
+        });
+      }
     }
+  }
+
+  Future<void> _allowExportFeedbackFrame() async {
+    debugPrint('RECON EXPORT UI => loading feedback set');
+    await Future<void>.delayed(Duration.zero);
+    await WidgetsBinding.instance.endOfFrame;
+    debugPrint('RECON EXPORT UI => loading feedback painted');
+  }
+
+  Future<void> _exportCurrentViewExcel() async {
+    await _runExportWithFeedback(
+      mode: 'working_view',
+      name: 'Export Working View',
+      errorPrefix: 'Export failed',
+      exportAction: () async {
+        final workingDirectory = await _resolveWorkspaceExportDirectory(
+          exportType: 'current_view',
+          resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
+            buyerId: widget.selectedBuyerId,
+            financialYearId: widget.selectedFinancialYearId,
+          ),
+        );
+        final filePath = await ExcelExportService.exportCurrentViewExcel(
+          rows: ReconciliationExportRowScope.currentViewRows(
+            visibleTableRows: tableRows,
+          ),
+          buyerName: widget.buyerName,
+          buyerPan: widget.buyerPan,
+          gstNo: widget.gstNo,
+          outputFolderPath: workingDirectory?.path,
+          financialYear: _exportFinancialYearLabel(),
+        );
+        return _ExportResult(
+          filePath: filePath,
+          workspaceAvailable: workingDirectory != null,
+        );
+      },
+      successMessage: (result) => result.workspaceAvailable
+          ? 'Working view export saved to workspace: ${result.filePath}'
+          : 'Workspace unavailable. Working view exported to Downloads: ${result.filePath}',
+    );
   }
 
   Future<void> _exportSectionExcel() async {
@@ -1933,99 +1998,104 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       return;
     }
     final rows = _rowsForSelectedSectionExport();
-    try {
-      final workingDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'section',
-        resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
-          buyerId: widget.selectedBuyerId,
-          financialYearId: widget.selectedFinancialYearId,
-        ),
-      );
-      if (!mounted) return;
-      final filePath = await ExcelExportService.exportSectionExcel(
-        rows: rows,
-        section: section,
-        buyerName: widget.buyerName,
-        buyerPan: widget.buyerPan,
-        gstNo: widget.gstNo,
-        outputFolderPath: workingDirectory?.path,
-        financialYear: _exportFinancialYearLabel(),
-      );
-
-      if (!mounted) return;
-      _showSnackBar(
-        workingDirectory == null
-            ? 'Workspace unavailable. Exported to Downloads: $filePath'
-            : 'Section export saved to workspace: $filePath',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnackBar('Export failed: $e');
-    }
+    await _runExportWithFeedback(
+      mode: 'section',
+      name: 'Export Section',
+      errorPrefix: 'Export failed',
+      exportAction: () async {
+        final workingDirectory = await _resolveWorkspaceExportDirectory(
+          exportType: 'section',
+          resolve: () => _workspaceExportPathService.resolveWorkingDirectory(
+            buyerId: widget.selectedBuyerId,
+            financialYearId: widget.selectedFinancialYearId,
+          ),
+        );
+        final filePath = await ExcelExportService.exportSectionExcel(
+          rows: rows,
+          section: section,
+          buyerName: widget.buyerName,
+          buyerPan: widget.buyerPan,
+          gstNo: widget.gstNo,
+          outputFolderPath: workingDirectory?.path,
+          financialYear: _exportFinancialYearLabel(),
+        );
+        return _ExportResult(
+          filePath: filePath,
+          workspaceAvailable: workingDirectory != null,
+        );
+      },
+      successMessage: (result) => result.workspaceAvailable
+          ? 'Section export saved to workspace: ${result.filePath}'
+          : 'Workspace unavailable. Exported to Downloads: ${result.filePath}',
+    );
   }
 
   Future<void> _exportPivotReportExcel() async {
     final rows = _rowsForReportExport();
-    try {
-      final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'pivot_report',
-        resolve: () => _workspaceExportPathService.resolveFinalExportsDirectory(
-          buyerId: widget.selectedBuyerId,
-          financialYearId: widget.selectedFinancialYearId,
-        ),
-      );
-      if (!mounted) return;
-      final filePath = await ExcelExportService.exportPivotReportExcel(
-        rows: rows,
-        buyerName: widget.buyerName,
-        buyerPan: widget.buyerPan,
-        gstNo: widget.gstNo,
-        outputFolderPath: finalExportsDirectory?.path,
-        financialYear: _exportFinancialYearLabel(),
-      );
-
-      if (!mounted) return;
-      _showSnackBar(
-        finalExportsDirectory == null
-            ? 'Workspace unavailable. Final export saved to Downloads: $filePath'
-            : 'Final export saved to workspace: $filePath',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnackBar('Final export failed: $e');
-    }
+    await _runExportWithFeedback(
+      mode: 'final_export',
+      name: 'Final Export',
+      errorPrefix: 'Final export failed',
+      exportAction: () async {
+        final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
+          exportType: 'pivot_report',
+          resolve: () =>
+              _workspaceExportPathService.resolveFinalExportsDirectory(
+                buyerId: widget.selectedBuyerId,
+                financialYearId: widget.selectedFinancialYearId,
+              ),
+        );
+        final filePath = await ExcelExportService.exportPivotReportExcel(
+          rows: rows,
+          buyerName: widget.buyerName,
+          buyerPan: widget.buyerPan,
+          gstNo: widget.gstNo,
+          outputFolderPath: finalExportsDirectory?.path,
+          financialYear: _exportFinancialYearLabel(),
+        );
+        return _ExportResult(
+          filePath: filePath,
+          workspaceAvailable: finalExportsDirectory != null,
+        );
+      },
+      successMessage: (result) => result.workspaceAvailable
+          ? 'Final export saved to workspace: ${result.filePath}'
+          : 'Workspace unavailable. Final export saved to Downloads: ${result.filePath}',
+    );
   }
 
   Future<void> _exportDetailedReportExcel() async {
     final rows = _rowsForReportExport();
-    try {
-      final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
-        exportType: 'detailed_report',
-        resolve: () => _workspaceExportPathService.resolveFinalExportsDirectory(
-          buyerId: widget.selectedBuyerId,
-          financialYearId: widget.selectedFinancialYearId,
-        ),
-      );
-      if (!mounted) return;
-      final filePath = await ExcelExportService.exportDetailedReportExcel(
-        rows: rows,
-        buyerName: widget.buyerName,
-        buyerPan: widget.buyerPan,
-        gstNo: widget.gstNo,
-        outputFolderPath: finalExportsDirectory?.path,
-        financialYear: _exportFinancialYearLabel(),
-      );
-
-      if (!mounted) return;
-      _showSnackBar(
-        finalExportsDirectory == null
-            ? 'Workspace unavailable. Detailed audit export saved to Downloads: $filePath'
-            : 'Detailed audit export saved to workspace: $filePath',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _showSnackBar('Detailed audit export failed: $e');
-    }
+    await _runExportWithFeedback(
+      mode: 'detailed_audit_export',
+      name: 'Detailed Audit Export',
+      errorPrefix: 'Detailed audit export failed',
+      exportAction: () async {
+        final finalExportsDirectory = await _resolveWorkspaceExportDirectory(
+          exportType: 'detailed_report',
+          resolve: () =>
+              _workspaceExportPathService.resolveFinalExportsDirectory(
+                buyerId: widget.selectedBuyerId,
+                financialYearId: widget.selectedFinancialYearId,
+              ),
+        );
+        final filePath = await ExcelExportService.exportDetailedReportExcel(
+          rows: rows,
+          buyerName: widget.buyerName,
+          buyerPan: widget.buyerPan,
+          gstNo: widget.gstNo,
+          outputFolderPath: finalExportsDirectory?.path,
+          financialYear: _exportFinancialYearLabel(),
+        );
+        return _ExportResult(
+          filePath: filePath,
+          workspaceAvailable: finalExportsDirectory != null,
+        );
+      },
+      successMessage: (result) => result.workspaceAvailable
+          ? 'Detailed audit export saved to workspace: ${result.filePath}'
+          : 'Workspace unavailable. Detailed audit export saved to Downloads: ${result.filePath}',
+    );
   }
 
   Future<Directory?> _resolveWorkspaceExportDirectory({
@@ -2062,6 +2132,131 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       ..showSnackBar(
         SnackBar(behavior: SnackBarBehavior.fixed, content: Text(message)),
       );
+  }
+
+  void _showExportLoadingSnackBar(String exportName) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..clearSnackBars()
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.fixed,
+          duration: const Duration(days: 1),
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text('$exportName is being prepared...')),
+            ],
+          ),
+        ),
+      );
+  }
+
+  void _showExportSuccessSnackBar(String message, String filePath) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..clearSnackBars()
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.fixed,
+          duration: const Duration(seconds: 12),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _openExportFile(filePath),
+                    icon: const Icon(Icons.insert_drive_file_rounded, size: 16),
+                    label: const Text('Open File'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openExportFolder(filePath),
+                    icon: const Icon(Icons.folder_open_rounded, size: 16),
+                    label: const Text('Open Folder'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
+  Future<void> _openExportFile(String filePath) async {
+    final opened = await _openResolvedExportPath(filePath);
+    if (!mounted || opened) return;
+    _showSnackBar('Could not open export file: $filePath');
+  }
+
+  Future<void> _openExportFolder(String filePath) async {
+    final folderPath = p.dirname(filePath);
+    final opened = await _openResolvedExportPath(folderPath);
+    if (!mounted || opened) return;
+    _showSnackBar('Could not open export folder: $folderPath');
+  }
+
+  Future<bool> _openResolvedExportPath(String targetPath) async {
+    try {
+      final normalizedPath = targetPath.trim();
+      if (normalizedPath.isEmpty) return false;
+
+      if (Platform.isWindows) {
+        if (await Directory(normalizedPath).exists()) {
+          await Process.start('explorer.exe', [normalizedPath]);
+        } else if (await File(normalizedPath).exists()) {
+          await Process.start('rundll32.exe', [
+            'url.dll,FileProtocolHandler',
+            normalizedPath,
+          ]);
+        } else {
+          return false;
+        }
+        return true;
+      }
+
+      if (Platform.isMacOS) {
+        await Process.start('open', [normalizedPath]);
+        return true;
+      }
+
+      if (Platform.isLinux) {
+        await Process.start('xdg-open', [normalizedPath]);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('EXPORT OPEN => failed path=$targetPath error=$e');
+      return false;
+    }
+
+    return false;
   }
 
   Color _statusColor(String status) {
@@ -2323,14 +2518,18 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         ),
       ),
       bottomNavigationBar: ReconciliationBottomActionBar(
-        onExportCurrentView: !_canExportCurrentView
+        isExporting: _isExporting,
+        activeExportMode: _activeExportMode,
+        onExportCurrentView: _isExporting || !_canExportCurrentView
             ? null
             : _exportCurrentViewExcel,
-        onExportSection: !_canExportSection ? null : _exportSectionExcel,
-        onExportPivotReport: !_canExportReports
+        onExportSection: _isExporting || !_canExportSection
+            ? null
+            : _exportSectionExcel,
+        onExportPivotReport: _isExporting || !_canExportReports
             ? null
             : _exportPivotReportExcel,
-        onExportDetailedReport: !_canExportReports
+        onExportDetailedReport: _isExporting || !_canExportReports
             ? null
             : _exportDetailedReportExcel,
       ),

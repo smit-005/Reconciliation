@@ -11,6 +11,8 @@ class ReconciliationBottomActionBar extends StatelessWidget {
   final VoidCallback? onExportSection;
   final VoidCallback? onExportPivotReport;
   final VoidCallback? onExportDetailedReport;
+  final bool isExporting;
+  final String? activeExportMode;
 
   const ReconciliationBottomActionBar({
     super.key,
@@ -18,6 +20,8 @@ class ReconciliationBottomActionBar extends StatelessWidget {
     required this.onExportSection,
     required this.onExportPivotReport,
     required this.onExportDetailedReport,
+    this.isExporting = false,
+    this.activeExportMode,
   });
 
   @override
@@ -42,7 +46,11 @@ class ReconciliationBottomActionBar extends StatelessWidget {
                   key: const ValueKey('export_current_button'),
                   onPressed: onExportCurrentView,
                   icon: Icons.download_rounded,
-                  label: 'Export Working View',
+                  label: _labelFor(
+                    mode: 'working_view',
+                    fallback: 'Export Working View',
+                  ),
+                  isLoading: activeExportMode == 'working_view',
                 ),
               ),
             ),
@@ -54,7 +62,7 @@ class ReconciliationBottomActionBar extends StatelessWidget {
                   key: const ValueKey('export_section_button'),
                   onPressed: onExportSection,
                   icon: Icons.download_for_offline_rounded,
-                  label: 'Export Section',
+                  label: _labelFor(mode: 'section', fallback: 'Export Section'),
                 ),
               ),
             ),
@@ -66,7 +74,10 @@ class ReconciliationBottomActionBar extends StatelessWidget {
                   key: const ValueKey('export_pivot_button'),
                   onPressed: onExportPivotReport,
                   icon: Icons.table_chart_rounded,
-                  label: 'Final Export',
+                  label: _labelFor(
+                    mode: 'final_export',
+                    fallback: 'Final Export',
+                  ),
                 ),
               ),
             ),
@@ -78,7 +89,10 @@ class ReconciliationBottomActionBar extends StatelessWidget {
                   key: const ValueKey('export_detailed_button'),
                   onPressed: onExportDetailedReport,
                   icon: Icons.article_rounded,
-                  label: 'Detailed Audit Export',
+                  label: _labelFor(
+                    mode: 'detailed_audit_export',
+                    fallback: 'Detailed Audit Export',
+                  ),
                 ),
               ),
             ),
@@ -133,6 +147,11 @@ class ReconciliationBottomActionBar extends StatelessWidget {
         },
       ),
     );
+  }
+
+  String _labelFor({required String mode, required String fallback}) {
+    if (!isExporting || activeExportMode != mode) return fallback;
+    return 'Exporting...';
   }
 }
 
