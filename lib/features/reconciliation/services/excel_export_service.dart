@@ -242,13 +242,6 @@ class ExcelExportService {
       predicate: _isMissingInBooksRow,
     );
 
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Timing_Difference'),
-      rows: rows,
-      title: 'TIMING DIFFERENCE',
-      predicate: _isTimingDifferenceRow,
-    );
-
     final detailSheet = workbook.worksheets.addWithName('Raw_Data');
     _writeTitle(detailSheet, 'WORKING VIEW RAW DATA');
     _writeSummarySection(
@@ -302,13 +295,6 @@ class ExcelExportService {
       rows: rows,
       title: 'MISSING IN BOOKS',
       predicate: _isMissingInBooksRow,
-    );
-
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Timing_Difference'),
-      rows: rows,
-      title: 'TIMING DIFFERENCE',
-      predicate: _isTimingDifferenceRow,
     );
 
     final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
@@ -375,13 +361,6 @@ class ExcelExportService {
       predicate: _isMissingInBooksRow,
     );
 
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Final_Timing_Difference'),
-      rows: rows,
-      title: 'FINAL TIMING DIFFERENCE',
-      predicate: _isTimingDifferenceRow,
-    );
-
     final exceptionSummarySheet = workbook.worksheets.addWithName(
       'Exception_Summary',
     );
@@ -435,13 +414,6 @@ class ExcelExportService {
       rows: rows,
       title: 'FINAL MISSING IN BOOKS',
       predicate: _isMissingInBooksRow,
-    );
-
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Final_Timing_Difference'),
-      rows: rows,
-      title: 'FINAL TIMING DIFFERENCE',
-      predicate: _isTimingDifferenceRow,
     );
 
     final exceptionSummarySheet = workbook.worksheets.addWithName(

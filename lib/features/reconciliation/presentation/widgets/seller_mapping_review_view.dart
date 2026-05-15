@@ -18,7 +18,6 @@ class SellerMappingReviewView extends StatelessWidget {
   final SellerReviewValueGetter selectedValueForRow;
   final SellerReviewStringGetter selectedPanForRow;
   final SellerReviewLinkedLedgerGetter linkedLedgerRowForRow;
-  final SellerReviewRowAction onMarkTimingDifference;
   final SellerReviewRowAction onMarkMissingInBooks;
 
   const SellerMappingReviewView({
@@ -30,7 +29,6 @@ class SellerMappingReviewView extends StatelessWidget {
     required this.selectedValueForRow,
     required this.selectedPanForRow,
     required this.linkedLedgerRowForRow,
-    required this.onMarkTimingDifference,
     required this.onMarkMissingInBooks,
   });
 
@@ -138,7 +136,6 @@ class SellerMappingReviewView extends StatelessWidget {
                         linkedLedgerRow: _safeLinkedLedgerRow(
                           linkedLedgerRowForRow(row),
                         ),
-                        onMarkTimingDifference: onMarkTimingDifference,
                         onMarkMissingInBooks: onMarkMissingInBooks,
                       );
                     },
@@ -343,7 +340,6 @@ class _ReviewSellerRow extends StatelessWidget {
   final String? selectedValue;
   final String selectedPan;
   final SellerMappingRowVm? linkedLedgerRow;
-  final SellerReviewRowAction onMarkTimingDifference;
   final SellerReviewRowAction onMarkMissingInBooks;
 
   const _ReviewSellerRow({
@@ -352,7 +348,6 @@ class _ReviewSellerRow extends StatelessWidget {
     required this.selectedValue,
     required this.selectedPan,
     required this.linkedLedgerRow,
-    required this.onMarkTimingDifference,
     required this.onMarkMissingInBooks,
   });
 
@@ -420,19 +415,6 @@ class _ReviewSellerRow extends StatelessWidget {
                 ),
                 if (_canMarkException) ...[
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => onMarkTimingDifference(row),
-                    icon: const Icon(Icons.schedule_rounded, size: 16),
-                    label: const Text(
-                      'Timing Difference',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 34),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
                   OutlinedButton.icon(
                     onPressed: () => onMarkMissingInBooks(row),
                     icon: const Icon(Icons.bookmark_remove_rounded, size: 16),

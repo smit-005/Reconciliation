@@ -35,7 +35,6 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
   final SellerMappingLedgerLinkAction onLinkToLedgerRow;
   final SellerMappingRowAction onKeepSeparate;
   final SellerMappingRowAction onClear;
-  final SellerMappingRowAction onMarkTimingDifference;
   final SellerMappingRowAction onMarkMissingInBooks;
 
   const SellerMappingTwoPanelBody({
@@ -59,7 +58,6 @@ class SellerMappingTwoPanelBody extends StatefulWidget {
     required this.onLinkToLedgerRow,
     required this.onKeepSeparate,
     required this.onClear,
-    required this.onMarkTimingDifference,
     required this.onMarkMissingInBooks,
   });
 
@@ -577,7 +575,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         border: Border.all(color: SellerMappingTheme.borderColor),
       ),
       child: _ActionColumnLayout(
-        compactHeightBreakpoint: canShowExceptionActions ? 360 : 280,
+        compactHeightBreakpoint: canShowExceptionActions ? 320 : 280,
         controls: [
           const Text(
             'Actions',
@@ -628,12 +626,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
           ),
           if (canShowExceptionActions) ...[
             const Divider(height: 24),
-            OutlinedButton.icon(
-              onPressed: () => widget.onMarkTimingDifference(row),
-              icon: const Icon(Icons.schedule_rounded, size: 18),
-              label: const Text('Timing Difference'),
-            ),
-            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => widget.onMarkMissingInBooks(row),
               icon: const Icon(Icons.bookmark_remove_rounded, size: 18),

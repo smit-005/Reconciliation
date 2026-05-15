@@ -322,13 +322,12 @@ void _validateWorkingViewWorkbook(String path) {
     'Summary',
     'Pivot',
     'Missing_In_Books',
-    'Timing_Difference',
     'Raw_Data',
     'TDS_Section_Info',
   ]);
   _expectSheetHasRows(workbook, 'Pivot');
   _expectSheetHasRows(workbook, 'Missing_In_Books');
-  _expectSheetExists(workbook, 'Timing_Difference');
+  _expectSheetMissing(workbook, 'Timing_Difference');
   _expectSheetHasRows(workbook, 'Raw_Data');
 }
 
@@ -339,7 +338,6 @@ void _validateSectionWorkbook(String path) {
     'Section_Pivot',
     'Ledger_Pivot',
     'Missing_In_Books',
-    'Timing_Difference',
     'Exceptions',
     'Raw_Data',
     'TDS_Section_Info',
@@ -347,7 +345,7 @@ void _validateSectionWorkbook(String path) {
   _expectSheetHasRows(workbook, 'Section_Pivot');
   _expectSheetHasRows(workbook, 'Ledger_Pivot');
   _expectSheetHasRows(workbook, 'Missing_In_Books');
-  _expectSheetExists(workbook, 'Timing_Difference');
+  _expectSheetMissing(workbook, 'Timing_Difference');
   _expectSheetHasRows(workbook, 'Raw_Data');
 }
 
@@ -359,14 +357,13 @@ void _validateFinalWorkbook(String path, List<String> sections) {
     for (final section in sections) '$section Pivot',
     'Ledger_Pivot',
     'Final_Missing_In_Books',
-    'Final_Timing_Difference',
     'Exception_Summary',
     'TDS_Section_Info',
   ]);
   _expectSheetHasRows(workbook, 'Section_Summary');
   _expectSheetHasRows(workbook, 'Ledger_Pivot');
   _expectSheetHasRows(workbook, 'Final_Missing_In_Books');
-  _expectSheetExists(workbook, 'Final_Timing_Difference');
+  _expectSheetMissing(workbook, 'Final_Timing_Difference');
   for (final section in sections) {
     _expectSheetHasRows(workbook, '$section Pivot');
   }
@@ -380,7 +377,6 @@ void _validateDetailedWorkbook(String path, List<String> sections) {
     for (final section in sections) '$section Pivot',
     'Ledger_Pivot',
     'Final_Missing_In_Books',
-    'Final_Timing_Difference',
     'Exception_Summary',
     'Raw_Reconciliation',
     'Exception_Details',
@@ -390,6 +386,7 @@ void _validateDetailedWorkbook(String path, List<String> sections) {
   _expectSheetHasRows(workbook, 'Raw_Reconciliation');
   _expectSheetHasRows(workbook, 'Exception_Details');
   _expectSheetHasRows(workbook, 'Technical_Details');
+  _expectSheetMissing(workbook, 'Final_Timing_Difference');
 }
 
 SpreadsheetDecoder _openWorkbook(String path) {
@@ -412,11 +409,11 @@ void _expectSheetHasRows(SpreadsheetDecoder workbook, String sheetName) {
   );
 }
 
-void _expectSheetExists(SpreadsheetDecoder workbook, String sheetName) {
+void _expectSheetMissing(SpreadsheetDecoder workbook, String sheetName) {
   expect(
     workbook.tables[sheetName],
-    isNotNull,
-    reason: 'Missing sheet $sheetName',
+    isNull,
+    reason: 'Unexpected hidden workflow sheet $sheetName',
   );
 }
 

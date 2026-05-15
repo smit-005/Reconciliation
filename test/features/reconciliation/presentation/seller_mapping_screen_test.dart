@@ -331,7 +331,6 @@ void main() {
             onLinkToLedgerRow: (row, ledgerRow) {},
             onKeepSeparate: (_) {},
             onClear: (_) {},
-            onMarkTimingDifference: (_) {},
             onMarkMissingInBooks: (_) {},
           ),
         ),
@@ -342,6 +341,14 @@ void main() {
     await tester.pump();
 
     expect(find.text('Multiple PANs: 2'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Missing in Books'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(OutlinedButton, 'Timing Difference'),
+      findsNothing,
+    );
   });
 
   testWidgets(
@@ -414,7 +421,6 @@ void main() {
               onLinkToLedgerRow: (row, ledgerRow) {},
               onKeepSeparate: (_) {},
               onClear: (_) {},
-              onMarkTimingDifference: (_) {},
               onMarkMissingInBooks: (_) {},
             ),
           ),
@@ -481,7 +487,6 @@ void main() {
             onLinkToLedgerRow: (row, ledgerRow) {},
             onKeepSeparate: (_) {},
             onClear: (_) {},
-            onMarkTimingDifference: (_) {},
             onMarkMissingInBooks: (_) {},
           ),
         ),

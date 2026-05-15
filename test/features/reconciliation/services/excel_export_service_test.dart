@@ -105,11 +105,11 @@ void main() {
         'Summary',
         'Pivot',
         'Missing_In_Books',
-        'Timing_Difference',
         'Raw_Data',
         'TDS_Section_Info',
       ]),
     );
+    expect(sheets, isNot(contains('Timing_Difference')));
     expect(sheets, isNot(contains('Pivot Summary')));
     expect(sheets, isNot(contains('194A')));
     expect(sheets, isNot(contains('194A Pivot')));
@@ -203,12 +203,12 @@ void main() {
         'Section_Pivot',
         'Ledger_Pivot',
         'Missing_In_Books',
-        'Timing_Difference',
         'Exceptions',
         'Raw_Data',
         'TDS_Section_Info',
       ]),
     );
+    expect(sheets, isNot(contains('Timing_Difference')));
     expect(sheets, isNot(contains('Pivot Summary')));
     expect(sheets, isNot(contains('194C')));
   });
@@ -278,11 +278,11 @@ void main() {
           '194C Pivot',
           'Ledger_Pivot',
           'Final_Missing_In_Books',
-          'Final_Timing_Difference',
           'Exception_Summary',
           'TDS_Section_Info',
         ]),
       );
+      expect(sheets, isNot(contains('Final_Timing_Difference')));
       expect(sheets, isNot(contains('Pivot Summary')));
       expect(sheets, isNot(contains('194A')));
       expect(sheets, isNot(contains('194C')));
@@ -519,7 +519,6 @@ void main() {
         '194C Pivot',
         'Ledger_Pivot',
         'Final_Missing_In_Books',
-        'Final_Timing_Difference',
         'Exception_Summary',
         'Raw_Reconciliation',
         'Exception_Details',
@@ -527,6 +526,7 @@ void main() {
         'TDS_Section_Info',
       ]),
     );
+    expect(sheets, isNot(contains('Final_Timing_Difference')));
     expect(sheets, isNot(contains('Pivot Summary')));
     expect(sheets, isNot(contains('194A')));
     expect(sheets, isNot(contains('194C')));

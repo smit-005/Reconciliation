@@ -2255,7 +2255,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                 'Unmapped',
                 'Only in Ledger',
                 'Conflict',
-                'Timing Difference',
                 'Missing in Books',
               ],
               onChanged: (value) {
@@ -2433,8 +2432,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       onLinkToLedgerRow: _linkToLedgerRow,
       onKeepSeparate: _markSeparate,
       onClear: _clearMapping,
-      onMarkTimingDifference: (row) =>
-          _setExceptionDecision(row, _timingDifferenceValue(row)),
       onMarkMissingInBooks: (row) =>
           _setExceptionDecision(row, _missingInBooksValue(row)),
     );
@@ -2636,11 +2633,6 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                                   _linkedLedgerRowForSelection(
                                     sectionCode: row.sectionCode,
                                     selectedValue: _getSelectedValue(row),
-                                  ),
-                              onMarkTimingDifference: (row) =>
-                                  _setExceptionDecision(
-                                    row,
-                                    _timingDifferenceValue(row),
                                   ),
                               onMarkMissingInBooks: (row) =>
                                   _setExceptionDecision(
