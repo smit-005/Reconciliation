@@ -24,6 +24,21 @@ class ExcelExportService {
     );
   }
 
+  static void _writeTimedSheet(
+    xlsio.Worksheet sheet,
+    String label,
+    void Function() write,
+  ) {
+    final sheetWatch = Stopwatch()..start();
+    write();
+    sheetWatch.stop();
+    _logPerformance(
+      'sheet_write',
+      sheetWatch,
+      details: 'sheet=${sheet.name} label=$label',
+    );
+  }
+
   static Future<String> exportCurrentViewExcel({
     required List<ReconciliationRow> rows,
     required String buyerName,
@@ -150,6 +165,16 @@ class ExcelExportService {
     String? financialYear,
     String? section,
   }) async {
+    final totalExportWatch = Stopwatch()..start();
+    final fileName = buildExportFileName(
+      mode: mode,
+      buyerName: buyerName,
+      financialYear: financialYear,
+      section: section ?? _sectionLabelFromRows(rows),
+    );
+    debugPrint(
+      'EXPORT TIMING => export_start mode=${mode.name} name=$fileName rows=${rows.length}',
+    );
     debugPrint('EXPORT PERF => step=rows_count rows=${rows.length}');
     final workbookWatch = Stopwatch()..start();
     final workbook = xlsio.Workbook();
@@ -157,6 +182,7 @@ class ExcelExportService {
     _logPerformance('workbook_creation', workbookWatch);
 
     try {
+      final workbookBuildWatch = Stopwatch()..start();
       switch (mode) {
         case ExcelExportMode.currentView:
           _buildCurrentViewWorkbook(
@@ -192,19 +218,34 @@ class ExcelExportService {
             gstNo: gstNo,
           );
       }
-
-      final fileName = buildExportFileName(
-        mode: mode,
-        buyerName: buyerName,
-        financialYear: financialYear,
-        section: section ?? _sectionLabelFromRows(rows),
+      workbookBuildWatch.stop();
+      debugPrint(
+        'EXPORT TIMING => workbook_build_ms=${workbookBuildWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName',
       );
 
-      return _saveWorkbook(
+      final saveWatch = Stopwatch()..start();
+      final path = await _saveWorkbook(
         workbook,
         fileName: fileName,
         outputFolderPath: outputFolderPath,
       );
+      saveWatch.stop();
+      totalExportWatch.stop();
+      debugPrint(
+        'EXPORT TIMING => save_ms=${saveWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName',
+      );
+      debugPrint(
+        'EXPORT TIMING => total_export_ms=${totalExportWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName path=$path',
+      );
+      return path;
+    } catch (e) {
+      if (totalExportWatch.isRunning) {
+        totalExportWatch.stop();
+      }
+      debugPrint(
+        'EXPORT TIMING => total_export_ms=${totalExportWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName status=failed error=$e',
+      );
+      rethrow;
     } finally {
       workbook.dispose();
     }
@@ -218,43 +259,60 @@ class ExcelExportService {
     required String gstNo,
   }) {
     final summarySheet = workbook.worksheets[0];
-    summarySheet.name = 'Summary';
-    _writeCompactSummarySheet(
-      summarySheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-      title: 'Working View Summary',
-    );
+    _writeTimedSheet(summarySheet, 'compact_summary', () {
+      summarySheet.name = 'Summary';
+      _writeCompactSummarySheet(
+        summarySheet,
+        rows: rows,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+        title: 'Working View Summary',
+      );
+    });
 
     final pivotSheet = workbook.worksheets.addWithName('Pivot');
-    _writeTimedPivotSummarySheet(
+    _writeTimedSheet(
       pivotSheet,
-      rows: rows,
-      title: 'WORKING VIEW PIVOT',
+      'pivot',
+      () => _writeTimedPivotSummarySheet(
+        pivotSheet,
+        rows: rows,
+        title: 'WORKING VIEW PIVOT',
+      ),
     );
 
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Missing_In_Books'),
-      rows: rows,
-      title: 'MISSING IN BOOKS',
-      predicate: _isMissingInBooksRow,
+    final missingSheet = workbook.worksheets.addWithName('Missing_In_Books');
+    _writeTimedSheet(
+      missingSheet,
+      'filtered_detail',
+      () => _writeFilteredDetailSheet(
+        missingSheet,
+        rows: rows,
+        title: 'MISSING IN BOOKS',
+        predicate: _isMissingInBooksRow,
+      ),
     );
 
     final detailSheet = workbook.worksheets.addWithName('Raw_Data');
-    _writeTitle(detailSheet, 'WORKING VIEW RAW DATA');
-    _writeSummarySection(
-      detailSheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-    );
-    _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+    _writeTimedSheet(detailSheet, 'detail', () {
+      _writeTitle(detailSheet, 'WORKING VIEW RAW DATA');
+      _writeSummarySection(
+        detailSheet,
+        rows: rows,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+      );
+      _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+    });
 
     final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
-    _writeTdsSectionInfoSheet(infoSheet);
+    _writeTimedSheet(
+      infoSheet,
+      'tds_section_info',
+      () => _writeTdsSectionInfoSheet(infoSheet),
+    );
   }
 
   static void _buildSectionWorkbook(
@@ -267,52 +325,81 @@ class ExcelExportService {
   }) {
     final grouped = _groupBySection(rows);
     final sectionSummarySheet = workbook.worksheets[0];
-    sectionSummarySheet.name = 'Section_Summary';
-    _writeSectionSummarySheet(
-      sectionSummarySheet,
-      grouped: grouped,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-    );
+    _writeTimedSheet(sectionSummarySheet, 'section_summary', () {
+      sectionSummarySheet.name = 'Section_Summary';
+      _writeSectionSummarySheet(
+        sectionSummarySheet,
+        grouped: grouped,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+      );
+    });
 
     final pivotSheet = workbook.worksheets.addWithName('Section_Pivot');
-    _writeTimedPivotSummarySheet(
+    _writeTimedSheet(
       pivotSheet,
-      rows: rows,
-      title: 'SECTION $section SELLER PIVOT',
+      'pivot',
+      () => _writeTimedPivotSummarySheet(
+        pivotSheet,
+        rows: rows,
+        title: 'SECTION $section SELLER PIVOT',
+      ),
     );
 
     final ledgerPivotSheet = workbook.worksheets.addWithName('Ledger_Pivot');
-    _writeLedgerPivotSheet(
+    _writeTimedSheet(
       ledgerPivotSheet,
-      rows: rows,
-      title: 'SECTION $section LEDGER PIVOT',
+      'ledger_pivot',
+      () => _writeLedgerPivotSheet(
+        ledgerPivotSheet,
+        rows: rows,
+        title: 'SECTION $section LEDGER PIVOT',
+      ),
     );
 
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Missing_In_Books'),
-      rows: rows,
-      title: 'MISSING IN BOOKS',
-      predicate: _isMissingInBooksRow,
+    final missingSheet = workbook.worksheets.addWithName('Missing_In_Books');
+    _writeTimedSheet(
+      missingSheet,
+      'filtered_detail',
+      () => _writeFilteredDetailSheet(
+        missingSheet,
+        rows: rows,
+        title: 'MISSING IN BOOKS',
+        predicate: _isMissingInBooksRow,
+      ),
     );
 
     final exceptionsSheet = workbook.worksheets.addWithName('Exceptions');
-    _writeExceptionsSheet(exceptionsSheet, rows: rows, remainingOnly: true);
+    _writeTimedSheet(
+      exceptionsSheet,
+      'exceptions',
+      () => _writeExceptionsSheet(
+        exceptionsSheet,
+        rows: rows,
+        remainingOnly: true,
+      ),
+    );
 
     final detailSheet = workbook.worksheets.addWithName('Raw_Data');
-    _writeTitle(detailSheet, 'SECTION $section DETAIL');
-    _writeSummarySection(
-      detailSheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-    );
-    _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+    _writeTimedSheet(detailSheet, 'detail', () {
+      _writeTitle(detailSheet, 'SECTION $section DETAIL');
+      _writeSummarySection(
+        detailSheet,
+        rows: rows,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+      );
+      _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+    });
 
     final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
-    _writeTdsSectionInfoSheet(infoSheet);
+    _writeTimedSheet(
+      infoSheet,
+      'tds_section_info',
+      () => _writeTdsSectionInfoSheet(infoSheet),
+    );
   }
 
   static void _buildPivotReportWorkbook(
@@ -324,50 +411,75 @@ class ExcelExportService {
   }) {
     final grouped = _groupBySection(rows);
     final workbookSummarySheet = workbook.worksheets[0];
-    workbookSummarySheet.name = 'Master_Summary';
-    _writeCompactSummarySheet(
-      workbookSummarySheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-      title: 'Master Summary',
-    );
+    _writeTimedSheet(workbookSummarySheet, 'compact_summary', () {
+      workbookSummarySheet.name = 'Master_Summary';
+      _writeCompactSummarySheet(
+        workbookSummarySheet,
+        rows: rows,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+        title: 'Master Summary',
+      );
+    });
 
     final sectionSummarySheet = workbook.worksheets.addWithName(
       'Section_Summary',
     );
-    _writeSectionSummarySheet(
+    _writeTimedSheet(
       sectionSummarySheet,
-      grouped: grouped,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
+      'section_summary',
+      () => _writeSectionSummarySheet(
+        sectionSummarySheet,
+        grouped: grouped,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+      ),
     );
 
     _writeSectionPivotSheets(workbook, grouped: grouped);
 
     final ledgerPivotSheet = workbook.worksheets.addWithName('Ledger_Pivot');
-    _writeLedgerPivotSheet(
+    _writeTimedSheet(
       ledgerPivotSheet,
-      rows: rows,
-      title: 'FINAL LEDGER PIVOT',
+      'ledger_pivot',
+      () => _writeLedgerPivotSheet(
+        ledgerPivotSheet,
+        rows: rows,
+        title: 'FINAL LEDGER PIVOT',
+      ),
     );
 
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Final_Missing_In_Books'),
-      rows: rows,
-      title: 'FINAL MISSING IN BOOKS',
-      predicate: _isMissingInBooksRow,
+    final finalMissingSheet = workbook.worksheets.addWithName(
+      'Final_Missing_In_Books',
+    );
+    _writeTimedSheet(
+      finalMissingSheet,
+      'filtered_detail',
+      () => _writeFilteredDetailSheet(
+        finalMissingSheet,
+        rows: rows,
+        title: 'FINAL MISSING IN BOOKS',
+        predicate: _isMissingInBooksRow,
+      ),
     );
 
     final exceptionSummarySheet = workbook.worksheets.addWithName(
       'Exception_Summary',
     );
-    _writeExceptionSummarySheet(exceptionSummarySheet, rows: rows);
+    _writeTimedSheet(
+      exceptionSummarySheet,
+      'exception_summary',
+      () => _writeExceptionSummarySheet(exceptionSummarySheet, rows: rows),
+    );
 
     final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
-    _writeTdsSectionInfoSheet(infoSheet);
+    _writeTimedSheet(
+      infoSheet,
+      'tds_section_info',
+      () => _writeTdsSectionInfoSheet(infoSheet),
+    );
   }
 
   static void _buildDetailedReportWorkbook(
@@ -379,75 +491,110 @@ class ExcelExportService {
   }) {
     final grouped = _groupBySection(rows);
     final workbookSummarySheet = workbook.worksheets[0];
-    workbookSummarySheet.name = 'Master_Summary';
-    _writeCompactSummarySheet(
-      workbookSummarySheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-      title: 'Master Summary',
-    );
+    _writeTimedSheet(workbookSummarySheet, 'compact_summary', () {
+      workbookSummarySheet.name = 'Master_Summary';
+      _writeCompactSummarySheet(
+        workbookSummarySheet,
+        rows: rows,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+        title: 'Master Summary',
+      );
+    });
 
     final sectionSummarySheet = workbook.worksheets.addWithName(
       'Section_Summary',
     );
-    _writeSectionSummarySheet(
+    _writeTimedSheet(
       sectionSummarySheet,
-      grouped: grouped,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
+      'section_summary',
+      () => _writeSectionSummarySheet(
+        sectionSummarySheet,
+        grouped: grouped,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+      ),
     );
 
     _writeSectionPivotSheets(workbook, grouped: grouped);
 
     final ledgerPivotSheet = workbook.worksheets.addWithName('Ledger_Pivot');
-    _writeLedgerPivotSheet(
+    _writeTimedSheet(
       ledgerPivotSheet,
-      rows: rows,
-      title: 'FINAL LEDGER PIVOT',
+      'ledger_pivot',
+      () => _writeLedgerPivotSheet(
+        ledgerPivotSheet,
+        rows: rows,
+        title: 'FINAL LEDGER PIVOT',
+      ),
     );
 
-    _writeFilteredDetailSheet(
-      workbook.worksheets.addWithName('Final_Missing_In_Books'),
-      rows: rows,
-      title: 'FINAL MISSING IN BOOKS',
-      predicate: _isMissingInBooksRow,
+    final finalMissingSheet = workbook.worksheets.addWithName(
+      'Final_Missing_In_Books',
+    );
+    _writeTimedSheet(
+      finalMissingSheet,
+      'filtered_detail',
+      () => _writeFilteredDetailSheet(
+        finalMissingSheet,
+        rows: rows,
+        title: 'FINAL MISSING IN BOOKS',
+        predicate: _isMissingInBooksRow,
+      ),
     );
 
     final exceptionSummarySheet = workbook.worksheets.addWithName(
       'Exception_Summary',
     );
-    _writeExceptionSummarySheet(exceptionSummarySheet, rows: rows);
+    _writeTimedSheet(
+      exceptionSummarySheet,
+      'exception_summary',
+      () => _writeExceptionSummarySheet(exceptionSummarySheet, rows: rows),
+    );
 
     final detailSheet = workbook.worksheets.addWithName('Raw_Reconciliation');
-    _writeTitle(detailSheet, 'RAW RECONCILIATION');
-    _writeSummarySection(
-      detailSheet,
-      rows: rows,
-      buyerName: buyerName,
-      buyerPan: buyerPan,
-      gstNo: gstNo,
-    );
-    _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+    _writeTimedSheet(detailSheet, 'detail', () {
+      _writeTitle(detailSheet, 'RAW RECONCILIATION');
+      _writeSummarySection(
+        detailSheet,
+        rows: rows,
+        buyerName: buyerName,
+        buyerPan: buyerPan,
+        gstNo: gstNo,
+      );
+      _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
+    });
 
     final exceptionDetailsSheet = workbook.worksheets.addWithName(
       'Exception_Details',
     );
-    _writeExceptionsSheet(
+    _writeTimedSheet(
       exceptionDetailsSheet,
-      rows: rows,
-      remainingOnly: false,
+      'exceptions',
+      () => _writeExceptionsSheet(
+        exceptionDetailsSheet,
+        rows: rows,
+        remainingOnly: false,
+      ),
     );
 
     final technicalDetailsSheet = workbook.worksheets.addWithName(
       'Technical_Details',
     );
-    _writeTechnicalDetailsSheet(technicalDetailsSheet, rows: rows);
+    _writeTimedSheet(
+      technicalDetailsSheet,
+      'technical_details',
+      () => _writeTechnicalDetailsSheet(technicalDetailsSheet, rows: rows),
+    );
 
     final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
-    _writeTdsSectionInfoSheet(infoSheet);
+    _writeTimedSheet(
+      infoSheet,
+      'tds_section_info',
+      () => _writeTdsSectionInfoSheet(infoSheet),
+    );
   }
 
   static Set<String> _writeSectionPivotSheets(
@@ -466,10 +613,14 @@ class ExcelExportService {
       final sheetName = _safeSheetName('$cleanSection Pivot');
       sheetNames.add(sheetName);
       final sheet = workbook.worksheets.addWithName(sheetName);
-      _writeTimedPivotSummarySheet(
+      _writeTimedSheet(
         sheet,
-        rows: sectionRows,
-        title: '$cleanSection PIVOT',
+        'section_pivot',
+        () => _writeTimedPivotSummarySheet(
+          sheet,
+          rows: sectionRows,
+          title: '$cleanSection PIVOT',
+        ),
       );
     }
 
@@ -1079,7 +1230,11 @@ class ExcelExportService {
       sheet.getRangeByIndex(startRow + 1, 13, rowIndex - 1, 13).numberFormat =
           '0.00%';
     }
-    _autoFitUsefulColumns(sheet, 21);
+    if (_usesFixedDetailWidths(sheet.name)) {
+      _applyFixedDetailColumnWidths(sheet);
+    } else {
+      _autoFitUsefulColumns(sheet, 21);
+    }
   }
 
   static void _writeCompactSummarySheet(
@@ -1489,7 +1644,7 @@ class ExcelExportService {
         startRow,
         headers.length,
       );
-      _autoFitUsefulColumns(sheet, headers.length);
+      _applyFixedTechnicalColumnWidths(sheet, headers);
     }
   }
 
@@ -1900,8 +2055,108 @@ class ExcelExportService {
     _logPerformance(
       'autoFitColumn',
       autoFitWatch,
-      details: 'columns=$totalColumns',
+      details: 'sheet=${sheet.name} columns=$totalColumns',
     );
+  }
+
+  static bool _usesFixedDetailWidths(String sheetName) {
+    return const {
+      'Raw_Data',
+      'Raw_Reconciliation',
+      'Exception_Details',
+      'Final_Missing_In_Books',
+      'Missing_In_Books',
+    }.contains(sheetName);
+  }
+
+  static void _applyFixedDetailColumnWidths(xlsio.Worksheet sheet) {
+    final widthWatch = Stopwatch()..start();
+    const widths = <int>[
+      170, // Buyer Name
+      115, // Buyer PAN
+      90, // Financial Year
+      80, // Month
+      80, // Section
+      220, // Seller Name
+      115, // Seller PAN
+      115, // Basic Amount
+      125, // Applicable Amount
+      105, // 26Q Amount
+      115, // Expected TDS
+      105, // Actual TDS
+      90, // TDS Rate Used
+      110, // TDS Difference
+      120, // Amount Difference
+      150, // Status
+      90, // Risk Level
+      170, // Source Ledger File IDs
+      220, // Source Ledger Files
+      180, // Source Ledger Uploaded At
+      260, // Remarks
+    ];
+
+    for (var i = 0; i < widths.length; i++) {
+      sheet.setColumnWidthInPixels(i + 1, widths[i]);
+    }
+    widthWatch.stop();
+    _logPerformance(
+      'fixed_column_widths',
+      widthWatch,
+      details: 'sheet=${sheet.name} columns=${widths.length}',
+    );
+  }
+
+  static void _applyFixedTechnicalColumnWidths(
+    xlsio.Worksheet sheet,
+    List<String> headers,
+  ) {
+    final widthWatch = Stopwatch()..start();
+    for (var i = 0; i < headers.length; i++) {
+      sheet.setColumnWidthInPixels(i + 1, _technicalColumnWidth(headers[i]));
+    }
+    widthWatch.stop();
+    _logPerformance(
+      'fixed_column_widths',
+      widthWatch,
+      details: 'sheet=${sheet.name} columns=${headers.length}',
+    );
+  }
+
+  static int _technicalColumnWidth(String header) {
+    final normalized = header.toLowerCase();
+    if (normalized.contains('remark') || normalized.contains('reason')) {
+      return 260;
+    }
+    if (normalized.contains('file') ||
+        normalized.contains('source') ||
+        normalized.contains('ledger')) {
+      return 220;
+    }
+    if (normalized.contains('name')) {
+      return 210;
+    }
+    if (normalized.contains('date') ||
+        normalized.contains('month') ||
+        normalized.contains('uploaded')) {
+      return 150;
+    }
+    if (normalized.contains('pan') ||
+        normalized.contains('gst') ||
+        normalized.contains('section')) {
+      return 115;
+    }
+    if (normalized.contains('amount') ||
+        normalized.contains('tds') ||
+        normalized.contains('difference')) {
+      return 125;
+    }
+    if (normalized.contains('rate')) {
+      return 90;
+    }
+    if (normalized.contains('status')) {
+      return 150;
+    }
+    return 140;
   }
 
   static String _safeSheetName(String value) {
