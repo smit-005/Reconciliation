@@ -51,6 +51,7 @@ class UploadBottomActionButtons extends StatelessWidget {
         const Spacer(),
         if (has26QReady && allRequiredMappingsConfirmed)
           OutlinedButton.icon(
+            key: const ValueKey('review_seller_mappings_button'),
             onPressed: isLoadingSellerMapping ? null : openSellerMappingScreen,
             style: OutlinedButton.styleFrom(
               foregroundColor: isSellerMappingConfirmed
