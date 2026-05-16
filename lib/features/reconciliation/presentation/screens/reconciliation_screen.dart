@@ -27,6 +27,7 @@ import 'package:reconciliation_app/features/reconciliation/presentation/widgets/
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_filters.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_table_section.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/reconciliation_top_toolbar.dart';
+import 'package:reconciliation_app/features/reconciliation/utils/reconciliation_section_utils.dart';
 import 'package:reconciliation_app/features/upload/services/auto_mapping_service.dart';
 import 'package:reconciliation_app/features/reconciliation/services/excel_export_service.dart';
 import 'package:reconciliation_app/features/reconciliation/services/reconciliation_orchestrator.dart';
@@ -147,7 +148,7 @@ class ReconciliationScreen extends StatefulWidget {
 }
 
 class _ReconciliationScreenState extends State<ReconciliationScreen> {
-  static const List<String> _sectionTabs = [
+  static const List<String> _supportedSectionTabs = [
     'All',
     ...TdsSectionCatalog.supportedSectionCodes,
   ];
@@ -205,8 +206,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     CalculationService.sellerStatusMismatch,
     CalculationService.sellerStatusNo26Q,
     CalculationService.sellerStatusOnly26Q,
+    ReconciliationStatus.sectionMissing,
+    unsupportedReconciliationStatusFilter,
     ReconciliationStatus.reviewRequired,
   ];
+
+  List<String> get _sectionTabs {
+    return reconciliationSectionTabsForRows(allRows.map((row) => row.section));
+  }
 
   bool get _canExportCurrentView =>
       _hasCurrentViewExportRows && _currentViewExportRowCount > 0;
@@ -943,12 +950,20 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   bool _isSupportedSectionTab(String value) {
-    return value != 'All Sections' && _sectionTabs.contains(value);
+    return value != 'All Sections' &&
+        (_supportedSectionTabs.contains(value) ||
+            value == unsupportedReconciliationSectionTab);
   }
 
   List<ReconciliationRow> _baseRowsForSection(String selectedSectionValue) {
     if (selectedSectionValue == 'All Sections') {
       return List<ReconciliationRow>.of(allRows);
+    }
+
+    if (selectedSectionValue == unsupportedReconciliationSectionTab) {
+      return allRows
+          .where((row) => isUnsupportedReconciliationSection(row.section))
+          .toList();
     }
 
     final sectionRows =
@@ -1059,12 +1074,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
 
     final sections = scopedRows
         .map((e) => e.section.trim())
-        .where(_isSupportedSectionTab)
+        .where(_supportedSectionTabs.contains)
         .toSet()
         .toList();
+    final hasUnsupportedRows = _hasUnsupportedRows(scopedRows);
 
     sortSections(sections);
-    return ['All Sections', ...sections];
+    return [
+      'All Sections',
+      ...sections,
+      if (hasUnsupportedRows) unsupportedReconciliationSectionTab,
+    ];
   }
 
   List<ReconciliationRow> _filterRows({
@@ -1250,6 +1270,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     if (selectedSectionValue != 'All Sections' && !identical(baseRows, rows)) {
       // Section scoping already narrowed the base list when filtering from the
       // cached reconciliation result.
+    } else if (selectedSectionValue == unsupportedReconciliationSectionTab) {
+      baseRows = baseRows
+          .where((row) => isUnsupportedReconciliationSection(row.section))
+          .toList();
     } else if (selectedSectionValue != 'All Sections') {
       baseRows = baseRows
           .where((row) => row.section.trim() == selectedSectionValue)
@@ -1276,6 +1300,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           rows: summaryScopedRows,
           selectedStatusValue: selectedStatusValue,
         );
+      } else if (selectedStatusValue == unsupportedReconciliationStatusFilter) {
+        summaryScopedRows = summaryScopedRows
+            .where((row) => isUnsupportedReconciliationSection(row.section))
+            .toList();
       } else {
         summaryScopedRows = summaryScopedRows.where((row) {
           final status = row.status.trim();
@@ -1339,8 +1367,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     required String activeTab,
   }) {
     final sectionCounts = <String, int>{};
+    final sectionTabsForMetrics = <String>[
+      ..._supportedSectionTabs,
+      if (_hasUnsupportedRows(rows)) unsupportedReconciliationSectionTab,
+    ];
     final sectionMismatchCounts = <String, int>{
-      for (final section in _sectionTabs) section: 0,
+      for (final section in sectionTabsForMetrics) section: 0,
     };
     final mismatchReasonCounts = <String, int>{
       'No 26Q entry': 0,
@@ -1388,12 +1420,15 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         summaryMismatchRows++;
       }
 
-      if (sectionMismatchCounts.containsKey(
-            section == 'All Sections' ? 'All' : section,
-          ) &&
+      final sectionMismatchKey = isUnsupportedReconciliationSection(section)
+          ? unsupportedReconciliationSectionTab
+          : section == 'All Sections'
+          ? 'All'
+          : section;
+      if (sectionMismatchCounts.containsKey(sectionMismatchKey) &&
           upperStatus != 'MATCHED') {
-        sectionMismatchCounts[section] =
-            (sectionMismatchCounts[section] ?? 0) + 1;
+        sectionMismatchCounts[sectionMismatchKey] =
+            (sectionMismatchCounts[sectionMismatchKey] ?? 0) + 1;
       }
       if (upperStatus != 'MATCHED') {
         sectionMismatchCounts['All'] = (sectionMismatchCounts['All'] ?? 0) + 1;
@@ -1565,6 +1600,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     final stableRows = _stableSectionCountScope();
     final scopedRows = section == 'All'
         ? stableRows
+        : section == unsupportedReconciliationSectionTab
+        ? stableRows
+              .where((row) => isUnsupportedReconciliationSection(row.section))
+              .toList()
         : stableRows.where((row) => row.section.trim() == section).toList();
 
     return scopedRows.map(buildSellerSectionDisplayKey).toSet().length;
@@ -1595,6 +1634,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           ..sort();
 
     return unsupported;
+  }
+
+  bool _hasUnsupportedRows(List<ReconciliationRow> rows) {
+    return rows.any((row) => isUnsupportedReconciliationSection(row.section));
   }
 
   void _setViewMode(ReconciliationViewMode nextMode) {
@@ -1662,14 +1705,21 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       showContainer: false,
       items: _sectionTabs.map((section) {
         final sellerCount = _sellerCountForSection(section);
+        final isUnsupportedTab = section == unsupportedReconciliationSectionTab;
         return AppSectionSelectorItem(
           value: section,
-          label: compactSectionDisplayLabel(section),
-          subtitle: section == 'All' ? 'Unique sellers' : 'Section sellers',
+          label: isUnsupportedTab
+              ? unsupportedReconciliationSectionTab
+              : compactSectionDisplayLabel(section),
+          subtitle: section == 'All'
+              ? 'Unique sellers'
+              : isUnsupportedTab
+              ? 'Needs review'
+              : 'Section sellers',
           metricLabel: sellerCount.toString(),
           isSelected: activeSectionTab == section,
           onTap: () => _selectSectionTab(section),
-          width: section == 'All' ? 150 : null,
+          width: section == 'All' || isUnsupportedTab ? 150 : null,
         );
       }).toList(),
     );
@@ -2342,6 +2392,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   int _activeSourceFileCount() {
+    if (activeSectionTab == unsupportedReconciliationSectionTab) {
+      return widget.sourceRowsBySection.entries
+          .where(
+            (entry) =>
+                isUnsupportedReconciliationSection(entry.key) ||
+                entry.value.any(
+                  (row) => isUnsupportedReconciliationSection(row.section),
+                ),
+          )
+          .length;
+    }
     return activeSectionTab == 'All'
         ? widget.sourceFileCountBySection.values.fold<int>(
             0,
@@ -2351,6 +2412,12 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   int _activeSourceRowCount() {
+    if (activeSectionTab == unsupportedReconciliationSectionTab) {
+      return widget.sourceRowsBySection.values
+          .expand((rows) => rows)
+          .where((row) => isUnsupportedReconciliationSection(row.section))
+          .length;
+    }
     return activeSectionTab == 'All'
         ? widget.sourceRowsBySection.values.fold<int>(
             0,

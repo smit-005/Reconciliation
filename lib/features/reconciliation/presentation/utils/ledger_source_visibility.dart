@@ -1,5 +1,6 @@
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
+import 'package:reconciliation_app/features/reconciliation/utils/reconciliation_section_utils.dart';
 
 const String allLedgerSourcesFilterValue = '__ALL_LEDGER_SOURCES__';
 
@@ -41,6 +42,10 @@ Map<String, String> ledgerSourceLabelsForSections({
   final entries = <String, String>{};
   final sectionRows = activeSection == 'All'
       ? sourceRowsBySection.values.expand((rows) => rows)
+      : activeSection == unsupportedReconciliationSectionTab
+      ? sourceRowsBySection.values
+            .expand((rows) => rows)
+            .where((row) => isUnsupportedReconciliationSection(row.section))
       : sourceRowsBySection[activeSection] ??
             const <NormalizedTransactionRow>[];
 

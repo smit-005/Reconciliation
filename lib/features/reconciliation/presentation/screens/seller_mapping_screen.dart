@@ -16,6 +16,7 @@ import 'package:reconciliation_app/features/reconciliation/presentation/widgets/
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/models/reconciliation_view_mode.dart';
+import 'package:reconciliation_app/features/reconciliation/utils/reconciliation_section_utils.dart';
 
 class SellerMappingScreenRowData {
   final String purchasePartyDisplayName;
@@ -291,9 +292,23 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   List<String> get _availableSectionCodes {
-    return _sectionTabOrder
+    final supportedSections = _sectionTabOrder
         .where((section) => (_rowDataBySection[section] ?? const []).isNotEmpty)
         .toList();
+    final unsupportedSections =
+        _rowDataBySection.entries
+            .where((entry) => entry.value.isNotEmpty)
+            .map((entry) => normalizeSellerMappingSectionCode(entry.key))
+            .where(
+              (section) =>
+                  section.isNotEmpty &&
+                  section != 'ALL' &&
+                  isUnsupportedReconciliationSection(section),
+            )
+            .toSet()
+            .toList()
+          ..sort(TdsSectionCatalog.compare);
+    return [...supportedSections, ...unsupportedSections];
   }
 
   List<SellerMappingRowVm> _rowsForActiveSection() {
@@ -1391,6 +1406,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     setState(() {
       for (final row in activeRows) {
         if (row.isReadOnly) continue;
+        if (isUnsupportedReconciliationSection(row.sectionCode)) continue;
         if (widget.blockedAliases.contains(row.normalizedAlias)) continue;
         if (_clearedRowKeys.contains(row.rowKey)) continue;
         if (selectedMappings.containsKey(row.rowKey)) continue;
@@ -2233,9 +2249,13 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
                   items: _availableSectionCodes.map((sectionCode) {
                     final isSelected = _activeSectionCode == sectionCode;
                     final count = _needsActionCountForSection(sectionCode);
+                    final isUnsupportedSection =
+                        isUnsupportedReconciliationSection(sectionCode);
                     return AppSectionSelectorItem(
                       value: sectionCode,
-                      label: compactSectionDisplayLabel(sectionCode),
+                      label: isUnsupportedSection
+                          ? unsupportedSectionDisplayLabel(sectionCode)
+                          : compactSectionDisplayLabel(sectionCode),
                       subtitle: 'Needs action',
                       metricLabel: count.toString(),
                       isSelected: isSelected,
@@ -3053,7 +3073,20 @@ List<String> _availableSectionCodesForIsolate({
   final presentSections = _SellerMappingScreenState._sectionTabOrder
       .where((section) => (rowDataBySection[section] ?? const []).isNotEmpty)
       .toList();
-  return presentSections;
+  final unsupportedSections =
+      rowDataBySection.entries
+          .where((entry) => entry.value.isNotEmpty)
+          .map((entry) => normalizeSellerMappingSectionCode(entry.key))
+          .where(
+            (section) =>
+                section.isNotEmpty &&
+                section != 'ALL' &&
+                isUnsupportedReconciliationSection(section),
+          )
+          .toSet()
+          .toList()
+        ..sort(TdsSectionCatalog.compare);
+  return [...presentSections, ...unsupportedSections];
 }
 
 List<SellerMappingRowVm> _buildRowsForSectionInIsolate({

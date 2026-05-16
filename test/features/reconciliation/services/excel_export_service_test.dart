@@ -6,9 +6,11 @@ import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_export_row_scope.dart';
 import 'package:reconciliation_app/features/reconciliation/services/excel_export_service.dart';
 import 'package:reconciliation_app/features/reconciliation/services/section_rule_export_text.dart';
 import 'package:reconciliation_app/features/reconciliation/services/section_rule_registry.dart';
+import 'package:reconciliation_app/features/reconciliation/utils/reconciliation_section_utils.dart';
 
 void main() {
   test('export rule text is sourced from SectionRuleRegistry', () {
@@ -145,6 +147,45 @@ void main() {
       expect(_detailDataRowCount(currentViewRows, header: 'Buyer Name'), 2);
     },
   );
+
+  test('current view export can export unsupported tab rows', () async {
+    final outputDir = await _tempDir();
+    final unsupportedRows = ReconciliationExportRowScope.sectionRows(
+      allRows: [
+        _row(
+          section: 'UNKNOWN',
+          sellerName: 'Unknown Section Seller',
+          status: ReconciliationStatus.sectionMissing,
+        ),
+        _row(section: '194P', sellerName: 'Unsupported 194P Seller'),
+        _row(section: '194C', sellerName: 'Supported Contractor'),
+      ],
+      selectedSection: unsupportedReconciliationSectionTab,
+      selectedFinancialYear: '2025-26',
+    );
+
+    final path = await ExcelExportService.exportCurrentViewExcel(
+      rows: unsupportedRows,
+      buyerName: 'Radha Industries',
+      buyerPan: 'ABCDE1234F',
+      outputFolderPath: outputDir.path,
+      financialYear: '2025-26',
+    );
+
+    final currentViewRows = await _sheetRows(path, 'Raw_Data');
+    expect(
+      _sheetContainsText(currentViewRows, 'Unknown Section Seller'),
+      isTrue,
+    );
+    expect(
+      _sheetContainsText(currentViewRows, 'Unsupported 194P Seller'),
+      isTrue,
+    );
+    expect(
+      _sheetContainsText(currentViewRows, 'Supported Contractor'),
+      isFalse,
+    );
+  });
 
   test(
     'current view export includes visible ledger-filtered source rows',

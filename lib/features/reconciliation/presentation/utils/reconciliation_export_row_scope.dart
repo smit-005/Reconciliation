@@ -1,6 +1,7 @@
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/services/reconciliation_orchestrator.dart';
+import 'package:reconciliation_app/features/reconciliation/utils/reconciliation_section_utils.dart';
 
 class ReconciliationExportRowScope {
   const ReconciliationExportRowScope._();
@@ -22,7 +23,11 @@ class ReconciliationExportRowScope {
     }
 
     final exportRows = allRows.where((row) {
-      if (row.section.trim() != section) return false;
+      if (section == unsupportedReconciliationSectionTab) {
+        if (!isUnsupportedReconciliationSection(row.section)) return false;
+      } else if (row.section.trim() != section) {
+        return false;
+      }
       if (!_matchesFinancialYear(row, selectedFinancialYear)) return false;
       return true;
     }).toList();

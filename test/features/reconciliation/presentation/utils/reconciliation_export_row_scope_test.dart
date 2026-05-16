@@ -3,8 +3,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_export_row_scope.dart';
+import 'package:reconciliation_app/features/reconciliation/utils/reconciliation_section_utils.dart';
 
 void main() {
+  test('section tab list adds Unsupported when unsupported sections exist', () {
+    final tabs = reconciliationSectionTabsForRows(['194C', 'UNKNOWN', '194P']);
+
+    expect(tabs, contains(unsupportedReconciliationSectionTab));
+  });
+
+  test('section tab list keeps supported-only rows unchanged', () {
+    final tabs = reconciliationSectionTabsForRows(['194C', '194Q']);
+
+    expect(tabs, isNot(contains(unsupportedReconciliationSectionTab)));
+    expect(tabs, containsAll(['All', '194C', '194Q']));
+  });
+
   test('Current View export row scope matches visible table rows', () {
     final belowThresholdHistory = _row(
       sellerName: 'Visible Seller',
@@ -79,6 +93,37 @@ void main() {
     expect(reportRows, contains(otherSection));
     expect(reportRows, isNot(contains(otherFy)));
   });
+
+  test(
+    'unsupported section scope includes UNKNOWN and explicit unsupported rows',
+    () {
+      final unknownRow = _row(
+        sellerName: 'Unknown Section Seller',
+        section: 'UNKNOWN',
+        status: ReconciliationStatus.sectionMissing,
+      );
+      final unsupportedRow = _row(
+        sellerName: 'Unsupported 194P Seller',
+        section: '194P',
+      );
+      final supportedRow = _row(sellerName: 'Supported Contractor');
+      final otherFy = _row(
+        sellerName: 'Old Unsupported Seller',
+        section: '194P',
+        financialYear: '2024-25',
+      );
+
+      final sectionRows = ReconciliationExportRowScope.sectionRows(
+        allRows: [supportedRow, unknownRow, unsupportedRow, otherFy],
+        selectedSection: unsupportedReconciliationSectionTab,
+        selectedFinancialYear: '2025-26',
+      );
+
+      expect(sectionRows, containsAll([unknownRow, unsupportedRow]));
+      expect(sectionRows, isNot(contains(supportedRow)));
+      expect(sectionRows, isNot(contains(otherFy)));
+    },
+  );
 }
 
 ReconciliationRow _row({

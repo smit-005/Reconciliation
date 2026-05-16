@@ -265,6 +265,112 @@ void main() {
   );
 
   testWidgets(
+    'unsupported section rows are visible and counted as dangerous review',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194P',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: const <SellerMappingScreenRowData>[
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'Unsupported Vendor',
+                  normalizedAlias: 'Unsupported Vendor',
+                  sectionCode: '194P',
+                  tdsDisplayName: 'Unsupported Vendor',
+                  purchasePan: '',
+                  hasApplicableTdsImpact: true,
+                  preflightReasonCode: 'unresolved_identity',
+                  preflightReasonLabel: 'Unresolved Identity',
+                  preflightReasonDetail: 'Unsupported section needs review',
+                  requiresDangerousReview: true,
+                ),
+              ],
+              tdsParties: const <String>['Unsupported Vendor'],
+              existingMappings: const <SellerMapping>[],
+              blockedAliases: const <String>{},
+              tdsPartyPans: const <String, List<String>>{
+                'Unsupported Vendor': <String>['AAAAA1111A'],
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Unsupported: 194P'), findsOneWidget);
+      expect(find.text('Unsupported Vendor'), findsWidgets);
+      expect(
+        find.textContaining('1 dangerous identity issue remains'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('unsupported section rows are not auto-mapped', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SellerMappingScreen(
+            mode: SellerMappingScreenMode.preflight,
+            buyerName: 'Buyer One',
+            buyerPan: 'ABCDE1234F',
+            financialYearLabel: 'FY 2024-25',
+            selectedSectionLabel: '194P',
+            initialViewMode: ReconciliationViewMode.summary,
+            purchaseRows: const <SellerMappingScreenRowData>[
+              SellerMappingScreenRowData(
+                purchasePartyDisplayName: 'Unsupported Vendor',
+                normalizedAlias: 'Unsupported Vendor',
+                sectionCode: '194P',
+                tdsDisplayName: 'Unsupported Vendor',
+                purchasePan: '',
+                hasApplicableTdsImpact: true,
+                preflightReasonCode: 'unresolved_identity',
+                preflightReasonLabel: 'Unresolved Identity',
+                preflightReasonDetail: 'Unsupported section needs review',
+                requiresDangerousReview: true,
+              ),
+            ],
+            tdsParties: const <String>['Unsupported Vendor'],
+            existingMappings: const <SellerMapping>[],
+            blockedAliases: const <String>{},
+            tdsPartyPans: const <String, List<String>>{
+              'Unsupported Vendor': <String>['AAAAA1111A'],
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Auto Map'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.textContaining('1 dangerous identity issue remains'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Auto-mapped'), findsNothing);
+  });
+
+  testWidgets(
     'review view clear visible clears review-visible rows instead of working-filtered rows',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1600, 1200));
