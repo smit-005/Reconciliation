@@ -8,6 +8,7 @@ class UploadFileActionCard extends StatelessWidget {
   final String fileName;
   final int rowCount;
   final UploadMappingStatus status;
+  final String? statusLabel;
   final bool is26Q;
   final bool isBusy;
   final VoidCallback? onReview;
@@ -19,6 +20,7 @@ class UploadFileActionCard extends StatelessWidget {
     required this.fileName,
     required this.rowCount,
     required this.status,
+    this.statusLabel,
     this.is26Q = false,
     this.isBusy = false,
     this.onReview,
@@ -119,7 +121,7 @@ class UploadFileActionCard extends StatelessWidget {
                   children: [
                     _MiniChip(label: '$rowCount rows'),
                     AppStatusBadge(
-                      label: status.label,
+                      label: statusLabel ?? status.label,
                       icon: _statusIcon,
                       tone: _tone,
                     ),

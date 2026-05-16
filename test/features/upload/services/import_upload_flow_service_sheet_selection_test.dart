@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
+import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_mapping_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_upload_flow_service.dart';
@@ -35,6 +36,160 @@ void main() {
   });
 
   group('ImportUploadFlowService sheet selection', () {
+    test('generic ledger safe auto-map is auto-confirmed', () async {
+      final bytes = _buildWorkbook({
+        'Ledger': const [
+          ['Date', 'Party Name', 'Amount'],
+          ['2024-04-02', 'Selected Vendor', 222],
+        ],
+      });
+      var mappingOpened = false;
+
+      final response = await ImportUploadFlowService.prepareGenericLedgerImport(
+        buyerId: 'buyer-1',
+        sectionCode: '194C',
+        bytes: bytes,
+        fileName: 'safe-ledger.xlsx',
+        preferredSheetName: 'Ledger',
+        openColumnMapping:
+            ({
+              required bytes,
+              required fileName,
+              required fileType,
+              required validation,
+              sessionCache,
+              preferredSheetName,
+              preferredHeaderRowIndex,
+              preferredHeadersTrusted,
+              preferredColumnMapping,
+            }) async {
+              mappingOpened = true;
+              return null;
+            },
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(mappingOpened, isFalse);
+      expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+      expect(response.data!.wasAutoConfirmed, isTrue);
+      expect(response.data!.wasManuallyMapped, isFalse);
+    });
+
+    test('194Q purchase safe auto-map requires basic amount', () async {
+      final bytes = _buildWorkbook({
+        'Purchase': const [
+          ['Bill Date', 'Bill No', 'Party Name', 'Basic Amount'],
+          ['2024-04-02', 'INV-1', 'Selected Vendor', 222],
+        ],
+      });
+      var mappingOpened = false;
+
+      final response = await ImportUploadFlowService.preparePurchaseImport(
+        buyerId: 'buyer-1',
+        bytes: bytes,
+        fileName: 'safe-purchase.xlsx',
+        preferredSheetName: 'Purchase',
+        openColumnMapping:
+            ({
+              required bytes,
+              required fileName,
+              required fileType,
+              required validation,
+              sessionCache,
+              preferredSheetName,
+              preferredHeaderRowIndex,
+              preferredHeadersTrusted,
+              preferredColumnMapping,
+            }) async {
+              mappingOpened = true;
+              return null;
+            },
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(mappingOpened, isFalse);
+      expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+      expect(response.data!.wasAutoConfirmed, isTrue);
+    });
+
+    test(
+      '194Q purchase with bill amount but no basic amount needs review',
+      () async {
+        final bytes = _buildWorkbook({
+          'Purchase': const [
+            ['Bill Date', 'Bill No', 'Party Name', 'Bill Amount'],
+            ['2024-04-02', 'INV-1', 'Selected Vendor', 222],
+          ],
+        });
+
+        final response = await ImportUploadFlowService.preparePurchaseImport(
+          buyerId: 'buyer-1',
+          bytes: bytes,
+          fileName: 'bill-only-purchase.xlsx',
+          preferredSheetName: 'Purchase',
+          openColumnMapping:
+              ({
+                required bytes,
+                required fileName,
+                required fileType,
+                required validation,
+                sessionCache,
+                preferredSheetName,
+                preferredHeaderRowIndex,
+                preferredHeadersTrusted,
+                preferredColumnMapping,
+              }) async {
+                return null;
+              },
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(response.data!.mappingStatus, UploadMappingStatus.needsReview);
+        expect(response.data!.wasAutoConfirmed, isFalse);
+      },
+    );
+
+    test('26Q safe auto-map is auto-confirmed', () async {
+      final bytes = _buildWorkbook({
+        '26Q': const [
+          ['Date', 'Deductee Name', 'PAN', 'Amount Paid', 'TDS', 'Section'],
+          ['Apr-24', 'Selected Vendor', 'ABCDE1234F', 2220, 222, '194C'],
+        ],
+      });
+      final validation = await ImportUploadFlowService.validateTds26QImport(
+        bytes,
+        preferredSheetName: '26Q',
+      );
+      var mappingOpened = false;
+
+      final response = await ImportUploadFlowService.prepareTds26QImport(
+        bytes: bytes,
+        fileName: 'safe-26q.xlsx',
+        validation: validation,
+        preferredSheetName: '26Q',
+        openColumnMapping:
+            ({
+              required bytes,
+              required fileName,
+              required fileType,
+              required validation,
+              sessionCache,
+              preferredSheetName,
+              preferredHeaderRowIndex,
+              preferredHeadersTrusted,
+              preferredColumnMapping,
+            }) async {
+              mappingOpened = true;
+              return null;
+            },
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(mappingOpened, isFalse);
+      expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+      expect(response.data!.wasAutoConfirmed, isTrue);
+    });
+
     test('generic ledger uses selected sheet before forced mapping', () async {
       final bytes = _buildWorkbook({
         'Wrong First': const [

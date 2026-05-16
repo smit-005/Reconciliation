@@ -12,6 +12,8 @@ class LedgerUploadFile {
   final List<NormalizedLedgerRow> rows;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
+  final bool wasAutoConfirmed;
+  final bool usedSavedProfile;
   final String? sheetName;
   final int? headerRowIndex;
   final bool? headersTrusted;
@@ -28,6 +30,8 @@ class LedgerUploadFile {
     required this.rows,
     required this.mappingStatus,
     required this.wasManuallyMapped,
+    this.wasAutoConfirmed = false,
+    this.usedSavedProfile = false,
     required this.columnMapping,
     this.sheetName,
     this.headerRowIndex,
@@ -45,6 +49,8 @@ class LedgerUploadFile {
     List<NormalizedLedgerRow>? rows,
     UploadMappingStatus? mappingStatus,
     bool? wasManuallyMapped,
+    bool? wasAutoConfirmed,
+    bool? usedSavedProfile,
     String? sheetName,
     int? headerRowIndex,
     bool? headersTrusted,
@@ -61,6 +67,8 @@ class LedgerUploadFile {
       rows: rows ?? this.rows,
       mappingStatus: mappingStatus ?? this.mappingStatus,
       wasManuallyMapped: wasManuallyMapped ?? this.wasManuallyMapped,
+      wasAutoConfirmed: wasAutoConfirmed ?? this.wasAutoConfirmed,
+      usedSavedProfile: usedSavedProfile ?? this.usedSavedProfile,
       sheetName: sheetName ?? this.sheetName,
       headerRowIndex: headerRowIndex ?? this.headerRowIndex,
       headersTrusted: headersTrusted ?? this.headersTrusted,

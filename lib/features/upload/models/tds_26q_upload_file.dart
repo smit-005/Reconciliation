@@ -9,6 +9,7 @@ class Tds26QUploadFile {
   final List<Tds26QRow> rows;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
+  final bool wasAutoConfirmed;
   final String? sheetName;
   final int? headerRowIndex;
   final bool? headersTrusted;
@@ -22,6 +23,7 @@ class Tds26QUploadFile {
     required this.rows,
     required this.mappingStatus,
     required this.wasManuallyMapped,
+    this.wasAutoConfirmed = false,
     required this.columnMapping,
     this.sheetName,
     this.headerRowIndex,
@@ -36,6 +38,7 @@ class Tds26QUploadFile {
     List<Tds26QRow>? rows,
     UploadMappingStatus? mappingStatus,
     bool? wasManuallyMapped,
+    bool? wasAutoConfirmed,
     String? sheetName,
     int? headerRowIndex,
     bool? headersTrusted,
@@ -49,6 +52,7 @@ class Tds26QUploadFile {
       rows: rows ?? this.rows,
       mappingStatus: mappingStatus ?? this.mappingStatus,
       wasManuallyMapped: wasManuallyMapped ?? this.wasManuallyMapped,
+      wasAutoConfirmed: wasAutoConfirmed ?? this.wasAutoConfirmed,
       columnMapping: columnMapping ?? this.columnMapping,
       sheetName: sheetName ?? this.sheetName,
       headerRowIndex: headerRowIndex ?? this.headerRowIndex,

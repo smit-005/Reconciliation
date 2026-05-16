@@ -50,6 +50,8 @@ class PurchaseImportPreparation {
   final String? stagingImportId;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
+  final bool wasAutoConfirmed;
+  final bool usedSavedProfile;
   final String? sheetName;
   final int? headerRowIndex;
   final bool? headersTrusted;
@@ -62,6 +64,8 @@ class PurchaseImportPreparation {
     required this.stagingImportId,
     required this.mappingStatus,
     required this.wasManuallyMapped,
+    this.wasAutoConfirmed = false,
+    this.usedSavedProfile = false,
     required this.sheetName,
     required this.headerRowIndex,
     required this.headersTrusted,
@@ -75,6 +79,8 @@ class GenericLedgerImportPreparation {
   final List<NormalizedLedgerRow> parsedRows;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
+  final bool wasAutoConfirmed;
+  final bool usedSavedProfile;
   final String? sheetName;
   final int? headerRowIndex;
   final bool? headersTrusted;
@@ -86,6 +92,8 @@ class GenericLedgerImportPreparation {
     required this.parsedRows,
     required this.mappingStatus,
     required this.wasManuallyMapped,
+    this.wasAutoConfirmed = false,
+    this.usedSavedProfile = false,
     required this.sheetName,
     required this.headerRowIndex,
     required this.headersTrusted,
@@ -100,6 +108,7 @@ class Tds26QImportPreparation {
   final String? stagingImportId;
   final UploadMappingStatus mappingStatus;
   final bool wasManuallyMapped;
+  final bool wasAutoConfirmed;
   final String? sheetName;
   final int? headerRowIndex;
   final bool? headersTrusted;
@@ -111,6 +120,7 @@ class Tds26QImportPreparation {
     required this.stagingImportId,
     required this.mappingStatus,
     required this.wasManuallyMapped,
+    this.wasAutoConfirmed = false,
     required this.sheetName,
     required this.headerRowIndex,
     required this.headersTrusted,
@@ -162,6 +172,7 @@ class ImportUploadFlowService {
   ];
   static const String supportedUploadFilterLabel =
       'Excel Files (*.xlsx;*.xls;*.xlsm;*.csv)';
+  static const double _safeAutoConfirmConfidenceThreshold = 0.75;
 
   static Map<String, String> _canonicalizeValidationMapping(
     Map<String, String> rawToCanonical,
@@ -192,6 +203,38 @@ class ImportUploadFlowService {
     }
 
     return false;
+  }
+
+  @visibleForTesting
+  static bool canAutoConfirmMapping({
+    required ExcelValidationResult validation,
+    required ExcelImportType fileType,
+    required int parsedRowCount,
+  }) {
+    if (!validation.isValid ||
+        validation.requiresManualMapping ||
+        validation.warnings.isNotEmpty ||
+        parsedRowCount <= 0 ||
+        validation.confidenceScore < _safeAutoConfirmConfidenceThreshold) {
+      return false;
+    }
+
+    final canonicalMapping = _canonicalMappingFromValidation(validation);
+    if (!_hasRequiredColumnsForAutoConfirm(
+      canonicalMapping: canonicalMapping,
+      fileType: fileType,
+    )) {
+      return false;
+    }
+
+    if (!_hasUnambiguousAmountMapping(
+      canonicalMapping: canonicalMapping,
+      fileType: fileType,
+    )) {
+      return false;
+    }
+
+    return _hasConfidentPartyNameMapping(canonicalMapping);
   }
 
   static Future<ImportWorkflowResponse<PurchaseImportPreparation>>
@@ -268,12 +311,24 @@ class ImportUploadFlowService {
           rows: parsedRows,
         );
 
+        final canAutoConfirmProfile = _canAutoConfirmSavedProfileMapping(
+          validation: purchasePreparation.validation,
+          fileType: ExcelImportType.purchase,
+          parsedRowCount: parsedRows.length,
+          columnMapping: matchedProfile.columnMapping,
+        );
+        final mappingStatus = canAutoConfirmProfile
+            ? UploadMappingStatus.confirmed
+            : UploadMappingStatus.autoMapped;
+
         return ImportWorkflowResponse.success(
           PurchaseImportPreparation(
             parsedRows: parsedRows,
             stagingImportId: stagingImportId,
-            mappingStatus: UploadMappingStatus.autoMapped,
+            mappingStatus: mappingStatus,
             wasManuallyMapped: false,
+            wasAutoConfirmed: mappingStatus == UploadMappingStatus.confirmed,
+            usedSavedProfile: true,
             sheetName: inspection.sheetName,
             headerRowIndex: matchedProfile.headerRowIndex,
             headersTrusted: matchedProfile.headersTrusted,
@@ -390,8 +445,17 @@ class ImportUploadFlowService {
         PurchaseImportPreparation(
           parsedRows: parsedRows,
           stagingImportId: stagingImportId,
-          mappingStatus: _initialMappingStatusForValidation(validation),
+          mappingStatus: _initialMappingStatusForValidation(
+            validation: validation,
+            fileType: ExcelImportType.purchase,
+            parsedRowCount: parsedRows.length,
+          ),
           wasManuallyMapped: false,
+          wasAutoConfirmed: canAutoConfirmMapping(
+            validation: validation,
+            fileType: ExcelImportType.purchase,
+            parsedRowCount: parsedRows.length,
+          ),
           sheetName: inspection.sheetName,
           headerRowIndex: validation.headerRowIndex,
           headersTrusted: null,
@@ -469,11 +533,28 @@ class ImportUploadFlowService {
             );
 
         if (parsedRows.isNotEmpty) {
+          final profileValidation =
+              await ExcelService.validateGenericLedgerFileInBackground(
+                sessionCache?.bytes ?? Uint8List.fromList(bytes),
+                preferredSheetName: inspection.sheetName,
+              );
+          final canAutoConfirmProfile = _canAutoConfirmSavedProfileMapping(
+            validation: profileValidation,
+            fileType: ExcelImportType.genericLedger,
+            parsedRowCount: parsedRows.length,
+            columnMapping: matchedProfile.columnMapping,
+          );
+          final mappingStatus = canAutoConfirmProfile
+              ? UploadMappingStatus.confirmed
+              : UploadMappingStatus.autoMapped;
+
           return ImportWorkflowResponse.success(
             GenericLedgerImportPreparation(
               parsedRows: parsedRows,
-              mappingStatus: UploadMappingStatus.autoMapped,
+              mappingStatus: mappingStatus,
               wasManuallyMapped: false,
+              wasAutoConfirmed: mappingStatus == UploadMappingStatus.confirmed,
+              usedSavedProfile: true,
               sheetName: inspection.sheetName,
               headerRowIndex: matchedProfile.headerRowIndex,
               headersTrusted: matchedProfile.headersTrusted,
@@ -574,8 +655,17 @@ class ImportUploadFlowService {
       return ImportWorkflowResponse.success(
         GenericLedgerImportPreparation(
           parsedRows: parsedRows,
-          mappingStatus: _initialMappingStatusForValidation(validation),
+          mappingStatus: _initialMappingStatusForValidation(
+            validation: validation,
+            fileType: ExcelImportType.genericLedger,
+            parsedRowCount: parsedRows.length,
+          ),
           wasManuallyMapped: false,
+          wasAutoConfirmed: canAutoConfirmMapping(
+            validation: validation,
+            fileType: ExcelImportType.genericLedger,
+            parsedRowCount: parsedRows.length,
+          ),
           sheetName: validation.detectedSheet,
           headerRowIndex: validation.headerRowIndex,
           headersTrusted: null,
@@ -743,9 +833,16 @@ class ImportUploadFlowService {
           parsedRows: parsedRows,
           stagingImportId: stagingImportId,
           mappingStatus: _initialMappingStatusForValidation(
-            effectiveValidation,
+            validation: effectiveValidation,
+            fileType: ExcelImportType.tds26q,
+            parsedRowCount: parsedRows.length,
           ),
           wasManuallyMapped: false,
+          wasAutoConfirmed: canAutoConfirmMapping(
+            validation: effectiveValidation,
+            fileType: ExcelImportType.tds26q,
+            parsedRowCount: parsedRows.length,
+          ),
           sheetName: preferredSheetName ?? effectiveValidation.detectedSheet,
           headerRowIndex: effectiveValidation.headerRowIndex,
           headersTrusted: null,
@@ -893,11 +990,21 @@ class ImportUploadFlowService {
   }
 }
 
-UploadMappingStatus _initialMappingStatusForValidation(
-  ExcelValidationResult validation,
-) {
+UploadMappingStatus _initialMappingStatusForValidation({
+  required ExcelValidationResult validation,
+  required ExcelImportType fileType,
+  required int parsedRowCount,
+}) {
   if (validation.mappedColumns.isEmpty) {
     return UploadMappingStatus.notMapped;
+  }
+
+  if (ImportUploadFlowService.canAutoConfirmMapping(
+    validation: validation,
+    fileType: fileType,
+    parsedRowCount: parsedRowCount,
+  )) {
+    return UploadMappingStatus.confirmed;
   }
 
   if (validation.requiresManualMapping ||
@@ -908,6 +1015,179 @@ UploadMappingStatus _initialMappingStatusForValidation(
 
   return UploadMappingStatus.autoMapped;
 }
+
+Map<String, String> _canonicalMappingFromValidation(
+  ExcelValidationResult validation,
+) {
+  final result = <String, String>{};
+
+  for (final entry in validation.mappedColumns.entries) {
+    final key = _normalizeCanonicalField(entry.key.trim());
+    final value = _normalizeCanonicalField(entry.value.trim());
+
+    if (_knownCanonicalFields.contains(value)) {
+      result[value] = entry.key.trim();
+    } else if (_knownCanonicalFields.contains(key)) {
+      result[key] = entry.value.trim();
+    }
+  }
+
+  return ImportMappingService.dedupeSourceColumns(result);
+}
+
+bool _canAutoConfirmSavedProfileMapping({
+  required ExcelValidationResult validation,
+  required ExcelImportType fileType,
+  required int parsedRowCount,
+  required Map<String, String> columnMapping,
+}) {
+  if (!ImportUploadFlowService.canAutoConfirmMapping(
+    validation: validation,
+    fileType: fileType,
+    parsedRowCount: parsedRowCount,
+  )) {
+    return false;
+  }
+
+  final canonicalMapping = _canonicalMappingFromProfile(columnMapping);
+  return _hasRequiredColumnsForAutoConfirm(
+        canonicalMapping: canonicalMapping,
+        fileType: fileType,
+      ) &&
+      _hasUnambiguousAmountMapping(
+        canonicalMapping: canonicalMapping,
+        fileType: fileType,
+      ) &&
+      _hasConfidentPartyNameMapping(canonicalMapping);
+}
+
+Map<String, String> _canonicalMappingFromProfile(
+  Map<String, String> columnMapping,
+) {
+  final result = <String, String>{};
+
+  for (final entry in columnMapping.entries) {
+    final key = _normalizeCanonicalField(entry.key.trim());
+    final value = entry.value.trim();
+    if (key.isEmpty || value.isEmpty) continue;
+    if (_knownCanonicalFields.contains(key)) {
+      result[key] = value;
+    }
+  }
+
+  return ImportMappingService.dedupeSourceColumns(result);
+}
+
+bool _hasRequiredColumnsForAutoConfirm({
+  required Map<String, String> canonicalMapping,
+  required ExcelImportType fileType,
+}) {
+  switch (fileType) {
+    case ExcelImportType.purchase:
+      return canonicalMapping.containsKey('party_name') &&
+          (canonicalMapping.containsKey('date') ||
+              canonicalMapping.containsKey('eom')) &&
+          canonicalMapping.containsKey('basic_amount');
+    case ExcelImportType.genericLedger:
+      return canonicalMapping.containsKey('date') &&
+          canonicalMapping.containsKey('party_name') &&
+          canonicalMapping.containsKey('amount');
+    case ExcelImportType.tds26q:
+      return canonicalMapping.containsKey('date_month') &&
+          canonicalMapping.containsKey('party_name') &&
+          canonicalMapping.containsKey('pan_number') &&
+          canonicalMapping.containsKey('amount_paid') &&
+          canonicalMapping.containsKey('tds_amount') &&
+          canonicalMapping.containsKey('section');
+  }
+}
+
+bool _hasUnambiguousAmountMapping({
+  required Map<String, String> canonicalMapping,
+  required ExcelImportType fileType,
+}) {
+  final amountFields = switch (fileType) {
+    ExcelImportType.purchase => const ['bill_amount', 'basic_amount'],
+    ExcelImportType.genericLedger => const ['amount'],
+    ExcelImportType.tds26q => const ['amount_paid', 'tds_amount'],
+  };
+  final mappedSources = <String>{};
+  var mappedCount = 0;
+
+  for (final field in amountFields) {
+    final source = canonicalMapping[field]?.trim();
+    if (source == null || source.isEmpty) continue;
+    mappedCount += 1;
+    mappedSources.add(source.toLowerCase());
+  }
+
+  if (fileType == ExcelImportType.purchase) {
+    return canonicalMapping['basic_amount']?.trim().isNotEmpty == true &&
+        mappedSources.length == mappedCount;
+  }
+
+  return mappedCount == amountFields.length &&
+      mappedSources.length == amountFields.length;
+}
+
+bool _hasConfidentPartyNameMapping(Map<String, String> canonicalMapping) {
+  final partySource = canonicalMapping['party_name']?.trim();
+  if (partySource == null || partySource.isEmpty) {
+    return false;
+  }
+
+  final normalized = partySource
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_\-/]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (RegExp(r'^col[_ ]?\d+$').hasMatch(normalized)) {
+    return false;
+  }
+
+  const confidentTokens = [
+    'party',
+    'vendor',
+    'supplier',
+    'seller',
+    'deductee',
+    'ledger name',
+    'account name',
+  ];
+
+  return confidentTokens.any(normalized.contains);
+}
+
+String _normalizeCanonicalField(String field) {
+  switch (field) {
+    case 'pan_no':
+      return 'pan_number';
+    case 'tds':
+      return 'tds_amount';
+    case 'deducted_amount':
+      return 'amount_paid';
+    default:
+      return field;
+  }
+}
+
+const Set<String> _knownCanonicalFields = {
+  'date',
+  'eom',
+  'bill_no',
+  'party_name',
+  'basic_amount',
+  'bill_amount',
+  'gst_no',
+  'pan_number',
+  'productname',
+  'date_month',
+  'amount',
+  'amount_paid',
+  'tds_amount',
+  'section',
+  'description',
+};
 
 String? _preflightUploadFormat(String fileName) {
   final extension = p.extension(fileName).toLowerCase().replaceFirst('.', '');

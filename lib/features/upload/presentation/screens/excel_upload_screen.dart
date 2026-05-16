@@ -652,6 +652,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       rows: normalizedRows,
       mappingStatus: result.mappingStatus,
       wasManuallyMapped: result.wasManuallyMapped,
+      wasAutoConfirmed: result.wasAutoConfirmed,
+      usedSavedProfile: result.usedSavedProfile,
       sheetName: result.sheetName,
       headerRowIndex: result.headerRowIndex,
       headersTrusted: result.headersTrusted,
@@ -727,6 +729,8 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       rows: rowsWithSource,
       mappingStatus: result.mappingStatus,
       wasManuallyMapped: result.wasManuallyMapped,
+      wasAutoConfirmed: result.wasAutoConfirmed,
+      usedSavedProfile: result.usedSavedProfile,
       sheetName: result.sheetName,
       headerRowIndex: result.headerRowIndex,
       headersTrusted: result.headersTrusted,
@@ -1055,6 +1059,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           rows: result.parsedRows,
           mappingStatus: result.mappingStatus,
           wasManuallyMapped: result.wasManuallyMapped,
+          wasAutoConfirmed: result.wasAutoConfirmed,
           sheetName: result.sheetName,
           headerRowIndex: result.headerRowIndex,
           headersTrusted: result.headersTrusted,
@@ -1803,6 +1808,20 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
   }
 
+  String _uploadStatusLabel(
+    UploadMappingStatus status, {
+    required bool wasAutoConfirmed,
+    required bool usedSavedProfile,
+  }) {
+    if (status == UploadMappingStatus.confirmed && wasAutoConfirmed) {
+      return usedSavedProfile
+          ? 'Auto-confirmed (saved format)'
+          : 'Auto-confirmed';
+    }
+
+    return status.label;
+  }
+
   BoxDecoration _panelDecoration({
     Color borderColor = AppColorScheme.border,
     Color backgroundColor = Colors.white,
@@ -2048,7 +2067,13 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  uploaded ? mappingStatus.label : 'Pending',
+                  uploaded
+                      ? _uploadStatusLabel(
+                          mappingStatus,
+                          wasAutoConfirmed: file.wasAutoConfirmed,
+                          usedSavedProfile: false,
+                        )
+                      : 'Pending',
                   style: TextStyle(
                     color: _mappingStatusColor(mappingStatus),
                     fontWeight: FontWeight.w700,
@@ -2072,6 +2097,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
               fileName: file.fileName,
               rowCount: tdsRows.length,
               status: mappingStatus,
+              statusLabel: _uploadStatusLabel(
+                mappingStatus,
+                wasAutoConfirmed: file.wasAutoConfirmed,
+                usedSavedProfile: false,
+              ),
               is26Q: true,
               isBusy: isLoadingTds,
               onReview: _reviewTds26QMapping,
@@ -2392,6 +2422,11 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
                   fileName: file.fileName,
                   rowCount: file.rowCount,
                   status: file.mappingStatus,
+                  statusLabel: _uploadStatusLabel(
+                    file.mappingStatus,
+                    wasAutoConfirmed: file.wasAutoConfirmed,
+                    usedSavedProfile: file.usedSavedProfile,
+                  ),
                   isBusy: isLoading,
                   onReview: () => _remapSectionFile(sectionCode, file),
                   onReplace: () async {
