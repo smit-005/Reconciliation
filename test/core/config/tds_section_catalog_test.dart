@@ -29,6 +29,23 @@ void main() {
       );
     });
 
+    test('normalizes compact split section aliases', () {
+      expect(TdsSectionCatalog.normalizeCode('194IA'), '194I_A');
+      expect(TdsSectionCatalog.normalizeCode('194IB'), '194I_B');
+      expect(TdsSectionCatalog.normalizeCode('194JA'), '194J_A');
+      expect(TdsSectionCatalog.normalizeCode('194JB'), '194J_B');
+      expect(TdsSectionCatalog.normalizeCode('194I(A)'), '194I_A');
+      expect(TdsSectionCatalog.normalizeCode('194I(B)'), '194I_B');
+      expect(TdsSectionCatalog.normalizeCode('194J(A)'), '194J_A');
+      expect(TdsSectionCatalog.normalizeCode('194J(B)'), '194J_B');
+      expect(TdsSectionCatalog.normalizeCode('194I_A'), '194I_A');
+      expect(TdsSectionCatalog.normalizeCode('194I_B'), '194I_B');
+      expect(TdsSectionCatalog.normalizeCode('194J_A'), '194J_A');
+      expect(TdsSectionCatalog.normalizeCode('194J_B'), '194J_B');
+      expect(TdsSectionCatalog.normalizeCode('194I'), '194I');
+      expect(TdsSectionCatalog.normalizeCode('194J'), '194J');
+    });
+
     test('provides display labels from the central catalog', () {
       expect(TdsSectionCatalog.displayLabel('194A'), '194A');
       expect(

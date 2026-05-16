@@ -114,4 +114,26 @@ void main() {
     final remaining = await SellerMappingService.getAllMappings('ABCDE1234F');
     expect(remaining.map((mapping) => mapping.aliasName), ['VENDORTWO']);
   });
+
+  test(
+    'compact 194IB section alias is persisted as canonical 194I_B',
+    () async {
+      expect(normalizeSellerMappingSectionCode('194IB'), '194I_B');
+
+      await SellerMappingService.saveMapping(
+        SellerMapping(
+          buyerName: 'Buyer One',
+          buyerPan: 'ABCDE1234F',
+          aliasName: 'Rent Vendor',
+          sectionCode: '194IB',
+          mappedPan: 'AAAAA1111A',
+          mappedName: 'Rent Vendor',
+        ),
+      );
+
+      final mappings = await SellerMappingService.getAllMappings('ABCDE1234F');
+      expect(mappings, hasLength(1));
+      expect(mappings.single.sectionCode, '194I_B');
+    },
+  );
 }

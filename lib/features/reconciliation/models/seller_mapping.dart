@@ -85,10 +85,12 @@ String normalizeSellerMappingSectionCode(String value) {
     return 'ALL';
   }
 
+  final normalized = normalizeSection(trimmed);
+  if (normalized.isNotEmpty) return normalized;
+
   if (isLegacyUnsupportedSection(trimmed)) {
     return '194IB';
   }
 
-  final normalized = normalizeSection(trimmed);
-  return normalized.isEmpty ? trimmed : normalized;
+  return trimmed;
 }

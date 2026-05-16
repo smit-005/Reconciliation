@@ -88,7 +88,7 @@ class TdsSectionCatalog {
     '194J_B',
   };
 
-  static const Set<String> _legacyUnsupportedCompacts = {'194IB'};
+  static const Set<String> _legacyUnsupportedCompacts = <String>{};
 
   static TdsSectionDefinition? definitionFor(String code) {
     final normalized = normalizeCode(code);
@@ -115,6 +115,11 @@ class TdsSectionCatalog {
     final compact = upper.replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
     if (compact.isEmpty) return '';
+
+    if (compact.contains('194IA')) return '194I_A';
+    if (compact.contains('194IB')) return '194I_B';
+    if (compact.contains('194JA')) return '194J_A';
+    if (compact.contains('194JB')) return '194J_B';
 
     final is194IA =
         upper.contains('194I(A)') ||

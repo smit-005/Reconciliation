@@ -123,5 +123,32 @@ void main() {
       expect(row.section, '194A');
       expect(row.normalizedSection, '194A');
     });
+
+    test(
+      'compact split section aliases are normalized from 26Q section text',
+      () {
+        final cases = <String, String>{
+          '194IA': '194I_A',
+          '194IB': '194I_B',
+          '194JA': '194J_A',
+          '194JB': '194J_B',
+        };
+
+        for (final entry in cases.entries) {
+          final row = Tds26QRow.fromMap({
+            'month': 'Apr-2024',
+            'financial_year': '2024-25',
+            'party_name': 'Split Section Vendor',
+            'pan_number': 'ABCPA1234F',
+            'amount_paid': 25000,
+            'tds_amount': 250,
+            'section': entry.key,
+          });
+
+          expect(row.section, entry.value, reason: entry.key);
+          expect(row.normalizedSection, entry.value, reason: entry.key);
+        }
+      },
+    );
   });
 }
