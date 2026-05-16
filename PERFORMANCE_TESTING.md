@@ -32,6 +32,36 @@ Record:
 - export timings
 - `workbook_open_validate_ms`
 
+## Local Performance Runner
+
+The local runner is opt-in, so normal test runs stay fast. By default it only
+prints a skip message unless `LEDGERMATCH_PERF_RUN=1` is set.
+
+Run the default 1,000 rows per section:
+
+```powershell
+$env:LEDGERMATCH_PERF_RUN='1'
+flutter test --no-pub test/features/reconciliation/services/local_performance_runner_test.dart
+Remove-Item Env:\LEDGERMATCH_PERF_RUN
+```
+
+Run 6,000 rows per section:
+
+```powershell
+$env:LEDGERMATCH_PERF_RUN='1'
+$env:LEDGERMATCH_PERF_ROWS_PER_SECTION='6000'
+flutter test --no-pub test/features/reconciliation/services/local_performance_runner_test.dart
+Remove-Item Env:\LEDGERMATCH_PERF_RUN
+Remove-Item Env:\LEDGERMATCH_PERF_ROWS_PER_SECTION
+```
+
+The runner uses a temporary directory for generated datasets and exports. It
+prints one copy-friendly line:
+
+```text
+LEDGERMATCH_LOCAL_PERF_METRICS {...}
+```
+
 ## Generate 1,000 Rows Per Section
 
 ```powershell
