@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/screens/reconciliation_screen.dart';
 import 'package:reconciliation_app/features/upload/models/ledger_upload_file.dart';
 import 'package:reconciliation_app/features/upload/models/tds_26q_upload_file.dart';
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
@@ -17,6 +18,9 @@ void main() {
   setUpAll(() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+  });
+
+  setUp(() async {
     await DBHelper.debugResetForTest(
       databaseName: 'upload_workflow_smoke_integration_test.db',
     );
@@ -167,6 +171,84 @@ void main() {
       );
     },
   );
+
+  testWidgets('seller mapping saved review remains resolved after reopen', (
+    tester,
+  ) async {
+    await _pumpUploadScreen(tester);
+    final dynamic state = tester.state(find.byType(ExcelUploadScreen));
+    _seedConfirmedWorkspace(state);
+    await tester.pump();
+
+    await _openSellerMapping(tester);
+    expect(
+      find.text(
+        'All identity review items and unmatched 26Q exceptions are reviewed.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      _buttonByKey<FilledButton>('seller_mapping_save_button').onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('seller_mapping_save_button')));
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      () =>
+          _buttonByKey<FilledButton>('open_reconciliation_button').onPressed !=
+          null,
+    );
+
+    await _openSellerMapping(tester);
+    expect(
+      find.text(
+        'All identity review items and unmatched 26Q exceptions are reviewed.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      _buttonByKey<FilledButton>('seller_mapping_save_button').onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets(
+    'reconciliation opens after confirmed upload and saved seller mapping',
+    (tester) async {
+      await _pumpUploadScreen(tester);
+      final dynamic state = tester.state(find.byType(ExcelUploadScreen));
+      _seedConfirmedWorkspace(state);
+      await tester.pump();
+
+      await _openSellerMapping(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('seller_mapping_save_button')),
+      );
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () =>
+            _buttonByKey<FilledButton>(
+              'open_reconciliation_button',
+            ).onPressed !=
+            null,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('open_reconciliation_button')),
+      );
+      await tester.pump();
+      await _pumpUntilFound(tester, find.byType(ReconciliationScreen));
+      await _pumpUntilFound(tester, find.text('194C'));
+
+      expect(find.text('Reconciliation - FY 2024-25'), findsOneWidget);
+      expect(find.text('Buyer One'), findsOneWidget);
+      expect(find.text('FY 2024-25', findRichText: true), findsWidgets);
+      expect(find.text('194C'), findsWidgets);
+    },
+  );
 }
 
 Future<void> _pumpUploadScreen(WidgetTester tester) async {
@@ -192,6 +274,26 @@ Future<void> _pumpUploadScreen(WidgetTester tester) async {
 
 T _buttonByKey<T extends ButtonStyleButton>(String key) {
   return find.byKey(ValueKey(key)).evaluate().single.widget as T;
+}
+
+Future<void> _openSellerMapping(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('review_seller_mappings_button')));
+  await tester.pump();
+  await _pumpUntilFound(
+    tester,
+    find.byKey(const ValueKey('seller_mapping_save_button')),
+  );
+}
+
+void _seedConfirmedWorkspace(dynamic state) {
+  final sourceRow = _ledgerRow();
+  state.setState(() {
+    state.tdsRows = [_tdsRow()];
+    state.tdsUploadFile = _tdsFile(rows: state.tdsRows);
+    state.selectedSections.add('194C');
+    state.sectionFiles['194C'] = [_ledgerFile(sourceRow)];
+    state.ledgerRowsBySection['194C'] = [sourceRow];
+  });
 }
 
 Future<void> _pumpUntilFound(
