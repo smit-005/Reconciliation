@@ -1290,10 +1290,42 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         .toList(growable: false);
   }
 
+  List<SellerMappingRowVm> _currentFilteredRowsForSelection() {
+    return _activeWorkspaceView == SellerMappingWorkspaceView.review
+        ? _reviewFilteredRows()
+        : _filteredRows();
+  }
+
+  void _advanceTwoPanelSelectionIfStale(
+    List<SellerMappingRowVm> previousFilteredRows,
+  ) {
+    final selectedKey = _selectedTwoPanelLeftKey;
+    if (selectedKey == null) return;
+
+    final nextFilteredRows = _currentFilteredRowsForSelection();
+    if (nextFilteredRows.any((row) => row.rowKey == selectedKey)) {
+      return;
+    }
+
+    if (nextFilteredRows.isEmpty) {
+      _selectedTwoPanelLeftKey = null;
+      return;
+    }
+
+    final previousIndex = previousFilteredRows.indexWhere(
+      (row) => row.rowKey == selectedKey,
+    );
+    final nextIndex = previousIndex < 0
+        ? 0
+        : math.min(previousIndex, nextFilteredRows.length - 1);
+    _selectedTwoPanelLeftKey = nextFilteredRows[nextIndex].rowKey;
+  }
+
   void _applyAutoMap() {
     final candidates = _buildTdsCandidates();
     final nextDetails = Map<String, AutoMapDecision>.from(autoMapDetails);
     final activeRows = _rowsForActiveSection();
+    final previousFilteredRows = _currentFilteredRowsForSelection();
 
     setState(() {
       for (final row in activeRows) {
@@ -1314,6 +1346,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       autoMapDetails = nextDetails;
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
+      _advanceTwoPanelSelectionIfStale(previousFilteredRows);
     });
   }
 
@@ -2284,6 +2317,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   void _setMappedParty(SellerMappingRowVm row, String? value) {
     if (row.isReadOnly && !row.is26QUnmatched) return;
+    final previousFilteredRows = _currentFilteredRowsForSelection();
     setState(() {
       autoMapDetails.remove(row.rowKey);
       final normalizedValue = _normalizeToKnownTdsParty(value)?.trim() ?? '';
@@ -2301,10 +2335,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
+      _advanceTwoPanelSelectionIfStale(previousFilteredRows);
     });
   }
 
   void _linkToLedgerRow(SellerMappingRowVm row, SellerMappingRowVm ledgerRow) {
+    final previousFilteredRows = _currentFilteredRowsForSelection();
     setState(() {
       autoMapDetails.remove(row.rowKey);
       _removeSelectedMappingsTargeting(
@@ -2319,10 +2355,12 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       selectedMappings[row.rowKey] = _linkLedgerValue(ledgerRow.rowKey);
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
+      _advanceTwoPanelSelectionIfStale(previousFilteredRows);
     });
   }
 
   void _setExceptionDecision(SellerMappingRowVm row, String? value) {
+    final previousFilteredRows = _currentFilteredRowsForSelection();
     setState(() {
       autoMapDetails.remove(row.rowKey);
       if (value == null || value.isEmpty) {
@@ -2339,6 +2377,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       }
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
+      _advanceTwoPanelSelectionIfStale(previousFilteredRows);
     });
   }
 
@@ -2366,6 +2405,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
   void _markSeparate(SellerMappingRowVm row) {
     if (row.isReadOnly) return;
+    final previousFilteredRows = _currentFilteredRowsForSelection();
     setState(() {
       autoMapDetails.remove(row.rowKey);
       _removeSelectedMappingsTargeting(
@@ -2377,6 +2417,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       selectedMappings[row.rowKey] = _separateSelectionValue(row);
       _rebuildDerivedRowStateCache();
       _invalidateViewCaches();
+      _advanceTwoPanelSelectionIfStale(previousFilteredRows);
     });
   }
 

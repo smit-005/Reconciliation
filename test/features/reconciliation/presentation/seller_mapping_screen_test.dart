@@ -196,6 +196,75 @@ void main() {
   );
 
   testWidgets(
+    'seller mapping advances two-panel selection after resolving selected needs-action row',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194C',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: const <SellerMappingScreenRowData>[
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'First Vendor',
+                  normalizedAlias: 'First Vendor',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'First Vendor',
+                  purchasePan: '',
+                  hasApplicableTdsImpact: true,
+                  preflightReasonCode: 'unresolved_identity',
+                  preflightReasonLabel: 'Unresolved Identity',
+                  preflightReasonDetail: 'First needs review',
+                  requiresDangerousReview: true,
+                ),
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'Second Vendor',
+                  normalizedAlias: 'Second Vendor',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'Second Vendor',
+                  purchasePan: '',
+                  hasApplicableTdsImpact: true,
+                  preflightReasonCode: 'unresolved_identity',
+                  preflightReasonLabel: 'Unresolved Identity',
+                  preflightReasonDetail: 'Second needs review',
+                  requiresDangerousReview: true,
+                ),
+              ],
+              tdsParties: const <String>['First Vendor', 'Second Vendor'],
+              existingMappings: const <SellerMapping>[],
+              blockedAliases: const <String>{},
+              tdsPartyPans: const <String, List<String>>{},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.text('First Vendor').first);
+      await tester.pump();
+
+      expect(find.text('First needs review'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Keep Separate'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('First needs review'), findsNothing);
+      expect(find.text('Second needs review'), findsOneWidget);
+      expect(find.text('Select a seller to enable actions.'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'review view clear visible clears review-visible rows instead of working-filtered rows',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1600, 1200));

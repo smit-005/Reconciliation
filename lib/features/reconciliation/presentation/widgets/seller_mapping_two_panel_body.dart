@@ -109,8 +109,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
   void didUpdateWidget(covariant SellerMappingTwoPanelBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     final previousSelectedKey = _selectedLeftKey;
-    if (widget.selectedLeftKey != oldWidget.selectedLeftKey &&
-        widget.selectedLeftKey != _selectedLeftKey) {
+    if (widget.selectedLeftKey != _selectedLeftKey) {
       _selectedLeftKey = widget.selectedLeftKey;
     }
 
@@ -553,9 +552,6 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     final VoidCallback? linkSellerAction = canLink
         ? () {
             widget.onLinkToLedgerRow(row, selectedLedger);
-            setState(() {
-              _setSelectedLeftRow(row);
-            });
           }
         : null;
     final canAcceptSuggestion =
