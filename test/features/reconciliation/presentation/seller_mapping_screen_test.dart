@@ -421,6 +421,231 @@ void main() {
   });
 
   testWidgets(
+    'seller mapping save allows same-section same-PAN aliases to share one 26Q seller',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      SellerMappingScreenResult? capturedResult;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _SellerMappingDirectLaunchHarness(
+            screen: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194C',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: const <SellerMappingScreenRowData>[
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'ABC Enterprise Morbi',
+                  normalizedAlias: 'ABC Enterprise Morbi',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'ABC Enterprise',
+                  tdsPan: 'AAAAA1111A',
+                  purchasePan: 'AAAAA1111A',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                ),
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'ABC Enterprise Rajkot',
+                  normalizedAlias: 'ABC Enterprise Rajkot',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'ABC Enterprise',
+                  tdsPan: 'AAAAA1111A',
+                  purchasePan: 'AAAAA1111A',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                ),
+              ],
+              tdsParties: const <String>['ABC Enterprise'],
+              existingMappings: <SellerMapping>[
+                SellerMapping(
+                  buyerName: 'Buyer One',
+                  buyerPan: 'ABCDE1234F',
+                  aliasName: 'ABC Enterprise Morbi',
+                  sectionCode: '194C',
+                  mappedName: 'ABC Enterprise',
+                  mappedPan: 'AAAAA1111A',
+                ),
+              ],
+              blockedAliases: const <String>{},
+              tdsPartyPans: const <String, List<String>>{
+                'ABC Enterprise': <String>['AAAAA1111A'],
+              },
+              initialSelectedMappings: const <String, String>{
+                'ABCENTERPRISEMORBI|194C|0': 'ABC Enterprise',
+                'ABCENTERPRISERAJKOT|194C|1': 'ABC Enterprise',
+              },
+            ),
+            onResult: (result) => capturedResult = result,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Seller Mapping'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Continue'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(capturedResult, isNotNull);
+      expect(capturedResult!.upserts, hasLength(2));
+      expect(capturedResult!.deleted, isEmpty);
+      expect(
+        capturedResult!.upserts.map((row) => row['aliasName']).toSet(),
+        containsAll(<String>{'ABCENTERPRISEMORBI', 'ABCENTERPRISERAJKOT'}),
+      );
+    },
+  );
+
+  testWidgets(
+    'seller mapping save still dedupes same target with different PAN',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      SellerMappingScreenResult? capturedResult;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _SellerMappingDirectLaunchHarness(
+            screen: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194C',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: const <SellerMappingScreenRowData>[
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'ABC Enterprise Morbi',
+                  normalizedAlias: 'ABC Enterprise Morbi',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'ABC Enterprise',
+                  tdsPan: 'AAAAA1111A',
+                  purchasePan: 'AAAAA1111A',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                ),
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'ABC Enterprise Rajkot',
+                  normalizedAlias: 'ABC Enterprise Rajkot',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'ABC Enterprise',
+                  tdsPan: 'AAAAA1111A',
+                  purchasePan: 'BBBBB2222B',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                ),
+              ],
+              tdsParties: const <String>['ABC Enterprise'],
+              existingMappings: const <SellerMapping>[],
+              blockedAliases: const <String>{},
+              tdsPartyPans: const <String, List<String>>{
+                'ABC Enterprise': <String>['AAAAA1111A'],
+              },
+              initialSelectedMappings: const <String, String>{
+                'ABCENTERPRISEMORBI|194C|0': 'ABC Enterprise',
+                'ABCENTERPRISERAJKOT|194C|1': 'ABC Enterprise',
+              },
+            ),
+            onResult: (result) => capturedResult = result,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Seller Mapping'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Continue'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(capturedResult, isNotNull);
+      expect(capturedResult!.upserts, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'seller mapping save keeps cross-section same-PAN mappings scoped',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1600, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      SellerMappingScreenResult? capturedResult;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _SellerMappingDirectLaunchHarness(
+            screen: SellerMappingScreen(
+              mode: SellerMappingScreenMode.preflight,
+              buyerName: 'Buyer One',
+              buyerPan: 'ABCDE1234F',
+              financialYearLabel: 'FY 2024-25',
+              selectedSectionLabel: '194C',
+              initialViewMode: ReconciliationViewMode.summary,
+              purchaseRows: const <SellerMappingScreenRowData>[
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'ABC Enterprise Morbi',
+                  normalizedAlias: 'ABC Enterprise Morbi',
+                  sectionCode: '194C',
+                  tdsDisplayName: 'ABC Enterprise',
+                  tdsPan: 'AAAAA1111A',
+                  purchasePan: 'AAAAA1111A',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                ),
+                SellerMappingScreenRowData(
+                  purchasePartyDisplayName: 'ABC Enterprise Rajkot',
+                  normalizedAlias: 'ABC Enterprise Rajkot',
+                  sectionCode: '194J_B',
+                  tdsDisplayName: 'ABC Enterprise',
+                  tdsPan: 'AAAAA1111A',
+                  purchasePan: 'AAAAA1111A',
+                  sourceRowCount: 1,
+                  tdsRowCount: 1,
+                ),
+              ],
+              tdsParties: const <String>['ABC Enterprise'],
+              existingMappings: const <SellerMapping>[],
+              blockedAliases: const <String>{},
+              tdsPartyPans: const <String, List<String>>{
+                'ABC Enterprise': <String>['AAAAA1111A'],
+              },
+              initialSelectedMappings: const <String, String>{
+                'ABCENTERPRISEMORBI|194C|0': 'ABC Enterprise',
+                'ABCENTERPRISERAJKOT|194J_B|0': 'ABC Enterprise',
+              },
+            ),
+            onResult: (result) => capturedResult = result,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Seller Mapping'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Continue'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(capturedResult, isNotNull);
+      expect(capturedResult!.upserts, hasLength(2));
+      expect(
+        capturedResult!.upserts.map((row) => row['sectionCode']).toSet(),
+        containsAll(<String>{'194C', '194J_B'}),
+      );
+    },
+  );
+
+  testWidgets(
     'two-panel selection clears when search hides the selected left seller',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1600, 900));

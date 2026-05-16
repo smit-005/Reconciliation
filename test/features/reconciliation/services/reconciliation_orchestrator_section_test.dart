@@ -526,6 +526,322 @@ void main() {
         );
       },
     );
+
+    test(
+      'section Mark Separate with valid PAN does not merge into same-PAN 26Q row',
+      () async {
+        const buyerPan = 'SEPAR1111A';
+        await _clearMappings(buyerPan);
+        await SellerMappingService.saveMapping(
+          SellerMapping(
+            buyerName: 'Test Buyer',
+            buyerPan: buyerPan,
+            aliasName: 'ABC Enterprise Morbi',
+            sectionCode: '194C',
+            mappedPan: 'AAAAA1111A',
+            mappedName: '__SEPARATE__:ABCENTERPRISEMORBI|194C|0',
+          ),
+        );
+
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          sourceRows: [
+            _sourceRow(
+              section: '194C',
+              amount: 50000,
+              partyName: 'ABC Enterprise Morbi',
+              panNumber: 'AAAAA1111A',
+            ),
+          ],
+          tdsRows: [
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 50000,
+              tds: 500,
+              deducteeName: 'ABC Enterprise',
+              panNumber: 'AAAAA1111A',
+            ),
+          ],
+        );
+
+        expect(rows.rows, hasLength(2));
+        expect(
+          rows.rows.any((row) => row.purchasePresent && row.tdsPresent),
+          isFalse,
+        );
+
+        final separatePurchase = rows.rows.singleWhere(
+          (row) => row.purchasePresent && !row.tdsPresent,
+        );
+        expect(separatePurchase.sellerName, 'ABC Enterprise Morbi');
+        expect(separatePurchase.sellerPan, 'AAAAA1111A');
+        expect(
+          separatePurchase.resolvedSellerId,
+          'SEPARATE:194C|ABCENTERPRISEMORBI',
+        );
+        expect(separatePurchase.identitySource, 'review_separate');
+        expect(separatePurchase.debugInfo.mappingHit, 'separate');
+        expect(
+          separatePurchase.debugInfo.identityFlags,
+          contains('reviewed_separate'),
+        );
+
+        final tdsOnly = rows.rows.singleWhere(
+          (row) => !row.purchasePresent && row.tdsPresent,
+        );
+        expect(tdsOnly.sellerName, 'ABC Enterprise');
+        expect(tdsOnly.resolvedSellerId, 'PAN:AAAAA1111A');
+      },
+    );
+
+    test('normal same-PAN rows without Separate still collapse', () async {
+      const buyerPan = 'SEPAR2222B';
+      await _clearMappings(buyerPan);
+
+      final rows = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: buyerPan,
+        sourceRows: [
+          _sourceRow(
+            section: '194C',
+            amount: 50000,
+            partyName: 'ABC Enterprise Morbi',
+            panNumber: 'AAAAA1111A',
+          ),
+        ],
+        tdsRows: [
+          _tdsRow(
+            section: '194C',
+            deductedAmount: 50000,
+            tds: 1000,
+            deducteeName: 'ABC Enterprise',
+            panNumber: 'AAAAA1111A',
+          ),
+        ],
+      );
+
+      expect(rows.rows, hasLength(1));
+      final matched = rows.rows.single;
+      expect(matched.purchasePresent, isTrue);
+      expect(matched.tdsPresent, isTrue);
+      expect(matched.resolvedSellerId, 'PAN:AAAAA1111A');
+      expect(matched.identitySource, 'pan');
+      expect(matched.status, ReconciliationStatus.matched);
+    });
+
+    test('section Mark Separate beats ALL fallback mapping', () async {
+      const buyerPan = 'SEPAR3333C';
+      await _clearMappings(buyerPan);
+      await SellerMappingService.saveMappings(<SellerMapping>[
+        SellerMapping(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          aliasName: 'ABC Enterprise Morbi',
+          sectionCode: 'ALL',
+          mappedPan: 'AAAAA1111A',
+          mappedName: 'ABC Enterprise',
+        ),
+        SellerMapping(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          aliasName: 'ABC Enterprise Morbi',
+          sectionCode: '194C',
+          mappedPan: '',
+          mappedName: '__SEPARATE__:ABCENTERPRISEMORBI|194C|0',
+        ),
+      ]);
+
+      final rows = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: buyerPan,
+        sourceRows: [
+          _sourceRow(
+            section: '194C',
+            amount: 50000,
+            partyName: 'ABC Enterprise Morbi',
+            panNumber: '',
+          ),
+        ],
+        tdsRows: [
+          _tdsRow(
+            section: '194C',
+            deductedAmount: 50000,
+            tds: 500,
+            deducteeName: 'ABC Enterprise',
+            panNumber: 'AAAAA1111A',
+          ),
+        ],
+      );
+
+      expect(rows.rows, hasLength(2));
+      final separatePurchase = rows.rows.singleWhere(
+        (row) => row.purchasePresent && !row.tdsPresent,
+      );
+      expect(separatePurchase.sellerName, 'ABC Enterprise Morbi');
+      expect(separatePurchase.sellerPan, isEmpty);
+      expect(
+        separatePurchase.resolvedSellerId,
+        'SEPARATE:194C|ABCENTERPRISEMORBI',
+      );
+      expect(separatePurchase.identitySource, 'review_separate');
+      expect(separatePurchase.debugInfo.mappingSectionUsed, '194C');
+      expect(separatePurchase.debugInfo.mappingHit, 'separate');
+      expect(
+        rows.rows.any(
+          (row) =>
+              row.purchasePresent &&
+              row.tdsPresent &&
+              row.sellerName == 'ABC Enterprise',
+        ),
+        isFalse,
+      );
+    });
+
+    test('section Mark Separate does not affect another section', () async {
+      const buyerPan = 'SEPAR4444D';
+      await _clearMappings(buyerPan);
+      await SellerMappingService.saveMapping(
+        SellerMapping(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          aliasName: 'ABC Enterprise Morbi',
+          sectionCode: '194C',
+          mappedPan: 'AAAAA1111A',
+          mappedName: '__SEPARATE__:ABCENTERPRISEMORBI|194C|0',
+        ),
+      );
+
+      final rows = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: buyerPan,
+        sourceRows: [
+          _sourceRow(
+            section: '194C',
+            amount: 50000,
+            partyName: 'ABC Enterprise Morbi',
+            panNumber: 'AAAAA1111A',
+          ),
+          _sourceRow(
+            section: '194J_B',
+            amount: 50000,
+            partyName: 'ABC Enterprise Morbi',
+            panNumber: 'AAAAA1111A',
+          ),
+        ],
+        tdsRows: [
+          _tdsRow(
+            section: '194C',
+            deductedAmount: 50000,
+            tds: 500,
+            deducteeName: 'ABC Enterprise',
+            panNumber: 'AAAAA1111A',
+          ),
+          _tdsRow(
+            section: '194J_B',
+            deductedAmount: 50000,
+            tds: 5000,
+            deducteeName: 'ABC Enterprise',
+            panNumber: 'AAAAA1111A',
+          ),
+        ],
+      );
+
+      final contractRows = rows.rows
+          .where((row) => row.section == '194C')
+          .toList();
+      final professionalRows = rows.rows
+          .where((row) => row.section == '194J_B')
+          .toList();
+
+      expect(contractRows, hasLength(2));
+      expect(
+        contractRows.any((row) => row.identitySource == 'review_separate'),
+        isTrue,
+      );
+
+      expect(professionalRows, hasLength(1));
+      expect(professionalRows.single.purchasePresent, isTrue);
+      expect(professionalRows.single.tdsPresent, isTrue);
+      expect(professionalRows.single.resolvedSellerId, 'PAN:AAAAA1111A');
+      expect(professionalRows.single.identitySource, 'pan');
+    });
+
+    test(
+      'Timing Difference and Missing in Books markers keep existing identity flow',
+      () async {
+        const buyerPan = 'SEPAR5555E';
+        await _clearMappings(buyerPan);
+        await SellerMappingService.saveMappings(<SellerMapping>[
+          SellerMapping(
+            buyerName: 'Test Buyer',
+            buyerPan: buyerPan,
+            aliasName: 'Timing Alias Vendor',
+            sectionCode: '194C',
+            mappedPan: '',
+            mappedName: '__TIMING_DIFFERENCE__:TIMINGALIASVENDOR|194C|0',
+          ),
+          SellerMapping(
+            buyerName: 'Test Buyer',
+            buyerPan: buyerPan,
+            aliasName: 'Missing Alias Vendor',
+            sectionCode: '194J_B',
+            mappedPan: '',
+            mappedName: '__MISSING_IN_BOOKS__:MISSINGALIASVENDOR|194J_B|1',
+          ),
+        ]);
+
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: buyerPan,
+          sourceRows: [
+            _sourceRow(
+              section: '194C',
+              amount: 50000,
+              partyName: 'Timing Alias Vendor',
+              panNumber: 'BBBBB2222B',
+            ),
+            _sourceRow(
+              section: '194J_B',
+              amount: 50000,
+              partyName: 'Missing Alias Vendor',
+              panNumber: 'CCCCC3333C',
+            ),
+          ],
+          tdsRows: [
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 50000,
+              tds: 500,
+              deducteeName: 'Timing 26Q Vendor',
+              panNumber: 'BBBBB2222B',
+            ),
+            _tdsRow(
+              section: '194J_B',
+              deductedAmount: 50000,
+              tds: 5000,
+              deducteeName: 'Missing 26Q Vendor',
+              panNumber: 'CCCCC3333C',
+            ),
+          ],
+        );
+
+        expect(rows.rows, hasLength(2));
+        expect(
+          rows.rows.every((row) => row.purchasePresent && row.tdsPresent),
+          isTrue,
+        );
+        expect(rows.rows.every((row) => row.identitySource == 'pan'), isTrue);
+        expect(
+          rows.rows.any((row) => row.identitySource == 'review_separate'),
+          isFalse,
+        );
+        expect(
+          rows.rows.map((row) => row.resolvedSellerId),
+          containsAll(<String>['PAN:BBBBB2222B', 'PAN:CCCCC3333C']),
+        );
+      },
+    );
   });
 }
 

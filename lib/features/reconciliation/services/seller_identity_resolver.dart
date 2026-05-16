@@ -24,6 +24,7 @@ class SellerIdentityObservation {
 class SellerIdentityResolver {
   final Map<String, String> _aliasToPan;
   final Map<String, SellerMapping> _sectionMappings;
+  final Set<String> _separateAliasSectionKeys;
   final Map<String, Set<String>> _nameToPans;
   final Map<String, Set<String>> _panToNames;
   final Map<String, Set<String>> _legalNameToPans;
@@ -34,6 +35,7 @@ class SellerIdentityResolver {
   SellerIdentityResolver._({
     required Map<String, String> aliasToPan,
     required Map<String, SellerMapping> sectionMappings,
+    required Set<String> separateAliasSectionKeys,
     required Map<String, Set<String>> nameToPans,
     required Map<String, Set<String>> panToNames,
     required Map<String, Set<String>> legalNameToPans,
@@ -42,6 +44,7 @@ class SellerIdentityResolver {
     required Map<String, String> panDisplay,
   }) : _aliasToPan = aliasToPan,
        _sectionMappings = sectionMappings,
+       _separateAliasSectionKeys = separateAliasSectionKeys,
        _nameToPans = nameToPans,
        _panToNames = panToNames,
        _legalNameToPans = legalNameToPans,
@@ -56,6 +59,7 @@ class SellerIdentityResolver {
   }) {
     final aliasToPan = <String, String>{};
     final sectionMappings = <String, SellerMapping>{};
+    final separateAliasSectionKeys = <String>{};
     final nameToPans = <String, Set<String>>{};
     final panToNames = <String, Set<String>>{};
     final legalNameToPans = <String, Set<String>>{};
@@ -88,6 +92,13 @@ class SellerIdentityResolver {
       final sectionCode = normalizeSellerMappingSectionCode(
         mapping.sectionCode,
       );
+      final isSeparateMarker = mapping.mappedName
+          .trim()
+          .toUpperCase()
+          .startsWith(sellerMappingSeparateMarkerPrefix);
+      if (alias.isNotEmpty && sectionCode != 'ALL' && isSeparateMarker) {
+        separateAliasSectionKeys.add('$alias|$sectionCode');
+      }
       if (isSellerMappingReviewMarker(mapping.mappedName)) continue;
       if (alias.isEmpty || sectionCode.isEmpty) continue;
       sectionMappings['$alias|$sectionCode'] = mapping.copyWith(
@@ -133,6 +144,7 @@ class SellerIdentityResolver {
     return SellerIdentityResolver._(
       aliasToPan: aliasToPan,
       sectionMappings: sectionMappings,
+      separateAliasSectionKeys: separateAliasSectionKeys,
       nameToPans: nameToPans,
       panToNames: panToNames,
       legalNameToPans: legalNameToPans,
@@ -163,6 +175,20 @@ class SellerIdentityResolver {
     final flags = <String>{};
     final mappingAttempted =
         normalizedBuyerPan.isNotEmpty && normalizedAliasName.isNotEmpty;
+    if (mappingAttempted &&
+        _separateAliasSectionKeys.contains(
+          '$normalizedAliasName|$normalizedSectionCode',
+        )) {
+      return _resolveSeparateMapping(
+        normalizedAliasName: normalizedAliasName,
+        normalizedName: normalizedName,
+        normalizedPan: normalizedPan,
+        originalName: originalName,
+        sectionCode: normalizedSectionCode,
+        mappingAttempted: mappingAttempted,
+      );
+    }
+
     final exactMapping = mappingAttempted
         ? _sectionMappings['$normalizedAliasName|$normalizedSectionCode']
         : null;
@@ -248,6 +274,37 @@ class SellerIdentityResolver {
       mappingSectionUsed: mappingSectionUsed,
       mappingHit: mappingHit,
       extraFlags: flags,
+    );
+  }
+
+  ResolvedSellerIdentity _resolveSeparateMapping({
+    required String normalizedAliasName,
+    required String normalizedName,
+    required String normalizedPan,
+    required String originalName,
+    required String sectionCode,
+    required bool mappingAttempted,
+  }) {
+    final resolvedPan = looksLikePan(normalizedPan) ? normalizedPan : '';
+    final flags = <String>{
+      'reviewed_separate',
+      if (resolvedPan.isNotEmpty) 'pan_verified',
+    }.toList()..sort();
+
+    return ResolvedSellerIdentity(
+      resolvedSellerId: 'SEPARATE:$sectionCode|$normalizedAliasName',
+      resolvedSellerName: _displayNameForName(normalizedName, originalName),
+      resolvedPan: resolvedPan,
+      identitySource: 'review_separate',
+      identityConfidence: 1.0,
+      identityNotes: 'Seller kept separate by saved review decision.',
+      mappingAttempted: mappingAttempted,
+      mappingSectionUsed: sectionCode,
+      mappingHit: 'separate',
+      identityFlags: flags,
+      originalSellerName: originalName.trim(),
+      normalizedSellerName: normalizedName,
+      originalPan: normalizedPan,
     );
   }
 

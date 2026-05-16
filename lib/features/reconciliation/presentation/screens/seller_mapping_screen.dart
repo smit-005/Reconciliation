@@ -951,18 +951,62 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     return normalizeName(safeValue);
   }
 
+  bool _isSafeSamePanTargetSelection(SellerMappingRowVm row, Object? value) {
+    final safeValue = sellerMappingSafeText(value);
+    if (safeValue.isEmpty || _isUiDecisionSelection(safeValue)) return false;
+    if (row.sourceRowCount <= 0) return false;
+
+    final purchasePan = normalizePan(row.purchasePan);
+    final targetPan = _getPanForTdsParty(safeValue);
+    return looksLikePan(purchasePan) &&
+        looksLikePan(targetPan) &&
+        purchasePan == targetPan;
+  }
+
+  bool _canShareMappedTarget({
+    required SellerMappingRowVm currentRow,
+    required Object? currentValue,
+    required SellerMappingRowVm existingRow,
+    required Object? existingValue,
+  }) {
+    if (currentRow.sectionCode != existingRow.sectionCode) return false;
+    if (_selectionTargetKey(currentRow, currentValue) !=
+        _selectionTargetKey(existingRow, existingValue)) {
+      return false;
+    }
+    return _isSafeSamePanTargetSelection(currentRow, currentValue) &&
+        _isSafeSamePanTargetSelection(existingRow, existingValue);
+  }
+
   void _removeSelectedMappingsTargeting({
     required String sectionCode,
     required String targetName,
     String? exceptRowKey,
+    bool allowSafeSamePanTargetSharing = false,
   }) {
+    final rows = _rowsForSection(sectionCode);
     final targetKey = normalizeName(targetName);
     if (targetKey.isEmpty) return;
+    final currentRow = allowSafeSamePanTargetSharing && exceptRowKey != null
+        ? rows.cast<SellerMappingRowVm?>().firstWhere(
+            (row) => row?.rowKey == exceptRowKey,
+            orElse: () => null,
+          )
+        : null;
 
-    for (final row in _rowsForSection(sectionCode)) {
+    for (final row in rows) {
       if (row.rowKey == exceptRowKey) continue;
       final selectedValue = selectedMappings[row.rowKey];
       if (_selectionTargetKey(row, selectedValue) != targetKey) continue;
+      if (currentRow != null &&
+          _canShareMappedTarget(
+            currentRow: currentRow,
+            currentValue: targetName,
+            existingRow: row,
+            existingValue: selectedValue,
+          )) {
+        continue;
+      }
       selectedMappings.remove(row.rowKey);
       _clearedRowKeys.add(row.rowKey);
     }
@@ -973,8 +1017,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     Iterable<SellerMappingRowVm> rows,
   ) {
     final rowByKey = {for (final row in rows) row.rowKey: row};
-    final bestRowByTarget = <String, String>{};
-    final bestScoreByTarget = <String, int>{};
+    final entriesByTarget = <String, List<MapEntry<String, String>>>{};
 
     for (final entry in mappings.entries) {
       final row = rowByKey[entry.key];
@@ -983,21 +1026,39 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       final targetKey = _selectionTargetKey(row, entry.value);
       if (targetKey.isEmpty) continue;
       final groupKey = '${row.sectionCode}|$targetKey';
-      final score = _selectionDedupeScore(row, entry.value);
-      final bestScore = bestScoreByTarget[groupKey];
-      if (bestScore == null || score >= bestScore) {
-        bestRowByTarget[groupKey] = row.rowKey;
-        bestScoreByTarget[groupKey] = score;
-      }
+      entriesByTarget.putIfAbsent(groupKey, () => []).add(entry);
     }
 
     final deduped = <String, String>{};
-    for (final entry in mappings.entries) {
-      final row = rowByKey[entry.key];
-      if (row == null) continue;
-      final targetKey = _selectionTargetKey(row, entry.value);
-      if (targetKey.isEmpty) continue;
-      if (bestRowByTarget['${row.sectionCode}|$targetKey'] == entry.key) {
+    for (final entries in entriesByTarget.values) {
+      final allEntriesCanShareSamePan =
+          entries.length > 1 &&
+          entries.every((entry) {
+            final row = rowByKey[entry.key];
+            return row != null &&
+                _isSafeSamePanTargetSelection(row, entry.value);
+          });
+
+      if (allEntriesCanShareSamePan) {
+        for (final entry in entries) {
+          deduped[entry.key] = entry.value;
+        }
+        continue;
+      }
+
+      MapEntry<String, String>? bestEntry;
+      var bestScore = -1;
+      for (final entry in entries) {
+        final row = rowByKey[entry.key];
+        if (row == null) continue;
+        final score = _selectionDedupeScore(row, entry.value);
+        if (score >= bestScore) {
+          bestEntry = entry;
+          bestScore = score;
+        }
+      }
+      if (bestEntry != null) {
+        final entry = bestEntry;
         deduped[entry.key] = entry.value;
       }
     }
@@ -1676,6 +1737,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           sectionCode: row.sectionCode,
           targetName: effectiveMappedName,
           exceptAliasName: row.normalizedAlias,
+          allowSafeSamePanTargetSharing: true,
         );
       }
 
@@ -1770,11 +1832,20 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     required String sectionCode,
     required String targetName,
     String? exceptAliasName,
+    bool allowSafeSamePanTargetSharing = false,
   }) {
     final normalizedSection = normalizeSellerMappingSectionCode(sectionCode);
     final targetKey = normalizeName(targetName);
     final exceptAliasKey = normalizeName(exceptAliasName ?? '');
     if (targetKey.isEmpty) return;
+    final sectionRows = _rowsForSection(normalizedSection);
+    final currentRow =
+        allowSafeSamePanTargetSharing && exceptAliasKey.isNotEmpty
+        ? sectionRows.cast<SellerMappingRowVm?>().firstWhere(
+            (row) => row?.normalizedAlias == exceptAliasKey,
+            orElse: () => null,
+          )
+        : null;
 
     for (final mapping in widget.existingMappings) {
       if (normalizeSellerMappingSectionCode(mapping.sectionCode) !=
@@ -1785,6 +1856,22 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       if (aliasKey.isEmpty || aliasKey == exceptAliasKey) continue;
       if (isSellerMappingReviewMarker(mapping.mappedName)) continue;
       if (normalizeName(mapping.mappedName) != targetKey) continue;
+      final existingRow = currentRow == null
+          ? null
+          : sectionRows.cast<SellerMappingRowVm?>().firstWhere(
+              (row) => row?.normalizedAlias == aliasKey,
+              orElse: () => null,
+            );
+      if (currentRow != null &&
+          existingRow != null &&
+          _canShareMappedTarget(
+            currentRow: currentRow,
+            currentValue: targetName,
+            existingRow: existingRow,
+            existingValue: mapping.mappedName,
+          )) {
+        continue;
+      }
       addDeleted(aliasName: aliasKey, sectionCode: normalizedSection);
     }
   }
@@ -2329,6 +2416,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
           sectionCode: row.sectionCode,
           targetName: normalizedValue,
           exceptRowKey: row.rowKey,
+          allowSafeSamePanTargetSharing: true,
         );
         _clearedRowKeys.remove(row.rowKey);
         selectedMappings[row.rowKey] = normalizedValue;
@@ -2407,6 +2495,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     if (row.isReadOnly) return;
     final previousFilteredRows = _currentFilteredRowsForSelection();
     setState(() {
+      // TODO(Phase 8.1b): make final reconciliation honor saved separate
+      // markers before PAN identity collapse.
       autoMapDetails.remove(row.rowKey);
       _removeSelectedMappingsTargeting(
         sectionCode: row.sectionCode,
