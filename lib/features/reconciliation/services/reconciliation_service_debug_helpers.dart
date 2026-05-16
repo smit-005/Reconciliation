@@ -63,7 +63,7 @@ void _debugDuplicateSourceSectionLeakage(List<_ResolvedSourceRow> rows) {
         ..sort((a, b) => a.key.compareTo(b.key));
 
   if (leaked.isEmpty) {
-    debugPrint(
+    AppLogger.debug(
       'DUPLICATE SOURCE CHECK => no cross-section source duplication detected',
     );
     return;
@@ -71,7 +71,7 @@ void _debugDuplicateSourceSectionLeakage(List<_ResolvedSourceRow> rows) {
 
   for (final entry in leaked.take(20)) {
     final sections = entry.value.toList()..sort();
-    debugPrint(
+    AppLogger.debug(
       'DUPLICATE SOURCE CHECK => fingerprint=${entry.key} emitted sections=[${sections.join(', ')}]',
     );
   }

@@ -1,6 +1,6 @@
 import 'package:reconciliation_app/features/reconciliation/models/seller_mapping.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/screens/seller_mapping_screen.dart';
-import 'package:flutter/foundation.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 
 class SellerMappingRowVm {
   final String purchasePartyDisplayName;
@@ -80,7 +80,7 @@ String resolveTdsSellerTitle(SellerMappingRowVm row) {
   final normalizedAlias = sellerMappingSafeText(row.normalizedAlias);
   if (normalizedAlias.isNotEmpty) return normalizedAlias;
 
-  debugPrint(
+  AppLogger.debug(
     'SELLER UI WARN => missing 26Q identity '
     'rowKey=${sellerMappingSafeText(row.rowKey)} '
     'section=${sellerMappingSafeText(row.sectionCode)}',
@@ -103,7 +103,7 @@ String resolveLedgerSellerTitle(SellerMappingRowVm row) {
   final normalizedAlias = sellerMappingSafeText(row.normalizedAlias);
   if (normalizedAlias.isNotEmpty) return normalizedAlias;
 
-  debugPrint(
+  AppLogger.debug(
     'SELLER UI WARN => missing ledger identity '
     'rowKey=${sellerMappingSafeText(row.rowKey)} '
     'section=${sellerMappingSafeText(row.sectionCode)}',

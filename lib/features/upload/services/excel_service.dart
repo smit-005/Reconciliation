@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/parse_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
@@ -29,7 +30,7 @@ class ImportSessionCache {
     final decodeWatch = Stopwatch()..start();
     final decoder = SpreadsheetDecoder.decodeBytes(bytes, update: false);
     decodeWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=session_cache_decode ms=${decodeWatch.elapsedMilliseconds} sizeBytes=${bytes.length}',
     );
     return ImportSessionCache._(bytes: bytes, decoder: decoder);
@@ -55,7 +56,7 @@ class ImportFormatProfileMatch {
 }
 
 class ExcelService {
-  static const bool _enableVerboseImportLogs = false;
+  static const bool _enableVerboseImportLogs = AppLogger.verboseEnabled;
   static const int _defaultHeaderScanRowLimit = 20;
   static const int _defaultStructuredHeaderScanRowLimit = 30;
   static const int _selectedSheetHeaderScanRowLimit = 80;
@@ -86,7 +87,7 @@ class ExcelService {
 
   static void _debugVerbose(String message) {
     if (!_enableVerboseImportLogs) return;
-    debugPrint(message);
+    AppLogger.debug(message);
   }
 
   static void _logUploadFreezePerformance(
@@ -95,7 +96,7 @@ class ExcelService {
     String details = '',
   }) {
     final suffix = details.trim().isEmpty ? '' : ' | $details';
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=$step ms=${watch.elapsedMilliseconds}$suffix',
     );
   }
@@ -112,7 +113,7 @@ class ExcelService {
         .map((entry) => '${entry.key}:${entry.value}')
         .join(', ');
     _forcedNumericDateAvoidanceByField.clear();
-    debugPrint(
+    AppLogger.debug(
       'EXCEL VALUE FORMAT => summary context=$context avoidedForcedNumericDates={$summary}',
     );
   }
@@ -1294,7 +1295,7 @@ class ExcelService {
       );
     }
 
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD PERF => step=purchase_metadata_ready ms=${uploadWatch.elapsedMilliseconds} '
       'sheet=${sheetInfo.sheetName} confidence=${confidenceScore.toStringAsFixed(2)}',
     );
@@ -1305,7 +1306,7 @@ class ExcelService {
       mappedHeaders: mappedHeaders,
       headersTrusted: sheetInfo.headersTrusted,
     );
-    debugPrint(
+    AppLogger.debug(
       'PARSE PERF => step=parse_purchase_rows ms=${parseWatch.elapsedMilliseconds} rows=${parsed.length}',
     );
 
@@ -2259,7 +2260,7 @@ class ExcelService {
     );
     final cached = _headerDetectionCache[cacheKey];
     if (cached != null) {
-      debugPrint(
+      AppLogger.debug(
         'HEADER CACHE HIT => sheet=${cached.sheetName} row=${cached.headerRowIndex} type=${cached.detectedType.name}',
       );
       return cached;
@@ -2277,7 +2278,7 @@ class ExcelService {
     if (forcedType == ExcelImportType.tds26q &&
         preferredSheetName == null &&
         (preferred26QSheet == null || preferred26QSheet.isEmpty)) {
-      debugPrint(
+      AppLogger.debug(
         '26Q SHEET SELECTION => requires user selection, auto-selection skipped',
       );
       return null;
@@ -2312,8 +2313,8 @@ class ExcelService {
           if (sheetName != preferred26QSheet) continue;
         } else {
           if (_isLikely26QReferenceSheet(table.rows)) {
-            debugPrint('Rejected $sheetName as reference sheet');
-            debugPrint('Skipping reference sheet: $sheetName');
+            AppLogger.debug('Rejected $sheetName as reference sheet');
+            AppLogger.debug('Skipping reference sheet: $sheetName');
             continue;
           }
         }
@@ -2481,9 +2482,9 @@ class ExcelService {
             type: best.detectedType,
           );
 
-    debugPrint('DETECTION CHOSEN SHEET => ${best.sheetName}');
-    debugPrint('DETECTION HEADER ROW => ${best.headerRowIndex}');
-    debugPrint('DETECTION CONFIDENCE => $confidenceScore');
+    AppLogger.debug('DETECTION CHOSEN SHEET => ${best.sheetName}');
+    AppLogger.debug('DETECTION HEADER ROW => ${best.headerRowIndex}');
+    AppLogger.debug('DETECTION CONFIDENCE => $confidenceScore');
 
     final resolved = (
       sheetName: best.sheetName,
@@ -2547,14 +2548,14 @@ class ExcelService {
         bestSheet == null || bestScore <= 70 || scoreGap <= 10;
 
     if (isWeakSelection) {
-      debugPrint(
+      AppLogger.debug(
         '26Q SHEET SELECTION => weak confidence, no sheet auto-selected '
         '(best=${bestSheet ?? 'none'}, score=$bestScore, gap=$scoreGap)',
       );
       return null;
     }
 
-    debugPrint('26Q SHEET SELECTION => selected $bestSheet');
+    AppLogger.debug('26Q SHEET SELECTION => selected $bestSheet');
     return bestSheet;
   }
 
@@ -2812,7 +2813,7 @@ class ExcelService {
     });
 
     final selected = candidates.isEmpty ? null : candidates.first;
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD HEADER DETECT => '
       'file=$fileLabel '
       'selectedRow=${selected == null ? 0 : selected.headerRowIndex + 1} '
@@ -4164,7 +4165,7 @@ class ExcelService {
     required String column,
     required String reason,
   }) {
-    debugPrint('AMOUNT HEURISTIC REJECT => column=$column reason=$reason');
+    AppLogger.debug('AMOUNT HEURISTIC REJECT => column=$column reason=$reason');
   }
 
   static List<String?> _sanitizeGenericLedgerMappedHeaders({
@@ -5120,7 +5121,7 @@ class ExcelService {
     })
     audit,
   ) {
-    debugPrint(
+    AppLogger.debug(
       'GENERIC LEDGER IMPORT AUDIT => '
       'sourceRows=${audit.sourceRowCount} '
       'parsedTransactions=${audit.parsedTransactionCount} '

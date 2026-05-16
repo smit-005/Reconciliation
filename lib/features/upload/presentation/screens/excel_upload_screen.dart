@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 import 'package:reconciliation_app/core/widgets/app_page_scaffold.dart';
 import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
@@ -494,7 +495,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     }
 
     final file = result.files.single;
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=file_selected file=${file.name} sizeBytes=${file.size}',
     );
     final normalizedExtension = p.extension(file.name).toLowerCase();
@@ -522,14 +523,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             type: type,
           );
       if (snapshotPath == null) {
-        debugPrint(
+        AppLogger.debug(
           'SOURCE SNAPSHOT => skipped workspace unavailable file=${pickedFile.name}',
         );
         return;
       }
-      debugPrint('SOURCE SNAPSHOT => copied $snapshotPath');
+      AppLogger.debug('SOURCE SNAPSHOT => copied $snapshotPath');
     } catch (e) {
-      debugPrint('SOURCE SNAPSHOT => failed file=${pickedFile.name} error=$e');
+      AppLogger.warning(
+        'SOURCE SNAPSHOT => failed file=${pickedFile.name} error=$e',
+      );
     }
   }
 
@@ -540,7 +543,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       sectionLoading[sectionCode] = isLoading;
     });
     setStateWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=set_section_loading_setState ms=${setStateWatch.elapsedMilliseconds} section=$sectionCode loading=$isLoading',
     );
   }
@@ -585,7 +588,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     String? preferredSheetName,
   }) async {
     final parseWatch = Stopwatch()..start();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=purchase_file_size file=${pickedFile.name} sizeBytes=${bytes.length}',
     );
     final response = await ImportUploadFlowService.preparePurchaseImport(
@@ -636,7 +639,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     purchaseRowsByFileId[fileId] = result.parsedRows;
     parseWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD PERF => purchase parse ${parseWatch.elapsedMilliseconds} ms | '
       'file=${pickedFile.name} rows=${result.parsedRows.length} mappingStatus=${result.mappingStatus}',
     );
@@ -671,7 +674,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     String? preferredSheetName,
   }) async {
     final parseWatch = Stopwatch()..start();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=generic_file_size section=$sectionCode file=${pickedFile.name} sizeBytes=${bytes.length}',
     );
     final response = await ImportUploadFlowService.prepareGenericLedgerImport(
@@ -698,7 +701,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       return null;
     }
     parseWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD PERF => source parse ${parseWatch.elapsedMilliseconds} ms | '
       'section=$sectionCode file=${pickedFile.name} rows=${result.parsedRows.length} '
       'mappingStatus=${result.mappingStatus}',
@@ -861,7 +864,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionLoading['194Q'] = false;
       });
       setStateWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=purchase_upload_setState ms=${setStateWatch.elapsedMilliseconds} rows=${uploadFile.rowCount}',
       );
 
@@ -932,7 +935,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         sectionLoading[sectionCode] = false;
       });
       setStateWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=generic_upload_setState ms=${setStateWatch.elapsedMilliseconds} section=$sectionCode rows=${uploadFile.rowCount}',
       );
 
@@ -956,7 +959,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       isLoadingTds = true;
     });
     initialSetStateWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=tds_loading_setState ms=${initialSetStateWatch.elapsedMilliseconds} loading=true',
     );
     await WidgetsBinding.instance.endOfFrame;
@@ -968,7 +971,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final pickedFile = await _pickExcelFile();
       if (!mounted) return;
       pickWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=tds_pick_file ms=${pickWatch.elapsedMilliseconds} selected=${pickedFile != null}',
       );
       if (pickedFile == null) {
@@ -982,7 +985,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         _showUploadSnackBar('Could not read 26Q file');
         return;
       }
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=tds_file_size file=${pickedFile.name} sizeBytes=${bytes.length}',
       );
 
@@ -1003,7 +1006,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
       if (!mounted) return;
       validationWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=tds_validation_total ms=${validationWatch.elapsedMilliseconds} valid=${validation.isValid} requiresSelection=${validation.requiresUserSelection}',
       );
 
@@ -1028,7 +1031,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       );
       if (!mounted) return;
       prepareWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=tds_prepare_import_total ms=${prepareWatch.elapsedMilliseconds} success=${response.isSuccess}',
       );
 
@@ -1072,16 +1075,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         isLoadingTds = false;
       });
       setStateWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=tds_upload_setState ms=${setStateWatch.elapsedMilliseconds} rows=${result.parsedRows.length}',
       );
       uploadWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD PERF => 26Q upload total ${uploadWatch.elapsedMilliseconds} ms | '
         'file=${pickedFile.name} rows=${result.parsedRows.length} '
         'sheet=${validation.detectedSheet ?? 'manual'}',
       );
-      debugPrint('UPLOAD COUNT => 26Q rows=${result.parsedRows.length}');
+      AppLogger.debug('UPLOAD COUNT => 26Q rows=${result.parsedRows.length}');
 
       unawaited(
         _snapshotSourceFile(
@@ -1193,7 +1196,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       0,
       (sum, rows) => sum + rows.length,
     );
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD COUNT => open reconciliation sourceRows=$totalSourceRows '
       'tdsRows=${tdsRows.length} sections=${sourceRowsBySection.keys.join(',')}',
     );
@@ -1242,7 +1245,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final SellerMappingPreflightResult preflightResult;
       if (!_isSellerPreflightDirty && _cachedPreflightResult != null) {
         preflightResult = _cachedPreflightResult!;
-        debugPrint('UPLOAD POSTMAP PERF => preflight_cache_hit');
+        AppLogger.debug('UPLOAD POSTMAP PERF => preflight_cache_hit');
       } else {
         preflightResult = await SellerMappingPreflightService.analyze(
           buyerName: widget.selectedBuyerName,
@@ -1252,7 +1255,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
         );
         _cachedPreflightResult = preflightResult;
         _isSellerPreflightDirty = false;
-        debugPrint(
+        AppLogger.debug(
           'UPLOAD POSTMAP PERF => preflight_analyze ms=${preflightWatch.elapsedMilliseconds}',
         );
       }
@@ -1297,7 +1300,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       if (result != null &&
           result.dangerousRemaining == 0 &&
           result.unreviewedExceptionCount == 0) {
-        debugPrint(
+        AppLogger.debug(
           'UPLOAD POSTMAP PERF => refresh_preflight_skipped dangerousRemaining=0',
         );
 
@@ -1430,7 +1433,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
           .toList(growable: false),
     );
     deleteWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER DB PERF => step=delete_mappings ms=${deleteWatch.elapsedMilliseconds} count=${result.deleted.length}',
     );
 
@@ -1451,10 +1454,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     );
     upsertWatch.stop();
     totalWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER DB PERF => step=upsert_mappings ms=${upsertWatch.elapsedMilliseconds} count=${result.upserts.length}',
     );
-    debugPrint(
+    AppLogger.debug(
       'SELLER DB PERF => step=total_db_save ms=${totalWatch.elapsedMilliseconds} deletes=${result.deleted.length} upserts=${result.upserts.length}',
     );
   }

@@ -7,6 +7,7 @@ import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
 import 'package:reconciliation_app/core/widgets/app_section_selector.dart';
@@ -235,15 +236,17 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   Future<void> _allowLoadingFrame() async {
-    debugPrint('RECON UI => loading state set');
+    AppLogger.debug('RECON UI => loading state set');
     await Future<void>.delayed(Duration.zero);
     await WidgetsBinding.instance.endOfFrame;
-    debugPrint('RECON UI => first frame painted');
+    AppLogger.debug('RECON UI => first frame painted');
   }
 
   void _logPerformance(String label, Stopwatch watch, {String details = ''}) {
     final suffix = details.trim().isEmpty ? '' : ' | $details';
-    debugPrint('RECON PERF => $label ${watch.elapsedMilliseconds} ms$suffix');
+    AppLogger.debug(
+      'RECON PERF => $label ${watch.elapsedMilliseconds} ms$suffix',
+    );
   }
 
   Future<List<SellerMapping>> _loadManualMappingRecordsFromDb() {
@@ -470,10 +473,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     if (!mounted) return;
 
     try {
-      debugPrint('RECON PERF => heavy work started');
+      AppLogger.debug('RECON PERF => heavy work started');
       final totalWatch = Stopwatch()..start();
       final isInitialLoad = !_hasCompletedInitialLoad;
-      debugPrint(
+      AppLogger.debug(
         'RECON PERF => ${isInitialLoad ? 'initial load' : 'reconciliation refresh'} started',
       );
       final prevSeller = selectedSeller;
@@ -499,7 +502,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       final sourceRows = widget.sourceRowsBySection.values
           .expand((rows) => rows)
           .toList();
-      debugPrint(
+      AppLogger.debug(
         'RECON INPUT => sourceRows=${sourceRows.length} sourceSections=${widget.sourceRowsBySection.length} '
         'tdsRows=${widget.tdsRows.length} buyer=${widget.buyerPan}',
       );
@@ -533,7 +536,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         autoMappingBatch = _autoMappingCacheResult!;
       } else {
         final isolateWatch = Stopwatch()..start();
-        debugPrint('AUTO MAP ISOLATE => started');
+        AppLogger.debug('AUTO MAP ISOLATE => started');
         autoMappingBatch = await AutoMappingService.autoMapPartiesInBackground(
           purchaseParties: purchaseNames,
           tdsParties: tdsNames,
@@ -542,7 +545,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         );
         if (!mounted) return;
         isolateWatch.stop();
-        debugPrint(
+        AppLogger.debug(
           'AUTO MAP ISOLATE => completed ${isolateWatch.elapsedMilliseconds} ms',
         );
       }
@@ -552,7 +555,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       }
       autoMapWatch.stop();
       final mappingResults = autoMappingBatch.results;
-      debugPrint(
+      AppLogger.debug(
         'AUTO MAP PERF => cacheHit=$autoMapCacheHit | '
         'normalize ${autoMapCacheHit ? 0 : autoMappingBatch.normalizationMs} ms | '
         'match ${autoMapCacheHit ? 0 : autoMappingBatch.matchingMs} ms | '
@@ -626,7 +629,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       );
       panApplyWatch.stop();
       panPropagationWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'PAN PROP PERF => mapBuild ${panMapBuildWatch.elapsedMilliseconds} ms | '
         'apply ${panApplyWatch.elapsedMilliseconds} ms',
       );
@@ -1921,7 +1924,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       selectedFinancialYearValue: selectedFinancialYearValue,
     );
     watch.stop();
-    debugPrint(
+    AppLogger.debug(
       'RECON PERF => export availability cache rebuild ms=${watch.elapsedMilliseconds} '
       'currentRows=${currentViewRows.length} sectionRows=${sectionRows.length} reportRows=${reportRows.length}',
     );
@@ -1965,7 +1968,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     if (_isExporting) return;
 
     final totalWatch = Stopwatch()..start();
-    debugPrint('RECON EXPORT => export_start mode=$mode name="$name"');
+    AppLogger.debug('RECON EXPORT => export_start mode=$mode name="$name"');
 
     setState(() {
       _activeExportMode = mode;
@@ -1977,14 +1980,14 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     try {
       final result = await exportAction();
       totalWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'RECON EXPORT => total_export_ms=${totalWatch.elapsedMilliseconds} mode=$mode name="$name" path=${result.filePath}',
       );
       if (!mounted) return;
       _showExportSuccessSnackBar(successMessage(result), result.filePath);
     } catch (e, stackTrace) {
       totalWatch.stop();
-      debugPrint(
+      AppLogger.error(
         'RECON EXPORT => export_error mode=$mode name="$name" total_export_ms=${totalWatch.elapsedMilliseconds} error=$e\n$stackTrace',
       );
       if (!mounted) return;
@@ -1999,10 +2002,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   }
 
   Future<void> _allowExportFeedbackFrame() async {
-    debugPrint('RECON EXPORT UI => loading feedback set');
+    AppLogger.debug('RECON EXPORT UI => loading feedback set');
     await Future<void>.delayed(Duration.zero);
     await WidgetsBinding.instance.endOfFrame;
-    debugPrint('RECON EXPORT UI => loading feedback painted');
+    AppLogger.debug('RECON EXPORT UI => loading feedback painted');
   }
 
   Future<void> _exportCurrentViewExcel() async {
@@ -2153,18 +2156,18 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     try {
       final directory = await resolve();
       if (directory == null) {
-        debugPrint(
+        AppLogger.debug(
           'WORKSPACE EXPORT => fallback=downloads reason=${exportType}_workspace_unavailable',
         );
         return null;
       }
 
-      debugPrint(
+      AppLogger.debug(
         'WORKSPACE EXPORT => type=$exportType destination=${directory.path}',
       );
       return directory;
     } catch (e) {
-      debugPrint(
+      AppLogger.warning(
         'WORKSPACE EXPORT => fallback=downloads reason=${exportType}_resolver_error error=$e',
       );
       return null;
@@ -2300,7 +2303,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         return true;
       }
     } catch (e) {
-      debugPrint('EXPORT OPEN => failed path=$targetPath error=$e');
+      AppLogger.warning('EXPORT OPEN => failed path=$targetPath error=$e');
       return false;
     }
 

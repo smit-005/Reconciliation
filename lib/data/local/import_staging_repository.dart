@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
@@ -94,7 +94,7 @@ INSERT INTO staged_26q_rows (
     final dbWatch = Stopwatch()..start();
     final db = await DBHelper.database;
     dbWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=tds_stage_db_open ms=${dbWatch.elapsedMilliseconds} rows=${rows.length}',
     );
     final createdAt = DateTime.now().toIso8601String();
@@ -133,13 +133,13 @@ INSERT INTO staged_26q_rows (
 
         await batch.commit(noResult: true);
         chunkWatch.stop();
-        debugPrint(
+        AppLogger.debug(
           'UPLOAD FREEZE PERF => step=tds_stage_chunk ms=${chunkWatch.elapsedMilliseconds} startRow=${start + 1} endRow=$end rows=${end - start}',
         );
       }
     });
     transactionWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=tds_stage_transaction ms=${transactionWatch.elapsedMilliseconds} rows=${rows.length} chunkSize=$normalizedChunkSize',
     );
   }

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
 import 'package:reconciliation_app/core/widgets/app_section_selector.dart';
@@ -1231,7 +1232,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
 
     _rowStateByKey = nextState;
     stopwatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => derived_cache_rebuild ms=${stopwatch.elapsedMilliseconds} rows=${nextState.length}',
     );
   }
@@ -1253,7 +1254,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       return _matchesWorkingVisibleFilters(row, state);
     }).toList();
     stopwatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER FILTER PERF => ms=${stopwatch.elapsedMilliseconds} '
       'scope=${activeRows.length} result=${_cachedFilteredRows!.length} '
       'query="${_searchQuery.trim()}" section=$_activeSectionCode '
@@ -1465,7 +1466,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_firstFrameLogged) return;
       _firstFrameLogged = true;
-      debugPrint(
+      AppLogger.debug(
         'SELLER SCREEN PERF => firstFrame ms=${_screenOpenStopwatch.elapsedMilliseconds}',
       );
       _hydrateScreenAfterFirstFrame();
@@ -1477,14 +1478,14 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final prepareWatch = Stopwatch()..start();
     final preparedState = _prepareInitialState();
     prepareWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => prepare_initial_state ms=${prepareWatch.elapsedMilliseconds}',
     );
 
     final serializeWatch = Stopwatch()..start();
     final isolatePayload = preparedState.toIsolatePayload();
     serializeWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => isolate_payload_serialization ms=${serializeWatch.elapsedMilliseconds}',
     );
 
@@ -1493,7 +1494,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         ? await compute(_buildSellerScreenViewModelsInIsolate, isolatePayload)
         : _buildSellerScreenViewModelsInIsolate(isolatePayload);
     buildWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => buildViewModels ms=${buildWatch.elapsedMilliseconds}',
     );
 
@@ -1527,7 +1528,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       readyState.mappingRowsBySection.values.expand((rows) => rows),
     );
     hydrationWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => vm_hydration ms=${hydrationWatch.elapsedMilliseconds} sections=${readyState.mappingRowsBySection.length}',
     );
 
@@ -1553,7 +1554,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final filterWatch = Stopwatch()..start();
     _filteredRows();
     filterWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => initial_filtering ms=${filterWatch.elapsedMilliseconds}',
     );
   }
@@ -1802,7 +1803,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         })
         .length;
 
-    debugPrint(
+    AppLogger.debug(
       'SELLER MAP PREFLIGHT STATE dangerousRows=$dangerousRowCount '
       'dangerousSuggestionOnly=$dangerousSuggestionOnlyCount '
       'dangerousExplicitlyResolved=$dangerousExplicitlyResolvedCount '
@@ -1820,7 +1821,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
       dedupedUpsertsByKey['$normalizedAlias|$normalizedSection'] = upsert;
     }
     saveBuildWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER SCREEN PERF => save_result_build ms=${saveBuildWatch.elapsedMilliseconds} '
       'upserts=${dedupedUpsertsByKey.length} deleted=${deleted.length} '
       'dangerousRemaining=$dangerousRemaining unreviewedExceptionCount=$unreviewedExceptionCount',
@@ -1998,7 +1999,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   void _logAuditViewSnapshot() {
-    debugPrint(
+    AppLogger.debug(
       'SELLER AUDIT SNAPSHOT => rawSourceRows=${widget.rawSourceRowCount} '
       'groupedSellers=${_rowsForCurrentViewScope().length} '
       'selectedSection=$_activeSectionCode '
@@ -2551,7 +2552,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         })
         .toList(growable: false);
     if (nonSourceBackedCandidateCount > 0) {
-      debugPrint(
+      AppLogger.debug(
         'SELLER UI WARN => candidate row is not source-backed '
         'section=$_activeSectionCode count=$nonSourceBackedCandidateCount '
         'sampleRowKey=$firstNonSourceBackedCandidateKey',
@@ -2709,7 +2710,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     }
     stopwatch.stop();
     _cachedListViewCounts = counts;
-    debugPrint(
+    AppLogger.debug(
       'SELLER FILTER PERF => listCountsMs=${stopwatch.elapsedMilliseconds} '
       'section=$_activeSectionCode view=${_activeListView.name}',
     );
@@ -2723,8 +2724,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         try {
           return _buildSellerMappingScaffold(context);
         } catch (e, st) {
-          debugPrint('SELLER CRASH => $e');
-          debugPrint('$st');
+          AppLogger.error('SELLER CRASH => $e', stackTrace: st);
           return const Scaffold(body: Center(child: Text('UI Error')));
         }
       },
@@ -2745,7 +2745,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
         ? allFiltered.sublist(0, visibleCount)
         : <SellerMappingRowVm>[];
     _logAuditViewSnapshot();
-    debugPrint(
+    AppLogger.debug(
       'SELLER ROW BUILD PERF => visibleRows=$visibleCount totalFiltered=${allFiltered.length} mode=lazy',
     );
 
@@ -2814,7 +2814,7 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     );
 
     stopwatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'SELLER MAP PERF pageMs=${stopwatch.elapsedMilliseconds} rowsRendered=${visibleRows.length}',
     );
 

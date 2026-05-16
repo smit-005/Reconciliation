@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
 
@@ -1000,7 +1001,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
     }
     if (_lastMissingSelectedRowLogKey != selectedLeftKey) {
       _lastMissingSelectedRowLogKey = selectedLeftKey;
-      debugPrint(
+      AppLogger.debug(
         'SELLER UI WARN => selected row no longer exists '
         'rowKey=$selectedLeftKey',
       );

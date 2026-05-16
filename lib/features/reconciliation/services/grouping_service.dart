@@ -1,5 +1,4 @@
-import 'package:flutter/foundation.dart';
-
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/date_utils.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/purchase_row.dart';
@@ -66,7 +65,7 @@ class GroupingService {
 
       if (month.isEmpty || financialYear.isEmpty) {
         if (debugPurchaseRow) {
-          debugPrint(
+          AppLogger.debug(
             'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
             'rawDate=${row.date}, '
             'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
@@ -80,7 +79,7 @@ class GroupingService {
       }
       if (sellerPan.isEmpty && normalizedSellerName.isEmpty) {
         if (debugPurchaseRow) {
-          debugPrint(
+          AppLogger.debug(
             'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
             'rawDate=${row.date}, '
             'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
@@ -101,7 +100,7 @@ class GroupingService {
 
       if (sellerKey.isEmpty) {
         if (debugPurchaseRow) {
-          debugPrint(
+          AppLogger.debug(
             'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
             'rawDate=${row.date}, '
             'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '
@@ -122,7 +121,7 @@ class GroupingService {
       final fyMonthKey = '$financialYear|$month';
 
       if (debugPurchaseRow) {
-        debugPrint(
+        AppLogger.debug(
           'DEBUG PURCHASE GROUP => seller=${row.partyName}, '
           'rawDate=${row.date}, '
           'parsedDate=${parsedDate?.toIso8601String().split('T').first ?? ''}, '

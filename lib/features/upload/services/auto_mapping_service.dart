@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:reconciliation_app/core/utils/app_logger.dart';
+
 class AutoMappingResult {
   final String purchaseParty;
   final String? matchedTdsParty;
@@ -236,7 +238,7 @@ class AutoMappingService {
     }
 
     matchingWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'AUTO MAP CORE PERF => normalize ${normalizationWatch.elapsedMilliseconds} ms | '
       'match ${matchingWatch.elapsedMilliseconds} ms | '
       'purchaseNames=${purchaseProfiles.length} tdsNames=${tdsProfiles.length} | '

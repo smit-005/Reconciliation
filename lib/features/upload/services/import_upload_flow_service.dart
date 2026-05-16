@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/data/local/import_staging_repository.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_ledger_row.dart';
@@ -260,7 +261,7 @@ class ImportUploadFlowService {
         preferredSheetName: preferredSheetName,
       );
       inspectWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'UPLOAD FREEZE PERF => step=inspect_purchase_upload ms=${inspectWatch.elapsedMilliseconds} rows=0',
       );
 
@@ -304,7 +305,7 @@ class ImportUploadFlowService {
           columnMapping: matchedProfile.columnMapping,
         );
         parseWatch.stop();
-        debugPrint(
+        AppLogger.debug(
           'UPLOAD FREEZE PERF => step=parse_purchase_with_profile ms=${parseWatch.elapsedMilliseconds} rows=${parsedRows.length}',
         );
         final stagingImportId = await _stagePurchaseRows(
@@ -389,7 +390,7 @@ class ImportUploadFlowService {
           return const ImportWorkflowResponse.cancelled();
         }
         mappingUiWatch.stop();
-        debugPrint(
+        AppLogger.debug(
           'UPLOAD FREEZE PERF => step=column_mapping_review ms=${mappingUiWatch.elapsedMilliseconds} rows=0',
         );
 
@@ -402,7 +403,7 @@ class ImportUploadFlowService {
           columnMapping: columnMappingResult.columnMapping,
         );
         parseMappedWatch.stop();
-        debugPrint(
+        AppLogger.debug(
           'UPLOAD FREEZE PERF => step=parse_purchase_after_mapping ms=${parseMappedWatch.elapsedMilliseconds} rows=${parsedRows.length}',
         );
         final stagingImportId = await _stagePurchaseRows(
@@ -1326,7 +1327,7 @@ void _logUploadFreezePerformance(
   String details = '',
 }) {
   final suffix = details.trim().isEmpty ? '' : ' | $details';
-  debugPrint(
+  AppLogger.debug(
     'UPLOAD FREEZE PERF => step=$step ms=${watch.elapsedMilliseconds}$suffix',
   );
 }

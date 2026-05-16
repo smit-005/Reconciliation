@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'reconciliation_orchestrator.dart';
@@ -156,7 +156,7 @@ class ExcelExportService {
     String details = '',
   }) {
     final suffix = details.trim().isEmpty ? '' : ' | $details';
-    debugPrint(
+    AppLogger.debug(
       'EXPORT PERF => step=$step ms=${watch.elapsedMilliseconds}$suffix',
     );
   }
@@ -309,10 +309,10 @@ class ExcelExportService {
       financialYear: financialYear,
       section: section ?? _sectionLabelFromRows(rows),
     );
-    debugPrint(
+    AppLogger.debug(
       'EXPORT TIMING => export_start mode=${mode.name} name=$fileName rows=${rows.length}',
     );
-    debugPrint('EXPORT PERF => step=rows_count rows=${rows.length}');
+    AppLogger.debug('EXPORT PERF => step=rows_count rows=${rows.length}');
     final workbookWatch = Stopwatch()..start();
     final workbook = xlsio.Workbook();
     workbookWatch.stop();
@@ -356,7 +356,7 @@ class ExcelExportService {
           );
       }
       workbookBuildWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'EXPORT TIMING => workbook_build_ms=${workbookBuildWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName',
       );
 
@@ -368,10 +368,10 @@ class ExcelExportService {
       );
       saveWatch.stop();
       totalExportWatch.stop();
-      debugPrint(
+      AppLogger.debug(
         'EXPORT TIMING => save_ms=${saveWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName',
       );
-      debugPrint(
+      AppLogger.debug(
         'EXPORT TIMING => total_export_ms=${totalExportWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName path=$path',
       );
       return path;
@@ -379,7 +379,7 @@ class ExcelExportService {
       if (totalExportWatch.isRunning) {
         totalExportWatch.stop();
       }
-      debugPrint(
+      AppLogger.warning(
         'EXPORT TIMING => total_export_ms=${totalExportWatch.elapsedMilliseconds} mode=${mode.name} name=$fileName status=failed error=$e',
       );
       rethrow;
@@ -2298,7 +2298,7 @@ class ExcelExportService {
   ) async {
     final requestedPath = p.join(folderPath, fileName);
     if (!await File(requestedPath).exists()) {
-      debugPrint(
+      AppLogger.debug(
         'EXPORT PATH => requested=$requestedPath resolved=$requestedPath',
       );
       return requestedPath;
@@ -2310,7 +2310,7 @@ class ExcelExportService {
     while (true) {
       final candidate = p.join(folderPath, '${baseName}_$index$extension');
       if (!await File(candidate).exists()) {
-        debugPrint(
+        AppLogger.debug(
           'EXPORT PATH => requested=$requestedPath resolved=$candidate',
         );
         return candidate;

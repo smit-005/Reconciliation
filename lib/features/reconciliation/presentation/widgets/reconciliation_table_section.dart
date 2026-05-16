@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/reconciliation_helpers.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
@@ -66,7 +67,7 @@ class _ReconciliationTableSectionState
   Widget build(BuildContext context) {
     _tableBuildCounter += 1;
     final visiblePage = _visiblePage;
-    debugPrint(
+    AppLogger.debug(
       'RECON TABLE BUILD => count=$_tableBuildCounter totalRows=${widget.filteredRows.length} '
       'page=${visiblePage.pageNumber}/$_totalPages renderedRows=${visiblePage.rowCount} '
       'renderedGroups=${visiblePage.groups.length} pageSize=$_pageSize',
@@ -375,7 +376,7 @@ class _ReconciliationTableSectionState
     final nextPages = _buildPages(groups: nextGroups, pageSize: _pageSize);
     pagingWatch.stop();
 
-    debugPrint(
+    AppLogger.debug(
       'RECON TABLE PREP => totalRows=${widget.filteredRows.length} groups=${nextGroups.length} '
       'pages=${nextPages.length} pageSize=$_pageSize groupMs=${groupingWatch.elapsedMilliseconds} '
       'pageMs=${pagingWatch.elapsedMilliseconds}',

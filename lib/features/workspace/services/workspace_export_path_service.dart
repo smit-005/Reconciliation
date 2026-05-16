@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/features/buyers/data/buyer_financial_year_repository.dart';
 import 'package:reconciliation_app/features/workspace/services/workspace_service.dart';
 
@@ -93,7 +93,7 @@ class WorkspaceExportPathService {
 
     final directory = Directory(p.joinAll([fyPath, ...folderSegments]));
     await directory.create(recursive: true);
-    debugPrint('WORKSPACE PATH => ${directory.path}');
+    AppLogger.debug('WORKSPACE PATH => ${directory.path}');
     return directory;
   }
 

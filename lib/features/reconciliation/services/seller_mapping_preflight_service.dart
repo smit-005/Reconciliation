@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/features/reconciliation/models/normalized/normalized_transaction_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/raw/tds_26q_row.dart';
@@ -77,7 +78,7 @@ class SellerMappingPreflightService {
     final existingMappings = await SellerMappingService.getAllMappings(
       normalizedBuyerPan,
     );
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT PERF => step=load_existing_mappings ms=${preloadWatch.elapsedMilliseconds} '
       'mappings=${existingMappings.length}',
     );
@@ -97,10 +98,10 @@ class SellerMappingPreflightService {
     final compression = rawSourceRowCount == 0 || compactedSourceCount == 0
         ? '1.00x'
         : '${(rawSourceRowCount / compactedSourceCount).toStringAsFixed(2)}x';
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT COMPACT SOURCE => rawRows=$rawSourceRowCount compacted=$compactedSourceCount compression=$compression',
     );
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT PERF => step=compact_source_identities ms=${compactWatch.elapsedMilliseconds}',
     );
 
@@ -118,7 +119,7 @@ class SellerMappingPreflightService {
           .map(_serializeSellerMappingForIsolate)
           .toList(),
     });
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT PERF => step=compute_analyze ms=${analyzeWatch.elapsedMilliseconds} '
       'tdsRows=${tdsRows.length} sourceRows=$compactedSourceCount',
     );
@@ -136,7 +137,7 @@ class SellerMappingPreflightService {
     final normalizedBuyerPan = buyerPan.trim().toUpperCase();
     final lookupWatch = Stopwatch()..start();
     final savedMappingLookup = _SavedMappingLookup.build(existingMappings);
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT PERF => step=build_saved_mapping_lookup ms=${lookupWatch.elapsedMilliseconds} '
       'exactKeys=${savedMappingLookup.exactMappingKeysCount} '
       'fallbackKeys=${savedMappingLookup.fallbackMappingKeysCount} '
@@ -166,7 +167,7 @@ class SellerMappingPreflightService {
         keptSellerKeys += row.observationCount;
       }
     }
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT INPUT CLEANUP => droppedInvalidSellerKeys=$droppedInvalidSellerKeys keptSellerKeys=$keptSellerKeys',
     );
 
@@ -317,7 +318,7 @@ class SellerMappingPreflightService {
     var reviewedSeparateSkippedBlockers = 0;
     var reducedCandidateHits = 0;
     final candidateLoopWatch = Stopwatch()..start();
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT PERF => step=candidate_match_loop_start tdsGroups=${tdsGroups.length} '
       'sourceGroups=${sourceGroups.length}',
     );
@@ -334,7 +335,7 @@ class SellerMappingPreflightService {
           const <_SourceAliasAccumulator>[];
       if (sourceCandidates.length < allSectionCandidates.length) {
         reducedCandidateHits += 1;
-        debugPrint(
+        AppLogger.debug(
           'PREFLIGHT REDUCED CANDIDATES => section=${tdsGroup.sectionCode} seller=${tdsGroup.displayName} reduced=${sourceCandidates.length} total=${allSectionCandidates.length}',
         );
       }
@@ -469,11 +470,11 @@ class SellerMappingPreflightService {
         );
       }
     }
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT PERF => step=candidate_match_loop_done ms=${candidateLoopWatch.elapsedMilliseconds} '
       'tdsGroups=${tdsGroups.length} sourceGroups=${sourceGroups.length}',
     );
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT REDUCED CANDIDATES => hits=$reducedCandidateHits tdsGroups=${tdsGroups.length}',
     );
 
@@ -491,7 +492,7 @@ class SellerMappingPreflightService {
     for (final row in rows) {
       final hasSavedMapping =
           row.resolvedSuggestion?.source.startsWith('saved_') ?? false;
-      debugPrint(
+      AppLogger.debug(
         'PRECHECK row=${row.purchasePartyDisplayName} status=${row.preflightReasonCode} hasSavedMapping=$hasSavedMapping blocked=${row.requiresDangerousReview}',
       );
 
@@ -501,11 +502,11 @@ class SellerMappingPreflightService {
     }
     pendingReviewCount = uniqueDangerousAliases.length;
     final uploadedSectionsLabel = uploadedSectionScope.toList()..sort();
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT SCOPE => uploadedSections=${uploadedSectionsLabel.join(",")} '
       'outOfScopeTdsOnly=$outOfScopeTdsOnlyCount pendingReviewCount=$pendingReviewCount',
     );
-    debugPrint(
+    AppLogger.debug(
       'PREFLIGHT REVIEWED SEPARATE => count=$reviewedSeparateCount '
       'skippedBlockers=$reviewedSeparateSkippedBlockers',
     );

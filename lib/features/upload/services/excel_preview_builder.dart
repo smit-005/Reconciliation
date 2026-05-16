@@ -35,7 +35,7 @@ ExcelPreviewData? _buildPreviewData(
     int sourceRows = 0,
   }) {
     previewWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=preview_build ms=${previewWatch.elapsedMilliseconds} '
       'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} '
       'sheet=$sheetName sourceRows=$sourceRows result=${data == null ? 'null' : 'ok'}',
@@ -49,7 +49,7 @@ ExcelPreviewData? _buildPreviewData(
     sessionCache: sessionCache,
   );
   decodeWatch.stop();
-  debugPrint(
+  AppLogger.debug(
     'UPLOAD FREEZE PERF => step=preview_decode ms=${decodeWatch.elapsedMilliseconds} '
     'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} cache=${sessionCache != null}',
   );
@@ -147,7 +147,7 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
   final previewWatch = Stopwatch()..start();
   ExcelPreviewData? finish(ExcelPreviewData? data, {int sourceRows = 0}) {
     previewWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'UPLOAD FREEZE PERF => step=preview_build_with_profile ms=${previewWatch.elapsedMilliseconds} '
       'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} '
       'sheet=$sheetName sourceRows=$sourceRows result=${data == null ? 'null' : 'ok'}',
@@ -161,7 +161,7 @@ ExcelPreviewData? _buildPreviewDataWithProfile(
     sessionCache: sessionCache,
   );
   decodeWatch.stop();
-  debugPrint(
+  AppLogger.debug(
     'UPLOAD FREEZE PERF => step=preview_decode_with_profile ms=${decodeWatch.elapsedMilliseconds} '
     'file=$fileName type=${fileType.name} sizeBytes=${bytes.length} cache=${sessionCache != null}',
   );

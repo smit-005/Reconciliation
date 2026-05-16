@@ -1,6 +1,5 @@
-import 'package:flutter/foundation.dart';
-
 import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
+import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/date_utils.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/utils/parse_utils.dart';
@@ -395,7 +394,7 @@ class CalculationService {
         );
       }),
     ];
-    debugPrint(
+    AppLogger.debug(
       'RECON ORCH INPUT => sourceRows=${sourceRows.length} tdsRows=${tdsRows.length} '
       'savedMappings=${savedMappings.length} observations=${observations.length}',
     );
@@ -407,7 +406,7 @@ class CalculationService {
       savedAliasToPan: savedAliasToPan,
     );
     resolverWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'RECON ORCH PERF => identity resolver ${resolverWatch.elapsedMilliseconds} ms',
     );
     await Future<void>.delayed(Duration.zero);
@@ -439,16 +438,16 @@ class CalculationService {
         .whereType<_ResolvedSourceRow>()
         .toList();
     resolveSourceWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'RECON ORCH PERF => source resolve ${resolveSourceWatch.elapsedMilliseconds} ms | '
       'resolvedPurchases=${resolvedPurchases.length} resolvedTds=${resolvedTdsRows.length}',
     );
 
-    debugPrint(
+    AppLogger.debug(
       'SECTION RECON SOURCE ROWS => '
       '${_debugSectionCounts(_debugResolvedSectionCounts(resolvedPurchases))}',
     );
-    debugPrint(
+    AppLogger.debug(
       'SECTION RECON 26Q ROWS => '
       '${_debugSectionCounts(_debugResolvedSectionCounts(resolvedTdsRows))}',
     );
@@ -459,7 +458,7 @@ class CalculationService {
       final sectionTdsRows = resolvedTdsRows
           .where((row) => row.section.trim() == section)
           .length;
-      debugPrint(
+      AppLogger.debug(
         'SECTION INPUT ROWS => section=$section sourceRows=$sectionSourceRows tdsRows=$sectionTdsRows',
       );
     }
@@ -476,7 +475,7 @@ class CalculationService {
       ...tdsBuckets.keys,
     }.toList()..sort(_compareMonthlyBucketKeys);
     aggregationWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'RECON ORCH PERF => aggregation ${aggregationWatch.elapsedMilliseconds} ms | '
       'purchaseBuckets=${purchaseBuckets.length} tdsBuckets=${tdsBuckets.length} keys=${allKeys.length}',
     );
@@ -503,7 +502,7 @@ class CalculationService {
       rows.add(row);
     }
     rowBuildWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'RECON ORCH PERF => row build ${rowBuildWatch.elapsedMilliseconds} ms | rows=${rows.length}',
     );
 
@@ -524,12 +523,12 @@ class CalculationService {
       );
     }
     timingWatch.stop();
-    debugPrint(
+    AppLogger.debug(
       'RECON ORCH PERF => timing+summary ${timingWatch.elapsedMilliseconds} ms | '
       'timedRows=${timedRows.length} sections=${rowsBySection.length}',
     );
 
-    debugPrint(
+    AppLogger.debug(
       'SECTION RECON FINAL SUMMARIES => ${_debugSummaryMap(sectionSummaries)}',
     );
     for (final section in activeSections) {
@@ -541,13 +540,15 @@ class CalculationService {
                 row.status.trim() == CalculationService.sellerStatusNo26Q,
           )
           .length;
-      debugPrint(
+      AppLogger.debug(
         'SECTION OUTPUT ROWS => section=$section resultRows=${sectionRows.length} no26Q=$no26QCount',
       );
     }
 
     totalWatch.stop();
-    debugPrint('RECON ORCH PERF => total ${totalWatch.elapsedMilliseconds} ms');
+    AppLogger.debug(
+      'RECON ORCH PERF => total ${totalWatch.elapsedMilliseconds} ms',
+    );
 
     return SectionReconciliationResult(
       rows: timedRows,
