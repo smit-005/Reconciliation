@@ -1922,8 +1922,31 @@ class ExcelService {
     }
 
     if (missing.isNotEmpty) {
-      return ExcelValidationResult.invalid(
-        'Missing required 26Q columns: ${missing.join(', ')}',
+      if (!_hasPlausibleDataRowsAfterHeader(
+        table.rows,
+        sheetInfo.headerRowIndex,
+      )) {
+        return ExcelValidationResult.invalid(
+          'Missing required 26Q columns: ${missing.join(', ')}',
+        );
+      }
+
+      warnings.add(
+        'Missing required 26Q columns: ${missing.join(', ')}. Manual column mapping is required.',
+      );
+      return ExcelValidationResult.manualReview(
+        detectedSheet: sheetInfo.sheetName,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        detectedType: sheetInfo.detectedType,
+        mappedColumns: _headerPreviewMap(
+          table.rows[sheetInfo.headerRowIndex],
+          mappedHeaders,
+        ),
+        warnings: warnings,
+        confidenceScore: confidenceScore,
+        message:
+            '26Q column detection is incomplete. Review column mapping before import.',
+        unmappedRawHeaders: unmappedRawHeaders,
       );
     }
 
@@ -1970,6 +1993,26 @@ class ExcelService {
       requiresManualMapping: confidenceScore < 0.50,
       unmappedRawHeaders: unmappedRawHeaders,
     );
+  }
+
+  static bool _hasPlausibleDataRowsAfterHeader(
+    List<List<dynamic>> rows,
+    int headerRowIndex,
+  ) {
+    if (headerRowIndex < 0 || headerRowIndex + 1 >= rows.length) {
+      return false;
+    }
+
+    for (final row in rows.skip(headerRowIndex + 1).take(20)) {
+      final nonEmptyCellCount = row
+          .where((cell) => cell?.toString().trim().isNotEmpty == true)
+          .length;
+      if (nonEmptyCellCount >= 2) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   static ExcelValidationResult validateGenericLedgerFile(

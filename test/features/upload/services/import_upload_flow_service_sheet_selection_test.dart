@@ -688,6 +688,132 @@ void main() {
       expect(response.data!.wasAutoConfirmed, isTrue);
     });
 
+    test(
+      '26Q unusual plausible headers open mapping instead of failing',
+      () async {
+        final bytes = _buildWorkbook({
+          '26Q': const [
+            [
+              'Month',
+              'Deductee Name',
+              'PAN',
+              'Gross Payment',
+              'Tax Deducted',
+              'Section',
+            ],
+            ['Apr-24', 'Selected Vendor', 'ABCDE1234F', 2220, 222, '194C'],
+          ],
+        });
+        final validation = await ImportUploadFlowService.validateTds26QImport(
+          bytes,
+          preferredSheetName: '26Q',
+        );
+        var mappingOpened = false;
+
+        expect(validation.isValid, isTrue);
+        expect(validation.decision, ExcelImportDecision.manualReview);
+        expect(validation.message, contains('column detection is incomplete'));
+
+        final response = await ImportUploadFlowService.prepareTds26QImport(
+          bytes: bytes,
+          fileName: 'unusual-26q.xlsx',
+          validation: validation,
+          preferredSheetName: '26Q',
+          openColumnMapping:
+              ({
+                required bytes,
+                required fileName,
+                required fileType,
+                required validation,
+                sessionCache,
+                preferredSheetName,
+                preferredHeaderRowIndex,
+                preferredHeadersTrusted,
+                preferredColumnMapping,
+              }) async {
+                mappingOpened = true;
+                expect(fileType, ExcelImportType.tds26q);
+                expect(validation.detectedSheet, '26Q');
+                return const ColumnMappingResult(
+                  fileType: ImportMappingService.tds26qFileType,
+                  sheetName: '26Q',
+                  headerRowIndex: 0,
+                  headersTrusted: true,
+                  saveProfile: false,
+                  rawToCanonicalMapping: {
+                    'COL_0': 'date_month',
+                    'COL_1': 'party_name',
+                    'COL_2': 'pan_number',
+                    'COL_3': 'amount_paid',
+                    'COL_4': 'tds_amount',
+                    'COL_5': 'section',
+                  },
+                  columnMapping: {
+                    'date_month': 'COL_0',
+                    'party_name': 'COL_1',
+                    'pan_number': 'COL_2',
+                    'amount_paid': 'COL_3',
+                    'tds_amount': 'COL_4',
+                    'section': 'COL_5',
+                  },
+                );
+              },
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(mappingOpened, isTrue);
+        expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+        expect(response.data!.wasAutoConfirmed, isFalse);
+        expect(response.data!.wasManuallyMapped, isTrue);
+        expect(
+          response.data!.parsedRows.single.deducteeName,
+          'Selected Vendor',
+        );
+      },
+    );
+
+    test('26Q selected sheet with no plausible header still fails', () async {
+      final bytes = _buildWorkbook({
+        '26Q': const [
+          ['Summary', 'Totals'],
+          ['Not a deductee row', 'Still not 26Q'],
+        ],
+      });
+      final validation = await ImportUploadFlowService.validateTds26QImport(
+        bytes,
+        preferredSheetName: '26Q',
+      );
+      var mappingOpened = false;
+
+      expect(validation.isValid, isFalse);
+      expect(validation.decision, ExcelImportDecision.invalidMapping);
+
+      final response = await ImportUploadFlowService.prepareTds26QImport(
+        bytes: bytes,
+        fileName: 'invalid-26q.xlsx',
+        validation: validation,
+        preferredSheetName: '26Q',
+        openColumnMapping:
+            ({
+              required bytes,
+              required fileName,
+              required fileType,
+              required validation,
+              sessionCache,
+              preferredSheetName,
+              preferredHeaderRowIndex,
+              preferredHeadersTrusted,
+              preferredColumnMapping,
+            }) async {
+              mappingOpened = true;
+              return null;
+            },
+      );
+
+      expect(response.isFailure, isTrue);
+      expect(mappingOpened, isFalse);
+    });
+
     test('generic ledger uses selected sheet before forced mapping', () async {
       final bytes = _buildWorkbook({
         'Wrong First': const [
