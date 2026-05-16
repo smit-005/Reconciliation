@@ -13,6 +13,143 @@ import 'section_rule_export_text.dart';
 enum ExcelExportMode { currentView, section, pivotReport, detailedReport }
 
 class ExcelExportService {
+  static final List<_TechnicalExportColumn> _technicalDetailColumns = [
+    _TechnicalExportColumn('26Q Amount', (row) => row.tds26QAmount),
+    _TechnicalExportColumn('Actual TDS', (row) => row.actualTds),
+    _TechnicalExportColumn('Amount Difference', (row) => row.amountDifference),
+    _TechnicalExportColumn('Applicable Amount', (row) => row.applicableAmount),
+    _TechnicalExportColumn('Basic Amount', (row) => row.basicAmount),
+    _TechnicalExportColumn('Buyer Name', (row) => row.buyerName),
+    _TechnicalExportColumn('Buyer PAN', (row) => row.buyerPan),
+    _TechnicalExportColumn(
+      'Calculation Remark',
+      (row) => row.calculationRemark,
+    ),
+    _TechnicalExportColumn(
+      'Closing Timing Balance',
+      (row) => row.closingTimingBalance,
+    ),
+    _TechnicalExportColumn(
+      'Debug Applicable Reason',
+      (row) => row.debugInfo.applicableAmountReason,
+    ),
+    _TechnicalExportColumn(
+      'Debug Cumulative After',
+      (row) => row.debugInfo.cumulativePurchaseAfterRow,
+    ),
+    _TechnicalExportColumn(
+      'Debug Cumulative Before',
+      (row) => row.debugInfo.cumulativePurchaseBeforeRow,
+    ),
+    _TechnicalExportColumn(
+      'Debug Expected TDS Reason',
+      (row) => row.debugInfo.expectedTdsReason,
+    ),
+    _TechnicalExportColumn('Debug FY', (row) => row.debugInfo.financialYear),
+    _TechnicalExportColumn(
+      'Debug Final Status Reason',
+      (row) => row.debugInfo.finalStatusReason,
+    ),
+    _TechnicalExportColumn(
+      'Debug Identity Flags',
+      (row) => row.debugInfo.identityFlags.join(', '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Identity Notes',
+      (row) => row.debugInfo.identityNotes,
+    ),
+    _TechnicalExportColumn(
+      'Debug Identity Source',
+      (row) => row.debugInfo.resolvedIdentitySource,
+    ),
+    _TechnicalExportColumn(
+      'Debug Mapping Attempted',
+      (row) => row.debugInfo.mappingAttempted ? 'Yes' : 'No',
+    ),
+    _TechnicalExportColumn(
+      'Debug Mapping Hit',
+      (row) => row.debugInfo.mappingHit,
+    ),
+    _TechnicalExportColumn(
+      'Debug Mapping Section Used',
+      (row) => row.debugInfo.mappingSectionUsed,
+    ),
+    _TechnicalExportColumn(
+      'Debug Normalized Seller Names',
+      (row) => row.debugInfo.normalizedSellerNames.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Original PANs',
+      (row) => row.debugInfo.originalPans.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Original Seller Names',
+      (row) => row.debugInfo.originalSellerNames.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Resolved Seller Id',
+      (row) => row.debugInfo.resolvedSellerId,
+    ),
+    _TechnicalExportColumn('Debug Section', (row) => row.debugInfo.section),
+    _TechnicalExportColumn(
+      'Debug Source Ledger Files',
+      (row) => row.debugInfo.sourceLedgerFileNames.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Source Ledger IDs',
+      (row) => row.debugInfo.sourceLedgerFileIds.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Source Upload Timestamps',
+      (row) => row.debugInfo.sourceLedgerUploadedAtIso.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Debug Threshold Crossed',
+      (row) => row.debugInfo.thresholdCrossed ? 'Yes' : 'No',
+    ),
+    _TechnicalExportColumn('Expected TDS', (row) => row.expectedTds),
+    _TechnicalExportColumn('Financial Year', (row) => row.financialYear),
+    _TechnicalExportColumn(
+      'Identity Confidence',
+      (row) => row.identityConfidence,
+    ),
+    _TechnicalExportColumn('Identity Notes', (row) => row.identityNotes),
+    _TechnicalExportColumn('Identity Source', (row) => row.identitySource),
+    _TechnicalExportColumn('Month', (row) => row.month),
+    _TechnicalExportColumn(
+      'Month TDS Difference',
+      (row) => row.monthTdsDifference,
+    ),
+    _TechnicalExportColumn(
+      'Opening Timing Balance',
+      (row) => row.openingTimingBalance,
+    ),
+    _TechnicalExportColumn('Remarks', (row) => row.remarks),
+    _TechnicalExportColumn('Resolved PAN', (row) => row.resolvedPan),
+    _TechnicalExportColumn('Resolved Seller Id', (row) => row.resolvedSellerId),
+    _TechnicalExportColumn(
+      'Resolved Seller Name',
+      (row) => row.resolvedSellerName,
+    ),
+    _TechnicalExportColumn('Section', (row) => row.section),
+    _TechnicalExportColumn('Seller Name', (row) => row.sellerName),
+    _TechnicalExportColumn('Seller PAN', (row) => row.sellerPan),
+    _TechnicalExportColumn(
+      'Source Ledger File IDs',
+      (row) => row.sourceLedgerFileIds.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Source Ledger Files',
+      (row) => row.sourceLedgerFileNames.join(' | '),
+    ),
+    _TechnicalExportColumn(
+      'Source Ledger Uploaded At',
+      (row) => row.sourceLedgerUploadedAtIso.join(' | '),
+    ),
+    _TechnicalExportColumn('Status', (row) => row.status),
+    _TechnicalExportColumn('TDS Difference', (row) => row.tdsDifference),
+  ];
+
   static void _logPerformance(
     String step,
     Stopwatch watch, {
@@ -1590,15 +1727,6 @@ class ExcelExportService {
     xlsio.Worksheet sheet, {
     required List<ReconciliationRow> rows,
   }) {
-    final maps = rows.map((row) => row.toMap()).toList();
-    final headers =
-        maps
-            .expand((map) => map.keys)
-            .map((key) => key.toString())
-            .toSet()
-            .toList()
-          ..sort();
-
     sheet.getRangeByName('A1:Z1').merge();
     sheet.getRangeByName('A1').setText('Technical Details');
     sheet.getRangeByName('A1').cellStyle.bold = true;
@@ -1607,20 +1735,32 @@ class ExcelExportService {
     sheet.getRangeByName('A1').cellStyle.backColor = '#EDE7F6';
 
     const startRow = 3;
-    for (var i = 0; i < headers.length; i++) {
+    final columns = _technicalDetailColumns;
+    final headers = columns
+        .map((column) => column.header)
+        .toList(growable: false);
+
+    for (var i = 0; i < columns.length; i++) {
       final cell = sheet.getRangeByIndex(startRow, i + 1);
-      cell.setText(headers[i]);
-      cell.cellStyle.bold = true;
-      cell.cellStyle.backColor = '#D9EAF7';
-      cell.cellStyle.hAlign = xlsio.HAlignType.center;
-      cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+      cell.setText(columns[i].header);
     }
 
-    for (var rowOffset = 0; rowOffset < maps.length; rowOffset++) {
+    final headerRange = sheet.getRangeByIndex(
+      startRow,
+      1,
+      startRow,
+      columns.length,
+    );
+    headerRange.cellStyle.bold = true;
+    headerRange.cellStyle.backColor = '#D9EAF7';
+    headerRange.cellStyle.hAlign = xlsio.HAlignType.center;
+    headerRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+
+    for (var rowOffset = 0; rowOffset < rows.length; rowOffset++) {
       final rowIndex = startRow + 1 + rowOffset;
-      final map = maps[rowOffset];
-      for (var col = 0; col < headers.length; col++) {
-        final value = map[headers[col]];
+      final row = rows[rowOffset];
+      for (var col = 0; col < columns.length; col++) {
+        final value = columns[col].valueFor(row);
         final cell = sheet.getRangeByIndex(rowIndex, col + 1);
         if (value is num) {
           cell.setNumber(value.toDouble());
@@ -1628,21 +1768,14 @@ class ExcelExportService {
           cell.setText(value?.toString() ?? '');
         }
       }
-      sheet
-              .getRangeByIndex(rowIndex, 1, rowIndex, headers.length)
-              .cellStyle
-              .borders
-              .all
-              .lineStyle =
-          xlsio.LineStyle.thin;
     }
 
-    if (headers.isNotEmpty) {
+    if (columns.isNotEmpty) {
       sheet.autoFilters.filterRange = sheet.getRangeByIndex(
         startRow,
         1,
         startRow,
-        headers.length,
+        columns.length,
       );
       _applyFixedTechnicalColumnWidths(sheet, headers);
     }
@@ -2271,6 +2404,13 @@ class ExcelExportService {
   static double _round2(double value) {
     return double.parse(value.toStringAsFixed(2));
   }
+}
+
+class _TechnicalExportColumn {
+  final String header;
+  final Object? Function(ReconciliationRow row) valueFor;
+
+  const _TechnicalExportColumn(this.header, this.valueFor);
 }
 
 class _LedgerSourceReference {

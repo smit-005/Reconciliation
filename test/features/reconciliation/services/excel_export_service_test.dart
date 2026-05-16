@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 
+import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_debug_info.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_row.dart';
 import 'package:reconciliation_app/features/reconciliation/models/result/reconciliation_status.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/utils/reconciliation_export_row_scope.dart';
@@ -571,6 +572,81 @@ void main() {
     expect(sheets, isNot(contains('Pivot Summary')));
     expect(sheets, isNot(contains('194A')));
     expect(sheets, isNot(contains('194C')));
+  });
+
+  test('detailed report technical sheet preserves row map content', () async {
+    final outputDir = await _tempDir();
+    final row =
+        _row(
+          section: '194C',
+          sellerName: 'Technical Contractor',
+          sourceLedgerFileIds: const ['ledger-tech'],
+          sourceLedgerFileNames: const ['technical-ledger.xlsx'],
+          sourceLedgerUploadedAtIso: const ['2026-05-13T10:30:00.000'],
+        ).copyWith(
+          calculationRemark: 'calculated from debug trace',
+          debugInfo: const ReconciliationDebugInfo(
+            originalSellerNames: ['Technical Contractor Pvt Ltd'],
+            normalizedSellerNames: ['technical contractor'],
+            originalPans: ['AAAAA1111A'],
+            sourceLedgerFileIds: ['ledger-tech'],
+            sourceLedgerFileNames: ['technical-ledger.xlsx'],
+            sourceLedgerUploadedAtIso: ['2026-05-13T10:30:00.000'],
+            resolvedSellerId: 'PAN:AAAAA1111A',
+            resolvedIdentitySource: 'pan',
+            section: '194C',
+            financialYear: '2025-26',
+            cumulativePurchaseBeforeRow: 100,
+            cumulativePurchaseAfterRow: 200,
+            thresholdCrossed: true,
+            applicableAmountReason: 'above threshold',
+            expectedTdsReason: 'section rate',
+            finalStatusReason: 'short deduction',
+            mappingAttempted: true,
+            mappingSectionUsed: '194C',
+            mappingHit: 'exact',
+            identityFlags: ['pan', 'name'],
+            identityNotes: 'resolved by PAN',
+          ),
+        );
+
+    final path = await ExcelExportService.exportDetailedReportExcel(
+      rows: [row],
+      buyerName: 'Radha Industries',
+      buyerPan: 'ABCDE1234F',
+      outputFolderPath: outputDir.path,
+      financialYear: '2025-26',
+    );
+
+    final technicalRows = await _sheetRows(path, 'Technical_Details');
+    final headerIndex = technicalRows.indexWhere(
+      (sheetRow) =>
+          sheetRow.contains('26Q Amount') &&
+          sheetRow.contains('Debug Final Status Reason'),
+    );
+    expect(headerIndex, isNonNegative);
+
+    final headers = technicalRows[headerIndex]
+        .map((cell) => cell?.toString() ?? '')
+        .where((cell) => cell.isNotEmpty)
+        .toList();
+    final expectedHeaders =
+        row.toMap().keys.map((key) => key.toString()).toList()..sort();
+    expect(headers, expectedHeaders);
+
+    final values = technicalRows[headerIndex + 1];
+    String cellFor(String header) {
+      final index = headers.indexOf(header);
+      expect(index, isNonNegative, reason: 'Missing technical header $header');
+      return values[index]?.toString() ?? '';
+    }
+
+    expect(cellFor('Seller Name'), 'Technical Contractor');
+    expect(cellFor('Source Ledger Files'), 'technical-ledger.xlsx');
+    expect(cellFor('Calculation Remark'), 'calculated from debug trace');
+    expect(cellFor('Debug Final Status Reason'), 'short deduction');
+    expect(cellFor('Debug Threshold Crossed'), 'Yes');
+    expect(cellFor('Debug Identity Flags'), 'pan, name');
   });
 
   test(
