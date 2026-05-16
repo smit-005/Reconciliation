@@ -16,6 +16,8 @@ class AppInfoChip extends StatelessWidget {
   final Color? labelColor;
   final Color? valueColor;
   final double? fontSize;
+  final double? maxWidth;
+  final double? borderRadius;
   final FontWeight labelFontWeight;
   final FontWeight valueFontWeight;
 
@@ -32,6 +34,8 @@ class AppInfoChip extends StatelessWidget {
     this.labelColor,
     this.valueColor,
     this.fontSize,
+    this.maxWidth,
+    this.borderRadius,
     this.labelFontWeight = FontWeight.w700,
     this.valueFontWeight = FontWeight.w700,
   });
@@ -42,15 +46,42 @@ class AppInfoChip extends StatelessWidget {
     final resolvedValueColor = valueColor ?? AppColorScheme.textPrimary;
     final resolvedIconColor = iconColor ?? resolvedValueColor;
     final resolvedFontSize = fontSize ?? (compact ? 12.0 : 11.5);
+    final text = RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: TextStyle(fontSize: resolvedFontSize, color: resolvedValueColor),
+        children: [
+          if (showLabel && label.trim().isNotEmpty)
+            TextSpan(
+              text: '$label ',
+              style: TextStyle(
+                fontWeight: labelFontWeight,
+                color: resolvedLabelColor,
+              ),
+            ),
+          TextSpan(
+            text: value,
+            style: TextStyle(
+              fontWeight: valueFontWeight,
+              color: resolvedValueColor,
+            ),
+          ),
+        ],
+      ),
+    );
 
     return Container(
+      constraints: maxWidth == null
+          ? null
+          : BoxConstraints(maxWidth: maxWidth!),
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 10 : AppSpacing.sm,
         vertical: compact ? 6 : AppSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: backgroundColor ?? AppColorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderRadius: BorderRadius.circular(borderRadius ?? AppRadius.pill),
         border: Border.all(color: borderColor ?? AppColorScheme.divider),
       ),
       child: Row(
@@ -60,31 +91,7 @@ class AppInfoChip extends StatelessWidget {
             Icon(icon, size: compact ? 14 : 16, color: resolvedIconColor),
             const SizedBox(width: 6),
           ],
-          RichText(
-            text: TextSpan(
-              style: TextStyle(
-                fontSize: resolvedFontSize,
-                color: resolvedValueColor,
-              ),
-              children: [
-                if (showLabel && label.trim().isNotEmpty)
-                  TextSpan(
-                    text: '$label ',
-                    style: TextStyle(
-                      fontWeight: labelFontWeight,
-                      color: resolvedLabelColor,
-                    ),
-                  ),
-                TextSpan(
-                  text: value,
-                  style: TextStyle(
-                    fontWeight: valueFontWeight,
-                    color: resolvedValueColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          if (maxWidth == null) text else Expanded(child: text),
         ],
       ),
     );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
+import 'package:reconciliation_app/core/widgets/app_inline_banner.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_models.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
 
@@ -232,41 +234,14 @@ class _CompletionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isComplete = summary.isComplete;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: isComplete ? const Color(0xFFEAF7EF) : const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isComplete ? const Color(0xFFB7E4C7) : const Color(0xFFFED7AA),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isComplete ? Icons.verified_rounded : Icons.warning_amber_rounded,
-            color: isComplete
-                ? const Color(0xFF15803D)
-                : const Color(0xFFC2410C),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isComplete
-                  ? 'All sellers reviewed. Every 26Q seller is mapped or marked as a valid exception.'
-                  : '${summary.pendingSellers} seller(s) still need review before mapping can be considered complete.',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: isComplete
-                    ? const Color(0xFF166534)
-                    : const Color(0xFF9A3412),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AppInlineBanner(
+      tone: isComplete
+          ? AppInlineBannerTone.success
+          : AppInlineBannerTone.warning,
+      icon: isComplete ? Icons.verified_rounded : Icons.warning_amber_rounded,
+      message: isComplete
+          ? 'All sellers reviewed. Every 26Q seller is mapped or marked as a valid exception.'
+          : '${summary.pendingSellers} seller(s) still need review before mapping can be considered complete.',
     );
   }
 }
@@ -527,24 +502,15 @@ class _SellerInfoBlock extends StatelessWidget {
           children: chips
               .where((chip) => sellerMappingSafeText(chip).isNotEmpty)
               .map(
-                (chip) => Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: SellerMappingTheme.borderColor),
-                  ),
-                  child: Text(
-                    sellerMappingSafeText(chip),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: SellerMappingTheme.mutedTextColor,
-                    ),
-                  ),
+                (chip) => AppInfoChip(
+                  label: 'Meta',
+                  value: sellerMappingSafeText(chip),
+                  compact: true,
+                  showLabel: false,
+                  backgroundColor: Colors.white,
+                  borderColor: SellerMappingTheme.borderColor,
+                  valueColor: SellerMappingTheme.mutedTextColor,
+                  fontSize: 11,
                 ),
               )
               .toList(),

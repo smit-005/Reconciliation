@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
+import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 import 'package:reconciliation_app/core/widgets/app_status_badge.dart';
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 
@@ -119,7 +120,14 @@ class UploadFileActionCard extends StatelessWidget {
                   runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    _MiniChip(label: '$rowCount rows'),
+                    AppInfoChip(
+                      label: 'Rows',
+                      value: '$rowCount rows',
+                      compact: true,
+                      showLabel: false,
+                      valueColor: AppColorScheme.textMuted,
+                      fontSize: 12,
+                    ),
                     AppStatusBadge(
                       label: statusLabel ?? status.label,
                       icon: _statusIcon,
@@ -156,32 +164,6 @@ class UploadFileActionCard extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _MiniChip extends StatelessWidget {
-  final String label;
-
-  const _MiniChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColorScheme.divider),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppColorScheme.textMuted,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }

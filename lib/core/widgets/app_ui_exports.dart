@@ -4,6 +4,7 @@ export 'app_empty_state.dart';
 export 'app_file_summary_card.dart';
 export 'app_filter_bar.dart';
 export 'app_info_chip.dart';
+export 'app_inline_banner.dart';
 export 'app_loading.dart';
 export 'app_page_header.dart';
 export 'app_page_scaffold.dart';

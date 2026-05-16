@@ -5,6 +5,7 @@ import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/utils/financial_year_utils.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_inline_banner.dart';
 import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_secondary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_section_card.dart';
@@ -507,29 +508,10 @@ class _WorkspaceStatusBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = _detailsFor(status);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: details.backgroundColor,
-        border: Border.all(color: details.borderColor),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(details.icon, color: details.iconColor),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              details.message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: details.textColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return AppInlineBanner(
+      message: details.message,
+      tone: details.tone,
+      icon: details.icon,
     );
   }
 
@@ -539,28 +521,19 @@ class _WorkspaceStatusBanner extends StatelessWidget {
         return const _WorkspaceStatusDetails(
           message: 'Workspace is valid',
           icon: Icons.check_circle_outline,
-          backgroundColor: AppColorScheme.successSoft,
-          borderColor: AppColorScheme.success,
-          iconColor: AppColorScheme.success,
-          textColor: AppColorScheme.success,
+          tone: AppInlineBannerTone.success,
         );
       case WorkspaceStatus.invalid:
         return const _WorkspaceStatusDetails(
           message: 'Workspace not found. Choose the folder again in Settings.',
           icon: Icons.error_outline,
-          backgroundColor: AppColorScheme.warningSoft,
-          borderColor: AppColorScheme.warning,
-          iconColor: AppColorScheme.warning,
-          textColor: AppColorScheme.warning,
+          tone: AppInlineBannerTone.warning,
         );
       case WorkspaceStatus.notConfigured:
         return const _WorkspaceStatusDetails(
           message: 'No workspace selected',
           icon: Icons.info_outline,
-          backgroundColor: AppColorScheme.surfaceVariant,
-          borderColor: AppColorScheme.border,
-          iconColor: AppColorScheme.textMuted,
-          textColor: AppColorScheme.textMuted,
+          tone: AppInlineBannerTone.info,
         );
     }
   }
@@ -569,17 +542,11 @@ class _WorkspaceStatusBanner extends StatelessWidget {
 class _WorkspaceStatusDetails {
   final String message;
   final IconData icon;
-  final Color backgroundColor;
-  final Color borderColor;
-  final Color iconColor;
-  final Color textColor;
+  final AppInlineBannerTone tone;
 
   const _WorkspaceStatusDetails({
     required this.message,
     required this.icon,
-    required this.backgroundColor,
-    required this.borderColor,
-    required this.iconColor,
-    required this.textColor,
+    required this.tone,
   });
 }

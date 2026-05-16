@@ -7,6 +7,8 @@ import 'package:reconciliation_app/app/routes.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
 import 'package:reconciliation_app/core/widgets/app_empty_state.dart';
+import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
+import 'package:reconciliation_app/core/widgets/app_inline_banner.dart';
 import 'package:reconciliation_app/core/widgets/app_primary_button.dart';
 import 'package:reconciliation_app/core/widgets/app_rect_snackbar.dart';
 import 'package:reconciliation_app/core/widgets/app_search_field.dart';
@@ -931,23 +933,32 @@ class _BuyerWorkspacePreview extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                _InfoPill(
+                AppInfoChip(
                   label: 'PAN',
                   value: selectedBuyer.pan.trim().isEmpty
                       ? 'Not available'
                       : selectedBuyer.pan,
+                  maxWidth: 280,
+                  borderRadius: 8,
+                  fontSize: 14,
                 ),
-                _InfoPill(
+                AppInfoChip(
                   label: 'GST',
                   value: selectedBuyer.gstNumber.trim().isEmpty
                       ? 'Not available'
                       : selectedBuyer.gstNumber,
+                  maxWidth: 280,
+                  borderRadius: 8,
+                  fontSize: 14,
                 ),
-                _InfoPill(
+                AppInfoChip(
                   label: 'Folder',
                   value: selectedBuyer.workspaceRelativePath.trim().isEmpty
                       ? 'Not linked'
                       : selectedBuyer.workspaceRelativePath,
+                  maxWidth: 280,
+                  borderRadius: 8,
+                  fontSize: 14,
                 ),
                 if (selectedBuyer.workspaceRelativePath.trim().isNotEmpty)
                   AppSecondaryButton(
@@ -1101,46 +1112,6 @@ class _FinancialYearContextCard extends StatelessWidget {
             label: 'Add FY',
             icon: Icons.add_rounded,
             onPressed: onAdd,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoPill({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 280),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColorScheme.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label ',
-            style: const TextStyle(
-              color: AppColorScheme.textMuted,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
           ),
         ],
       ),
@@ -1505,37 +1476,14 @@ class _WorkspaceWarning extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColorScheme.warningSoft,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColorScheme.warning),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: AppColorScheme.warning,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: AppColorScheme.warning,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          AppSecondaryButton(
-            label: 'Settings',
-            icon: Icons.settings_outlined,
-            onPressed: onOpenSettings,
-          ),
-        ],
+    return AppInlineBanner(
+      message: message,
+      tone: AppInlineBannerTone.warning,
+      icon: Icons.warning_amber_rounded,
+      action: AppSecondaryButton(
+        label: 'Settings',
+        icon: Icons.settings_outlined,
+        onPressed: onOpenSettings,
       ),
     );
   }

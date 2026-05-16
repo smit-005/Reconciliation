@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:reconciliation_app/core/theme/app_color_scheme.dart';
 import 'package:reconciliation_app/core/theme/app_radius.dart';
 import 'package:reconciliation_app/core/theme/app_spacing.dart';
+import 'package:reconciliation_app/core/widgets/app_info_chip.dart';
 
 Widget summaryTile(String label, String value) {
   return Container(
@@ -78,34 +79,14 @@ Widget mismatchTile({
 }
 
 Widget miniInfoChip(BuildContext context, String label, String value) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: AppColorScheme.divider),
-    ),
-    child: RichText(
-      text: TextSpan(
-        style: DefaultTextStyle.of(context).style.copyWith(fontSize: 12),
-        children: [
-          TextSpan(
-            text: '$label: ',
-            style: TextStyle(
-              color: AppColorScheme.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const TextSpan(text: ''),
-          TextSpan(
-            text: value,
-            style: const TextStyle(
-              color: AppColorScheme.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    ),
+  return AppInfoChip(
+    label: '$label:',
+    value: value,
+    compact: true,
+    backgroundColor: Colors.white,
+    borderColor: AppColorScheme.divider,
+    labelFontWeight: FontWeight.w600,
+    valueFontWeight: FontWeight.w800,
+    fontSize: 12,
   );
 }
