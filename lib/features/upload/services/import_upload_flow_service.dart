@@ -903,6 +903,8 @@ class ImportUploadFlowService {
             (row) => NormalizedLedgerRow.fromPurchaseRow(
               row,
               sourceFileName: file.fileName,
+              sourceLedgerFileId: file.id,
+              sourceLedgerUploadedAt: file.uploadedAt,
             ),
           )
           .toList();
@@ -915,7 +917,7 @@ class ImportUploadFlowService {
             fileName: file.fileName,
             bytes: file.bytes,
             rowCount: parsedRows.length,
-            uploadedAt: DateTime.now(),
+            uploadedAt: file.uploadedAt,
             parserType: file.parserType,
             rows: normalizedRows,
             mappingStatus: UploadMappingStatus.confirmed,
@@ -948,6 +950,15 @@ class ImportUploadFlowService {
           defaultSection: file.sectionCode,
           sourceFileName: file.fileName,
         );
+    final rowsWithSource = parsedRows
+        .map(
+          (row) => row.copyWith(
+            sourceFileName: file.fileName,
+            sourceLedgerFileId: file.id,
+            sourceLedgerUploadedAt: file.uploadedAt,
+          ),
+        )
+        .toList();
 
     return ImportWorkflowResponse.success(
       SectionFileRemapPreparation(
@@ -957,9 +968,9 @@ class ImportUploadFlowService {
           fileName: file.fileName,
           bytes: file.bytes,
           rowCount: parsedRows.length,
-          uploadedAt: DateTime.now(),
+          uploadedAt: file.uploadedAt,
           parserType: file.parserType,
-          rows: parsedRows,
+          rows: rowsWithSource,
           mappingStatus: UploadMappingStatus.confirmed,
           wasManuallyMapped: true,
           sheetName: columnMappingResult.sheetName,

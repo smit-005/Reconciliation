@@ -1,11 +1,11 @@
 # Graph Report - E:\reconciliation_app_codex  (2026-05-17)
 
 ## Corpus Check
-- 215 files · ~156,724 words
+- 215 files · ~156,983 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2114 nodes · 2535 edges · 158 communities detected
+- 2114 nodes · 2536 edges · 158 communities detected
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 44 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -1065,11 +1065,11 @@ Nodes (0):
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `package:flutter/material.dart` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 9`, `Community 10`, `Community 11`, `Community 14`, `Community 17`, `Community 18`, `Community 22`?**
-  _High betweenness centrality (0.243) - this node is a cross-community bridge._
+  _High betweenness centrality (0.231) - this node is a cross-community bridge._
 - **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 7` to `Community 0`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 9`, `Community 10`, `Community 21`?**
-  _High betweenness centrality (0.104) - this node is a cross-community bridge._
-- **Why does `package:reconciliation_app/core/config/tds_section_catalog.dart` connect `Community 7` to `Community 0`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 9`, `Community 13`, `Community 14`, `Community 21`?**
-  _High betweenness centrality (0.046) - this node is a cross-community bridge._
+  _High betweenness centrality (0.123) - this node is a cross-community bridge._
+- **Why does `join` connect `Community 16` to `Community 7`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **What connects `MainActivity`, `main`, `app/app.dart` to the rest of the system?**
   _1548 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reconciliation_app/data/local/db_helper.dart';
 import 'package:reconciliation_app/features/upload/models/column_mapping_result.dart';
 import 'package:reconciliation_app/features/upload/models/import_format_profile.dart';
+import 'package:reconciliation_app/features/upload/models/ledger_upload_file.dart';
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 import 'package:reconciliation_app/features/upload/services/excel_service.dart';
 import 'package:reconciliation_app/features/upload/services/import_mapping_service.dart';
@@ -882,6 +883,112 @@ void main() {
       expect(response.data!.wasManuallyMapped, isTrue);
       expect(response.data!.parsedRows, hasLength(1));
       expect(response.data!.parsedRows.single.deducteeName, 'Selected Vendor');
+    });
+
+    test('remapped purchase file preserves source ledger metadata', () async {
+      final uploadedAt = DateTime(2026, 5, 17, 10, 30);
+      final bytes = _buildWorkbook({
+        'Purchase': const [
+          ['Bill Date', 'Party Name', 'Basic Amount'],
+          ['2024-04-02', 'Selected Vendor', 222],
+        ],
+      });
+      final file = LedgerUploadFile(
+        id: 'purchase-source-id',
+        sectionCode: '194Q',
+        fileName: 'original-purchase.xlsx',
+        bytes: bytes,
+        rowCount: 1,
+        uploadedAt: uploadedAt,
+        parserType: 'purchase',
+        rows: const [],
+        mappingStatus: UploadMappingStatus.needsReview,
+        wasManuallyMapped: false,
+        columnMapping: const {},
+      );
+
+      final response = await ImportUploadFlowService.prepareSectionFileRemap(
+        file: file,
+        columnMappingResult: const ColumnMappingResult(
+          fileType: ImportMappingService.purchaseFileType,
+          sheetName: 'Purchase',
+          headerRowIndex: 0,
+          headersTrusted: true,
+          saveProfile: false,
+          rawToCanonicalMapping: {
+            'COL_0': 'date',
+            'COL_1': 'party_name',
+            'COL_2': 'basic_amount',
+          },
+          columnMapping: {
+            'date': 'COL_0',
+            'party_name': 'COL_1',
+            'basic_amount': 'COL_2',
+          },
+        ),
+      );
+
+      expect(response.isSuccess, isTrue);
+      final updatedFile = response.data!.updatedFile;
+      expect(updatedFile.id, 'purchase-source-id');
+      expect(updatedFile.fileName, 'original-purchase.xlsx');
+      expect(updatedFile.uploadedAt, uploadedAt);
+      expect(updatedFile.rows.single.sourceLedgerFileId, 'purchase-source-id');
+      expect(updatedFile.rows.single.sourceFileName, 'original-purchase.xlsx');
+      expect(updatedFile.rows.single.sourceLedgerUploadedAt, uploadedAt);
+    });
+
+    test('remapped generic ledger file preserves source metadata', () async {
+      final uploadedAt = DateTime(2026, 5, 17, 11, 45);
+      final bytes = _buildWorkbook({
+        'Ledger': const [
+          ['Date', 'Party Name', 'Amount'],
+          ['2024-04-02', 'Selected Vendor', 222],
+        ],
+      });
+      final file = LedgerUploadFile(
+        id: 'generic-source-id',
+        sectionCode: '194C',
+        fileName: 'original-ledger.xlsx',
+        bytes: bytes,
+        rowCount: 1,
+        uploadedAt: uploadedAt,
+        parserType: 'genericLedger',
+        rows: const [],
+        mappingStatus: UploadMappingStatus.needsReview,
+        wasManuallyMapped: false,
+        columnMapping: const {},
+      );
+
+      final response = await ImportUploadFlowService.prepareSectionFileRemap(
+        file: file,
+        columnMappingResult: const ColumnMappingResult(
+          fileType: ImportMappingService.genericLedgerFileType,
+          sheetName: 'Ledger',
+          headerRowIndex: 0,
+          headersTrusted: true,
+          saveProfile: false,
+          rawToCanonicalMapping: {
+            'COL_0': 'date',
+            'COL_1': 'party_name',
+            'COL_2': 'amount',
+          },
+          columnMapping: {
+            'date': 'COL_0',
+            'party_name': 'COL_1',
+            'amount': 'COL_2',
+          },
+        ),
+      );
+
+      expect(response.isSuccess, isTrue);
+      final updatedFile = response.data!.updatedFile;
+      expect(updatedFile.id, 'generic-source-id');
+      expect(updatedFile.fileName, 'original-ledger.xlsx');
+      expect(updatedFile.uploadedAt, uploadedAt);
+      expect(updatedFile.rows.single.sourceLedgerFileId, 'generic-source-id');
+      expect(updatedFile.rows.single.sourceFileName, 'original-ledger.xlsx');
+      expect(updatedFile.rows.single.sourceLedgerUploadedAt, uploadedAt);
     });
   });
 }
