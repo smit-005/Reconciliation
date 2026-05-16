@@ -2536,20 +2536,27 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final allLeftRows = activeSectionRows
         .where(_is26QAuditRow)
         .toList(growable: false);
+    var nonSourceBackedCandidateCount = 0;
+    String? firstNonSourceBackedCandidateKey;
     final ledgerCandidateRows = activeSectionRows
         .where((row) {
           if (row.sourceRowCount > 0) {
             return true;
           }
           if (!row.is26QUnmatched) {
-            debugPrint(
-              'SELLER UI WARN => candidate source contains non-ledger row '
-              'rowKey=${row.rowKey} section=${row.sectionCode}',
-            );
+            nonSourceBackedCandidateCount += 1;
+            firstNonSourceBackedCandidateKey ??= row.rowKey;
           }
           return false;
         })
         .toList(growable: false);
+    if (nonSourceBackedCandidateCount > 0) {
+      debugPrint(
+        'SELLER UI WARN => candidate row is not source-backed '
+        'section=$_activeSectionCode count=$nonSourceBackedCandidateCount '
+        'sampleRowKey=$firstNonSourceBackedCandidateKey',
+      );
+    }
 
     return SellerMappingTwoPanelBody(
       visibleRows: visibleRows,
