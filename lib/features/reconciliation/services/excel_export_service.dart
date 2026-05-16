@@ -968,7 +968,7 @@ class ExcelExportService {
       11,
       12,
     ]);
-    _autoFitUsefulColumns(sheet, headers.length);
+    _applyFixedLedgerPivotColumnWidths(sheet);
   }
 
   static void _writeFilteredDetailSheet(
@@ -2196,6 +2196,7 @@ class ExcelExportService {
     return const {
       'Raw_Data',
       'Raw_Reconciliation',
+      'Exceptions',
       'Exception_Details',
       'Final_Missing_In_Books',
       'Missing_In_Books',
@@ -2226,6 +2227,35 @@ class ExcelExportService {
       220, // Source Ledger Files
       180, // Source Ledger Uploaded At
       260, // Remarks
+    ];
+
+    for (var i = 0; i < widths.length; i++) {
+      sheet.setColumnWidthInPixels(i + 1, widths[i]);
+    }
+    widthWatch.stop();
+    _logPerformance(
+      'fixed_column_widths',
+      widthWatch,
+      details: 'sheet=${sheet.name} columns=${widths.length}',
+    );
+  }
+
+  static void _applyFixedLedgerPivotColumnWidths(xlsio.Worksheet sheet) {
+    final widthWatch = Stopwatch()..start();
+    const widths = <int>[
+      220, // Ledger
+      85, // Section
+      230, // Seller Name
+      100, // Financial Year
+      70, // Rows
+      115, // Basic Amount
+      125, // Applicable Amount
+      105, // 26Q Amount
+      115, // Expected TDS
+      105, // Actual TDS
+      110, // TDS Difference
+      120, // Amount Difference
+      220, // Statuses
     ];
 
     for (var i = 0; i < widths.length; i++) {
