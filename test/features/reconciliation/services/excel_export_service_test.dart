@@ -563,18 +563,18 @@ void main() {
         'Final_Missing_In_Books',
         'Exception_Summary',
         'Raw_Reconciliation',
-        'Exception_Details',
-        'Technical_Details',
         'TDS_Section_Info',
       ]),
     );
+    expect(sheets, isNot(contains('Exception_Details')));
+    expect(sheets, isNot(contains('Technical_Details')));
     expect(sheets, isNot(contains('Final_Timing_Difference')));
     expect(sheets, isNot(contains('Pivot Summary')));
     expect(sheets, isNot(contains('194A')));
     expect(sheets, isNot(contains('194C')));
   });
 
-  test('detailed report technical sheet preserves row map content', () async {
+  test('default detailed report omits advanced debug sheets', () async {
     final outputDir = await _tempDir();
     final row =
         _row(
@@ -618,35 +618,14 @@ void main() {
       financialYear: '2025-26',
     );
 
-    final technicalRows = await _sheetRows(path, 'Technical_Details');
-    final headerIndex = technicalRows.indexWhere(
-      (sheetRow) =>
-          sheetRow.contains('26Q Amount') &&
-          sheetRow.contains('Debug Final Status Reason'),
-    );
-    expect(headerIndex, isNonNegative);
+    final sheets = await _sheetNames(path);
+    expect(sheets, contains('Raw_Reconciliation'));
+    expect(sheets, isNot(contains('Exception_Details')));
+    expect(sheets, isNot(contains('Technical_Details')));
 
-    final headers = technicalRows[headerIndex]
-        .map((cell) => cell?.toString() ?? '')
-        .where((cell) => cell.isNotEmpty)
-        .toList();
-    final expectedHeaders =
-        row.toMap().keys.map((key) => key.toString()).toList()..sort();
-    expect(headers, expectedHeaders);
-
-    final values = technicalRows[headerIndex + 1];
-    String cellFor(String header) {
-      final index = headers.indexOf(header);
-      expect(index, isNonNegative, reason: 'Missing technical header $header');
-      return values[index]?.toString() ?? '';
-    }
-
-    expect(cellFor('Seller Name'), 'Technical Contractor');
-    expect(cellFor('Source Ledger Files'), 'technical-ledger.xlsx');
-    expect(cellFor('Calculation Remark'), 'calculated from debug trace');
-    expect(cellFor('Debug Final Status Reason'), 'short deduction');
-    expect(cellFor('Debug Threshold Crossed'), 'Yes');
-    expect(cellFor('Debug Identity Flags'), 'pan, name');
+    final rawRows = await _sheetRows(path, 'Raw_Reconciliation');
+    expect(_sheetContainsText(rawRows, 'Technical Contractor'), isTrue);
+    expect(_sheetContainsText(rawRows, 'technical-ledger.xlsx'), isTrue);
   });
 
   test(

@@ -704,6 +704,20 @@ class ExcelExportService {
       _writeTimedDetailTable(detailSheet, rows: rows, startRow: 8);
     });
 
+    final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
+    _writeTimedSheet(
+      infoSheet,
+      'tds_section_info',
+      () => _writeTdsSectionInfoSheet(infoSheet),
+    );
+  }
+
+  // Reserved for a future advanced/debug export mode.
+  // ignore: unused_element
+  static void _writeAdvancedDebugSheets(
+    xlsio.Workbook workbook, {
+    required List<ReconciliationRow> rows,
+  }) {
     final exceptionDetailsSheet = workbook.worksheets.addWithName(
       'Exception_Details',
     );
@@ -724,13 +738,6 @@ class ExcelExportService {
       technicalDetailsSheet,
       'technical_details',
       () => _writeTechnicalDetailsSheet(technicalDetailsSheet, rows: rows),
-    );
-
-    final infoSheet = workbook.worksheets.addWithName('TDS_Section_Info');
-    _writeTimedSheet(
-      infoSheet,
-      'tds_section_info',
-      () => _writeTdsSectionInfoSheet(infoSheet),
     );
   }
 
