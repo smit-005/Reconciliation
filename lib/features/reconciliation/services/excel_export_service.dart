@@ -894,50 +894,31 @@ class ExcelExportService {
     var rowIndex = headerRow + 1;
     for (final group in sortedGroups) {
       final groupRows = group.rows;
+      final summary = _ExportRowSummary.fromRows(groupRows);
       sheet.getRangeByIndex(rowIndex, 1).setText(group.ledgerName);
       sheet.getRangeByIndex(rowIndex, 2).setText(group.section);
       sheet.getRangeByIndex(rowIndex, 3).setText(group.sellerName);
       sheet.getRangeByIndex(rowIndex, 4).setText(group.financialYear);
-      sheet.getRangeByIndex(rowIndex, 5).setNumber(groupRows.length.toDouble());
+      sheet.getRangeByIndex(rowIndex, 5).setNumber(summary.rowCount.toDouble());
       sheet
           .getRangeByIndex(rowIndex, 6)
-          .setNumber(
-            _round2(groupRows.fold(0.0, (sum, row) => sum + row.basicAmount)),
-          );
+          .setNumber(_round2(summary.basicAmount));
       sheet
           .getRangeByIndex(rowIndex, 7)
-          .setNumber(
-            _round2(
-              groupRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
-            ),
-          );
+          .setNumber(_round2(summary.applicableAmount));
       sheet
           .getRangeByIndex(rowIndex, 8)
-          .setNumber(
-            _round2(groupRows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
-          );
+          .setNumber(_round2(summary.tds26QAmount));
       sheet
           .getRangeByIndex(rowIndex, 9)
-          .setNumber(
-            _round2(groupRows.fold(0.0, (sum, row) => sum + row.expectedTds)),
-          );
-      sheet
-          .getRangeByIndex(rowIndex, 10)
-          .setNumber(
-            _round2(groupRows.fold(0.0, (sum, row) => sum + row.actualTds)),
-          );
+          .setNumber(_round2(summary.expectedTds));
+      sheet.getRangeByIndex(rowIndex, 10).setNumber(_round2(summary.actualTds));
       sheet
           .getRangeByIndex(rowIndex, 11)
-          .setNumber(
-            _round2(groupRows.fold(0.0, (sum, row) => sum + row.tdsDifference)),
-          );
+          .setNumber(_round2(summary.tdsDifference));
       sheet
           .getRangeByIndex(rowIndex, 12)
-          .setNumber(
-            _round2(
-              groupRows.fold(0.0, (sum, row) => sum + row.amountDifference),
-            ),
-          );
+          .setNumber(_round2(summary.amountDifference));
       sheet
           .getRangeByIndex(rowIndex, 13)
           .setText(
@@ -1126,27 +1107,14 @@ class ExcelExportService {
     required String buyerPan,
     required String gstNo,
   }) {
-    final totalBasic = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.basicAmount),
-    );
-    final totalApplicable = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.applicableAmount),
-    );
-    final total26QAmount = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.tds26QAmount),
-    );
-    final totalExpectedTds = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.expectedTds),
-    );
-    final totalActualTds = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.actualTds),
-    );
-    final totalTdsDifference = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.tdsDifference),
-    );
-    final totalAmountDifference = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.amountDifference),
-    );
+    final summary = _ExportRowSummary.fromRows(rows);
+    final totalBasic = _round2(summary.basicAmount);
+    final totalApplicable = _round2(summary.applicableAmount);
+    final total26QAmount = _round2(summary.tds26QAmount);
+    final totalExpectedTds = _round2(summary.expectedTds);
+    final totalActualTds = _round2(summary.actualTds);
+    final totalTdsDifference = _round2(summary.tdsDifference);
+    final totalAmountDifference = _round2(summary.amountDifference);
     final ruleText = SectionRuleExportText.summaryTextForSections(
       rows.map((row) => row.section),
     );
@@ -1311,43 +1279,27 @@ class ExcelExportService {
       rowIndex++;
     }
 
+    final summary = _ExportRowSummary.fromRows(rows);
+
     sheet.getRangeByIndex(rowIndex, 1).setText('TOTAL');
     sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
 
-    sheet
-        .getRangeByIndex(rowIndex, 8)
-        .setNumber(
-          _round2(rows.fold(0.0, (sum, row) => sum + row.basicAmount)),
-        );
+    sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(summary.basicAmount));
     sheet
         .getRangeByIndex(rowIndex, 9)
-        .setNumber(
-          _round2(rows.fold(0.0, (sum, row) => sum + row.applicableAmount)),
-        );
+        .setNumber(_round2(summary.applicableAmount));
     sheet
         .getRangeByIndex(rowIndex, 10)
-        .setNumber(
-          _round2(rows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
-        );
-    sheet
-        .getRangeByIndex(rowIndex, 11)
-        .setNumber(
-          _round2(rows.fold(0.0, (sum, row) => sum + row.expectedTds)),
-        );
-    sheet
-        .getRangeByIndex(rowIndex, 12)
-        .setNumber(_round2(rows.fold(0.0, (sum, row) => sum + row.actualTds)));
+        .setNumber(_round2(summary.tds26QAmount));
+    sheet.getRangeByIndex(rowIndex, 11).setNumber(_round2(summary.expectedTds));
+    sheet.getRangeByIndex(rowIndex, 12).setNumber(_round2(summary.actualTds));
     sheet.getRangeByIndex(rowIndex, 13).setText('');
     sheet
         .getRangeByIndex(rowIndex, 14)
-        .setNumber(
-          _round2(rows.fold(0.0, (sum, row) => sum + row.tdsDifference)),
-        );
+        .setNumber(_round2(summary.tdsDifference));
     sheet
         .getRangeByIndex(rowIndex, 15)
-        .setNumber(
-          _round2(rows.fold(0.0, (sum, row) => sum + row.amountDifference)),
-        );
+        .setNumber(_round2(summary.amountDifference));
 
     final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 21);
     totalRange.cellStyle.bold = true;
@@ -1389,27 +1341,18 @@ class ExcelExportService {
     sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
     sheet.getRangeByName('A1').cellStyle.backColor = '#EDE7F6';
 
-    final totalBasic = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.basicAmount),
+    final summary = _ExportRowSummary.fromRows(
+      rows,
+      includeStatusCounts: true,
+      includeDerivedCounts: true,
     );
-    final totalApplicable = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.applicableAmount),
-    );
-    final total26QAmount = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.tds26QAmount),
-    );
-    final totalExpectedTds = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.expectedTds),
-    );
-    final totalActualTds = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.actualTds),
-    );
-    final totalTdsDifference = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.tdsDifference),
-    );
-    final totalAmountDifference = _round2(
-      rows.fold(0.0, (sum, row) => sum + row.amountDifference),
-    );
+    final totalBasic = _round2(summary.basicAmount);
+    final totalApplicable = _round2(summary.applicableAmount);
+    final total26QAmount = _round2(summary.tds26QAmount);
+    final totalExpectedTds = _round2(summary.expectedTds);
+    final totalActualTds = _round2(summary.actualTds);
+    final totalTdsDifference = _round2(summary.tdsDifference);
+    final totalAmountDifference = _round2(summary.amountDifference);
     final ruleText = SectionRuleExportText.summaryTextForSections(
       rows.map((row) => row.section),
     );
@@ -1447,39 +1390,13 @@ class ExcelExportService {
       totalActualTds.toStringAsFixed(2),
       totalTdsDifference.toStringAsFixed(2),
       totalAmountDifference.toStringAsFixed(2),
-      rows
-          .where((e) => e.status == ReconciliationStatus.matched)
-          .length
-          .toString(),
-      rows
-          .where((e) => e.status == ReconciliationStatus.timingDifference)
-          .length
-          .toString(),
-      rows
-          .where((e) => e.status == ReconciliationStatus.shortDeduction)
-          .length
-          .toString(),
-      rows
-          .where((e) => e.status == ReconciliationStatus.excessDeduction)
-          .length
-          .toString(),
-      rows
-          .where((e) => e.status == ReconciliationStatus.purchaseOnly)
-          .length
-          .toString(),
-      rows
-          .where((e) => e.status == ReconciliationStatus.onlyIn26Q)
-          .length
-          .toString(),
-      rows
-          .where(
-            (e) =>
-                e.applicableAmount > 0 &&
-                e.tds26QAmount == 0 &&
-                e.actualTds == 0,
-          )
-          .length
-          .toString(),
+      summary.statusCount(ReconciliationStatus.matched).toString(),
+      summary.statusCount(ReconciliationStatus.timingDifference).toString(),
+      summary.statusCount(ReconciliationStatus.shortDeduction).toString(),
+      summary.statusCount(ReconciliationStatus.excessDeduction).toString(),
+      summary.statusCount(ReconciliationStatus.purchaseOnly).toString(),
+      summary.statusCount(ReconciliationStatus.onlyIn26Q).toString(),
+      summary.applicableButNo26QRows.toString(),
     ];
 
     for (int i = 0; i < labels.length; i++) {
@@ -1551,41 +1468,38 @@ class ExcelExportService {
 
     for (final section in keys) {
       final rows = grouped[section]!;
+      final summary = _ExportRowSummary.fromRows(
+        rows,
+        includeDerivedCounts: true,
+      );
 
       sheet.getRangeByIndex(rowIndex, 1).setText(section);
       sheet
           .getRangeByIndex(rowIndex, 2)
           .setText(SectionRuleExportText.summaryTextForSections([section]));
-      sheet.getRangeByIndex(rowIndex, 3).setNumber(rows.length.toDouble());
+      sheet.getRangeByIndex(rowIndex, 3).setNumber(summary.rowCount.toDouble());
       sheet
           .getRangeByIndex(rowIndex, 4)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.basicAmount)));
+          .setNumber(_round2(summary.basicAmount));
       sheet
           .getRangeByIndex(rowIndex, 5)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.applicableAmount)));
+          .setNumber(_round2(summary.applicableAmount));
       sheet
           .getRangeByIndex(rowIndex, 6)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tds26QAmount)));
+          .setNumber(_round2(summary.tds26QAmount));
       sheet
           .getRangeByIndex(rowIndex, 7)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.expectedTds)));
-      sheet
-          .getRangeByIndex(rowIndex, 8)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.actualTds)));
+          .setNumber(_round2(summary.expectedTds));
+      sheet.getRangeByIndex(rowIndex, 8).setNumber(_round2(summary.actualTds));
       sheet
           .getRangeByIndex(rowIndex, 9)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.tdsDifference)));
+          .setNumber(_round2(summary.tdsDifference));
       sheet
           .getRangeByIndex(rowIndex, 10)
-          .setNumber(_round2(rows.fold(0.0, (s, r) => s + r.amountDifference)));
+          .setNumber(_round2(summary.amountDifference));
       sheet
           .getRangeByIndex(rowIndex, 11)
-          .setNumber(
-            rows
-                .where((e) => e.status != ReconciliationStatus.matched)
-                .length
-                .toDouble(),
-          );
+          .setNumber(summary.nonMatchedRows.toDouble());
 
       final rowRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
       rowRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
@@ -1655,51 +1569,28 @@ class ExcelExportService {
     final statuses = grouped.keys.toList()..sort();
     for (final status in statuses) {
       final statusRows = grouped[status]!;
+      final summary = _ExportRowSummary.fromRows(statusRows);
       sheet.getRangeByIndex(rowIndex, 1).setText(status);
-      sheet
-          .getRangeByIndex(rowIndex, 2)
-          .setNumber(statusRows.length.toDouble());
+      sheet.getRangeByIndex(rowIndex, 2).setNumber(summary.rowCount.toDouble());
       sheet
           .getRangeByIndex(rowIndex, 3)
-          .setNumber(
-            _round2(statusRows.fold(0.0, (sum, row) => sum + row.basicAmount)),
-          );
+          .setNumber(_round2(summary.basicAmount));
       sheet
           .getRangeByIndex(rowIndex, 4)
-          .setNumber(
-            _round2(
-              statusRows.fold(0.0, (sum, row) => sum + row.applicableAmount),
-            ),
-          );
+          .setNumber(_round2(summary.applicableAmount));
       sheet
           .getRangeByIndex(rowIndex, 5)
-          .setNumber(
-            _round2(statusRows.fold(0.0, (sum, row) => sum + row.tds26QAmount)),
-          );
+          .setNumber(_round2(summary.tds26QAmount));
       sheet
           .getRangeByIndex(rowIndex, 6)
-          .setNumber(
-            _round2(statusRows.fold(0.0, (sum, row) => sum + row.expectedTds)),
-          );
-      sheet
-          .getRangeByIndex(rowIndex, 7)
-          .setNumber(
-            _round2(statusRows.fold(0.0, (sum, row) => sum + row.actualTds)),
-          );
+          .setNumber(_round2(summary.expectedTds));
+      sheet.getRangeByIndex(rowIndex, 7).setNumber(_round2(summary.actualTds));
       sheet
           .getRangeByIndex(rowIndex, 8)
-          .setNumber(
-            _round2(
-              statusRows.fold(0.0, (sum, row) => sum + row.tdsDifference),
-            ),
-          );
+          .setNumber(_round2(summary.tdsDifference));
       sheet
           .getRangeByIndex(rowIndex, 9)
-          .setNumber(
-            _round2(
-              statusRows.fold(0.0, (sum, row) => sum + row.amountDifference),
-            ),
-          );
+          .setNumber(_round2(summary.amountDifference));
 
       sheet
               .getRangeByIndex(rowIndex, 1, rowIndex, headers.length)
@@ -1887,9 +1778,8 @@ class ExcelExportService {
 
     for (final seller in grouped.keys) {
       final fyMap = grouped[seller]!;
-      final sellerRows = fyMap.values.expand((rows) => rows).toList();
       final ledgerContext = showLedgerSourceInSellerHeader
-          ? _ledgerSourceContextForRows(sellerRows)
+          ? _ledgerSourceContextForRows(fyMap.values.expand((rows) => rows))
           : '';
       final sellerHeader = ledgerContext.isEmpty
           ? seller.toUpperCase()
@@ -1915,13 +1805,14 @@ class ExcelExportService {
       for (final fy in fyMap.keys) {
         final fyRows = fyMap[fy]!;
 
-        final fyBasic = fyRows.fold(0.0, (s, r) => s + r.basicAmount);
-        final fyApplicable = fyRows.fold(0.0, (s, r) => s + r.applicableAmount);
-        final fy26Q = fyRows.fold(0.0, (s, r) => s + r.tds26QAmount);
-        final fyExpected = fyRows.fold(0.0, (s, r) => s + r.expectedTds);
-        final fyActual = fyRows.fold(0.0, (s, r) => s + r.actualTds);
-        final fyTdsDiff = fyRows.fold(0.0, (s, r) => s + r.tdsDifference);
-        final fyAmtDiff = fyRows.fold(0.0, (s, r) => s + r.amountDifference);
+        final fySummary = _ExportRowSummary.fromRows(fyRows);
+        final fyBasic = fySummary.basicAmount;
+        final fyApplicable = fySummary.applicableAmount;
+        final fy26Q = fySummary.tds26QAmount;
+        final fyExpected = fySummary.expectedTds;
+        final fyActual = fySummary.actualTds;
+        final fyTdsDiff = fySummary.tdsDifference;
+        final fyAmtDiff = fySummary.amountDifference;
 
         grandBasic += fyBasic;
         grandApplicable += fyApplicable;
@@ -2080,7 +1971,7 @@ class ExcelExportService {
     return map;
   }
 
-  static String _ledgerSourceContextForRows(List<ReconciliationRow> rows) {
+  static String _ledgerSourceContextForRows(Iterable<ReconciliationRow> rows) {
     final names =
         rows
             .expand((row) => row.sourceLedgerFileNames)
@@ -2441,6 +2332,91 @@ class _TechnicalExportColumn {
   final Object? Function(ReconciliationRow row) valueFor;
 
   const _TechnicalExportColumn(this.header, this.valueFor);
+}
+
+class _ExportRowSummary {
+  final int rowCount;
+  final double basicAmount;
+  final double applicableAmount;
+  final double tds26QAmount;
+  final double expectedTds;
+  final double actualTds;
+  final double tdsDifference;
+  final double amountDifference;
+  final int nonMatchedRows;
+  final int applicableButNo26QRows;
+  final Map<String, int> statusCounts;
+
+  const _ExportRowSummary._({
+    required this.rowCount,
+    required this.basicAmount,
+    required this.applicableAmount,
+    required this.tds26QAmount,
+    required this.expectedTds,
+    required this.actualTds,
+    required this.tdsDifference,
+    required this.amountDifference,
+    required this.nonMatchedRows,
+    required this.applicableButNo26QRows,
+    required this.statusCounts,
+  });
+
+  factory _ExportRowSummary.fromRows(
+    Iterable<ReconciliationRow> rows, {
+    bool includeStatusCounts = false,
+    bool includeDerivedCounts = false,
+  }) {
+    var rowCount = 0;
+    var basicAmount = 0.0;
+    var applicableAmount = 0.0;
+    var tds26QAmount = 0.0;
+    var expectedTds = 0.0;
+    var actualTds = 0.0;
+    var tdsDifference = 0.0;
+    var amountDifference = 0.0;
+    var nonMatchedRows = 0;
+    var applicableButNo26QRows = 0;
+    final statusCounts = includeStatusCounts ? <String, int>{} : null;
+
+    for (final row in rows) {
+      rowCount++;
+      basicAmount += row.basicAmount;
+      applicableAmount += row.applicableAmount;
+      tds26QAmount += row.tds26QAmount;
+      expectedTds += row.expectedTds;
+      actualTds += row.actualTds;
+      tdsDifference += row.tdsDifference;
+      amountDifference += row.amountDifference;
+      if (includeDerivedCounts && row.status != ReconciliationStatus.matched) {
+        nonMatchedRows++;
+      }
+      if (includeDerivedCounts &&
+          row.applicableAmount > 0 &&
+          row.tds26QAmount == 0 &&
+          row.actualTds == 0) {
+        applicableButNo26QRows++;
+      }
+      if (statusCounts != null) {
+        statusCounts[row.status] = (statusCounts[row.status] ?? 0) + 1;
+      }
+    }
+
+    return _ExportRowSummary._(
+      rowCount: rowCount,
+      basicAmount: basicAmount,
+      applicableAmount: applicableAmount,
+      tds26QAmount: tds26QAmount,
+      expectedTds: expectedTds,
+      actualTds: actualTds,
+      tdsDifference: tdsDifference,
+      amountDifference: amountDifference,
+      nonMatchedRows: nonMatchedRows,
+      applicableButNo26QRows: applicableButNo26QRows,
+      statusCounts: statusCounts ?? const <String, int>{},
+    );
+  }
+
+  int statusCount(String status) => statusCounts[status] ?? 0;
 }
 
 class _LedgerSourceReference {
