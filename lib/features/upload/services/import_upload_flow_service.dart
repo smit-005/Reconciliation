@@ -537,6 +537,8 @@ class ImportUploadFlowService {
               await ExcelService.validateGenericLedgerFileInBackground(
                 sessionCache?.bytes ?? Uint8List.fromList(bytes),
                 preferredSheetName: inspection.sheetName,
+                expectedSection: sectionCode,
+                sourceFileName: fileName,
               );
           final canAutoConfirmProfile = _canAutoConfirmSavedProfileMapping(
             validation: profileValidation,
@@ -544,7 +546,9 @@ class ImportUploadFlowService {
             parsedRowCount: parsedRows.length,
             columnMapping: matchedProfile.columnMapping,
           );
-          final mappingStatus = canAutoConfirmProfile
+          final mappingStatus = profileValidation.warnings.isNotEmpty
+              ? UploadMappingStatus.needsReview
+              : canAutoConfirmProfile
               ? UploadMappingStatus.confirmed
               : UploadMappingStatus.autoMapped;
 
@@ -572,6 +576,8 @@ class ImportUploadFlowService {
           await ExcelService.validateGenericLedgerFileInBackground(
             sessionCache?.bytes ?? Uint8List.fromList(bytes),
             preferredSheetName: inspection.sheetName,
+            expectedSection: sectionCode,
+            sourceFileName: fileName,
           );
       final shouldOpenColumnMapping =
           forceColumnMapping ||

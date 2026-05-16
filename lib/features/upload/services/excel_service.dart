@@ -276,15 +276,17 @@ class ExcelService {
   static Future<ExcelValidationResult> validateGenericLedgerFileInBackground(
     Uint8List bytes, {
     String? preferredSheetName,
+    String? expectedSection,
+    String sourceFileName = '',
   }) async {
     final computeWatch = Stopwatch()..start();
-    final payload = await compute(
-      _validateGenericLedgerFileInIsolate,
-      <String, dynamic>{
-        'bytes': bytes,
-        'preferredSheetName': preferredSheetName,
-      },
-    );
+    final payload =
+        await compute(_validateGenericLedgerFileInIsolate, <String, dynamic>{
+          'bytes': bytes,
+          'preferredSheetName': preferredSheetName,
+          'expectedSection': expectedSection,
+          'sourceFileName': sourceFileName,
+        });
     computeWatch.stop();
     final result = _deserializeValidationForIsolate(payload);
     _logUploadFreezePerformance(
@@ -1932,6 +1934,8 @@ class ExcelService {
   static ExcelValidationResult validateGenericLedgerFile(
     List<int> bytes, {
     String? preferredSheetName,
+    String? expectedSection,
+    String sourceFileName = '',
     ImportSessionCache? sessionCache,
   }) {
     final decoder = _decoderFromCache(bytes, sessionCache: sessionCache);
@@ -1975,6 +1979,16 @@ class ExcelService {
     final unmappedRawHeaders = _extractUnmappedRawHeaders(
       rawHeaderRow,
       mappedHeaders,
+    );
+    warnings.addAll(
+      _buildGenericLedgerSectionWarnings(
+        rows: table.rows,
+        headerRowIndex: sheetInfo.headerRowIndex,
+        headersTrusted: sheetInfo.headersTrusted,
+        expectedSection: expectedSection,
+        sourceFileName: sourceFileName,
+        sheetName: sheetInfo.sheetName,
+      ),
     );
 
     final hasDate = presentHeaders.contains('date');
@@ -3624,6 +3638,136 @@ class ExcelService {
     if (text.isEmpty) return false;
 
     return RegExp(r'\b(19[0-9][A-Z]?|20[0-9][A-Z]?)\b').hasMatch(text);
+  }
+
+  static bool _isExplicitGenericLedgerSectionHeader(String value) {
+    final normalized = _normalizeLooseText(value);
+    return normalized == 'section' ||
+        normalized == 'tds section' ||
+        normalized == 'section code' ||
+        normalized == 'sec' ||
+        normalized == 'tds sec';
+  }
+
+  static Set<String> _detectExplicitGenericLedgerSections({
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required bool headersTrusted,
+  }) {
+    if (!headersTrusted ||
+        headerRowIndex < 0 ||
+        headerRowIndex >= rows.length) {
+      return const <String>{};
+    }
+
+    final headerRow = rows[headerRowIndex];
+    final sectionColumns = <int>[];
+    for (var i = 0; i < headerRow.length; i++) {
+      if (_isExplicitGenericLedgerSectionHeader(
+        headerRow[i]?.toString() ?? '',
+      )) {
+        sectionColumns.add(i);
+      }
+    }
+
+    if (sectionColumns.isEmpty) return const <String>{};
+
+    final detected = <String>{};
+    for (var i = headerRowIndex + 1; i < rows.length; i++) {
+      final row = rows[i];
+      for (final columnIndex in sectionColumns) {
+        if (columnIndex >= row.length) continue;
+        final normalized = TdsSectionCatalog.normalizeCode(
+          row[columnIndex]?.toString() ?? '',
+        );
+        if (TdsSectionCatalog.supportedSectionCodeSet.contains(normalized)) {
+          detected.add(normalized);
+        }
+      }
+    }
+
+    return detected;
+  }
+
+  static Set<String> _detectStrongSectionMentions(String value) {
+    final compact = value.trim().toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
+    if (compact.isEmpty) return const <String>{};
+
+    final detected = <String>{};
+    const aliases = <String, String>{
+      '194IA': '194I_A',
+      '194IB': '194I_B',
+      '194JA': '194J_A',
+      '194JB': '194J_B',
+      '194Q': '194Q',
+      '194A': '194A',
+      '194C': '194C',
+      '194H': '194H',
+    };
+
+    for (final entry in aliases.entries) {
+      if (compact.contains(entry.key)) {
+        detected.add(entry.value);
+      }
+    }
+
+    return detected;
+  }
+
+  static List<String> _buildGenericLedgerSectionWarnings({
+    required List<List<dynamic>> rows,
+    required int headerRowIndex,
+    required bool headersTrusted,
+    required String? expectedSection,
+    required String sourceFileName,
+    required String sheetName,
+  }) {
+    final selectedSection = TdsSectionCatalog.normalizeCode(
+      expectedSection ?? '',
+    );
+    if (!TdsSectionCatalog.supportedSectionCodeSet.contains(selectedSection)) {
+      return const <String>[];
+    }
+
+    final warnings = <String>[];
+    void addWarning(String warning) {
+      if (!warnings.contains(warning)) warnings.add(warning);
+    }
+
+    final explicitSections = _detectExplicitGenericLedgerSections(
+      rows: rows,
+      headerRowIndex: headerRowIndex,
+      headersTrusted: headersTrusted,
+    ).toList()..sort(TdsSectionCatalog.compare);
+
+    if (explicitSections.length > 1) {
+      addWarning(
+        'This ledger appears to contain multiple TDS sections: ${explicitSections.join(', ')}. LedgerMatch will not split mixed ledgers yet; review before confirming.',
+      );
+    }
+
+    final explicitMismatches = explicitSections
+        .where((section) => section != selectedSection)
+        .toList();
+    if (explicitMismatches.isNotEmpty) {
+      addWarning(
+        'This ledger section column contains ${explicitMismatches.join(', ')}, but it was uploaded under $selectedSection. Review before confirming.',
+      );
+    }
+
+    final labelSections = _detectStrongSectionMentions(
+      '$sourceFileName $sheetName',
+    ).toList()..sort(TdsSectionCatalog.compare);
+    if (labelSections.length == 1 && labelSections.single != selectedSection) {
+      addWarning(
+        'The file or sheet name suggests ${labelSections.single}, but the selected upload section is $selectedSection. Review before confirming.',
+      );
+    }
+
+    return warnings;
   }
 
   static int _scoreSectionColumnSamples(List<String> samples) {
@@ -5410,6 +5554,8 @@ Future<Map<String, dynamic>> _validateGenericLedgerFileInIsolate(
     ExcelService.validateGenericLedgerFile(
       payload['bytes'] as Uint8List,
       preferredSheetName: payload['preferredSheetName'] as String?,
+      expectedSection: payload['expectedSection'] as String?,
+      sourceFileName: payload['sourceFileName'] as String? ?? '',
     ),
   );
 }
