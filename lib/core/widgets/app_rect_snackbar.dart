@@ -63,7 +63,7 @@ class AppRectSnackBar {
                     Flexible(
                       child: Text(
                         message,
-                        maxLines: 1,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF0F172A),

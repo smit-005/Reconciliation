@@ -817,7 +817,10 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       _hasCompletedInitialLoad = true;
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar('Recalculation failed: $e');
+      AppLogger.error('RECON RECALC => failed error=$e');
+      _showSnackBar(
+        'Could not refresh reconciliation. Check uploaded files and seller mapping, then try again.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -1991,7 +1994,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         'RECON EXPORT => export_error mode=$mode name="$name" total_export_ms=${totalWatch.elapsedMilliseconds} error=$e\n$stackTrace',
       );
       if (!mounted) return;
-      _showSnackBar('$errorPrefix: $e');
+      _showSnackBar(
+        '$errorPrefix. Check workspace permissions or choose the workspace folder again in Settings.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -2038,7 +2043,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       },
       successMessage: (result) => result.workspaceAvailable
           ? 'Working view export saved to workspace: ${result.filePath}'
-          : 'Workspace unavailable. Working view exported to Downloads: ${result.filePath}',
+          : 'Workspace unavailable. Working view saved to Downloads. Choose the workspace folder again in Settings.',
     );
   }
 
@@ -2077,7 +2082,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       },
       successMessage: (result) => result.workspaceAvailable
           ? 'Section export saved to workspace: ${result.filePath}'
-          : 'Workspace unavailable. Exported to Downloads: ${result.filePath}',
+          : 'Workspace unavailable. Section export saved to Downloads. Choose the workspace folder again in Settings.',
     );
   }
 
@@ -2111,7 +2116,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       },
       successMessage: (result) => result.workspaceAvailable
           ? 'Final export saved to workspace: ${result.filePath}'
-          : 'Workspace unavailable. Final export saved to Downloads: ${result.filePath}',
+          : 'Workspace unavailable. Final export saved to Downloads. Choose the workspace folder again in Settings.',
     );
   }
 
@@ -2145,7 +2150,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       },
       successMessage: (result) => result.workspaceAvailable
           ? 'Detailed audit export saved to workspace: ${result.filePath}'
-          : 'Workspace unavailable. Detailed audit export saved to Downloads: ${result.filePath}',
+          : 'Workspace unavailable. Detailed audit export saved to Downloads. Choose the workspace folder again in Settings.',
     );
   }
 
@@ -2264,14 +2269,18 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
   Future<void> _openExportFile(String filePath) async {
     final opened = await _openResolvedExportPath(filePath);
     if (!mounted || opened) return;
-    _showSnackBar('Could not open export file: $filePath');
+    _showSnackBar(
+      'Could not open the export file. Open the export folder and try again.',
+    );
   }
 
   Future<void> _openExportFolder(String filePath) async {
     final folderPath = p.dirname(filePath);
     final opened = await _openResolvedExportPath(folderPath);
     if (!mounted || opened) return;
-    _showSnackBar('Could not open export folder: $folderPath');
+    _showSnackBar(
+      'Could not open the export folder. Choose the workspace folder again in Settings.',
+    );
   }
 
   Future<bool> _openResolvedExportPath(String targetPath) async {

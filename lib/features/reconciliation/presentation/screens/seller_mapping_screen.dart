@@ -2606,8 +2606,8 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
     final summaryText =
         '${visibleRows.length} visible of $totalReviewSellers review sellers in ${sectionDisplayLabel(_activeSectionCode)}.';
     final reviewText = canContinue
-        ? 'All blocking identities and unmatched 26Q exceptions are reviewed.'
-        : '$dangerousCount dangerous identity ${dangerousCount == 1 ? 'issue remains' : 'issues remain'} and '
+        ? 'All identity review items and unmatched 26Q exceptions are reviewed.'
+        : '$dangerousCount identity review ${dangerousCount == 1 ? 'item remains' : 'items remain'} and '
               '$unreviewedExceptionCount unmatched 26Q ${unreviewedExceptionCount == 1 ? 'exception is' : 'exceptions are'} still unreviewed.';
 
     return SafeArea(

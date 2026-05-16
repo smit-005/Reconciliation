@@ -1,7 +1,7 @@
 # Graph Report - E:\reconciliation_app_codex  (2026-05-17)
 
 ## Corpus Check
-- 216 files · ~158,300 words
+- 216 files · ~158,550 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -182,8 +182,8 @@
 10. `generate_rows_for_section()` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `DecodeAndProcessResponseEnvelopeInternal()` --calls--> `error`  [INFERRED]
-  E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\standard_codec.cc → E:\reconciliation_app_codex\lib\core\utils\app_logger.dart
+- `error` --calls--> `DecodeAndProcessResponseEnvelopeInternal()`  [INFERRED]
+  E:\reconciliation_app_codex\lib\core\utils\app_logger.dart → E:\reconciliation_app_codex\windows\flutter\ephemeral\cpp_client_wrapper\standard_codec.cc
 - `join` --calls--> `parse_sections()`  [INFERRED]
   E:\reconciliation_app_codex\lib\features\reconciliation\services\reconciliation_remark_templates.dart → E:\reconciliation_app_codex\tools\generate_ledger_match_test_datasets.py
 - `RegisterPlugins()` --calls--> `OnCreate()`  [INFERRED]
@@ -1065,11 +1065,11 @@ Nodes (0):
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `package:flutter/material.dart` connect `Community 1` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 8`, `Community 9`, `Community 10`, `Community 12`, `Community 14`, `Community 18`, `Community 20`, `Community 23`?**
-  _High betweenness centrality (0.242) - this node is a cross-community bridge._
+  _High betweenness centrality (0.214) - this node is a cross-community bridge._
 - **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 6` to `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 7`, `Community 9`, `Community 10`, `Community 19`, `Community 22`?**
-  _High betweenness centrality (0.123) - this node is a cross-community bridge._
+  _High betweenness centrality (0.114) - this node is a cross-community bridge._
 - **Why does `package:flutter/foundation.dart` connect `Community 15` to `Community 19`, `Community 4`, `Community 7`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+  _High betweenness centrality (0.110) - this node is a cross-community bridge._
 - **What connects `MainActivity`, `main`, `app/app.dart` to the rest of the system?**
   _1557 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**

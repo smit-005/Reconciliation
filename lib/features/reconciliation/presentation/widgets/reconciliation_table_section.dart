@@ -158,7 +158,8 @@ class _ReconciliationTableSectionState
           child: AppEmptyState(
             icon: Icons.table_rows_rounded,
             title: 'No rows found',
-            message: 'No rows found for selected filters.',
+            message:
+                'No rows match the selected filters. Clear filters or switch to All Sections.',
           ),
         ),
       );

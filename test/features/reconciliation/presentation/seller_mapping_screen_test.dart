@@ -316,7 +316,7 @@ void main() {
       expect(find.text('Unsupported: 194P'), findsOneWidget);
       expect(find.text('Unsupported Vendor'), findsWidgets);
       expect(
-        find.textContaining('1 dangerous identity issue remains'),
+        find.textContaining('1 identity review item remains'),
         findsOneWidget,
       );
     },
@@ -370,7 +370,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(
-      find.textContaining('1 dangerous identity issue remains'),
+      find.textContaining('1 identity review item remains'),
       findsOneWidget,
     );
     expect(find.textContaining('Auto-mapped'), findsNothing);

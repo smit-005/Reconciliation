@@ -80,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showMessage(
         status == WorkspaceStatus.valid
             ? 'Workspace configured successfully'
-            : 'Workspace not found or has been moved',
+            : 'Workspace not found. Choose the workspace folder again in Settings.',
       );
     } catch (_) {
       final status = await workspaceService.getWorkspaceStatus();
@@ -89,7 +89,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         isBusy = false;
         workspaceStatus = status;
       });
-      _showMessage('Failed to configure workspace');
+      _showMessage(
+        'Could not configure workspace. Choose a folder you can access and try again.',
+      );
     }
   }
 
@@ -110,7 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _showMessage(
       status == WorkspaceStatus.valid
           ? 'Workspace is valid'
-          : 'Workspace not found or invalid',
+          : 'Workspace not found. Choose the workspace folder again in Settings.',
     );
   }
 
@@ -125,7 +127,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final opened = await workspaceService.openFolder(path);
     if (!mounted || opened) return;
     setState(() => workspaceStatus = WorkspaceStatus.invalid);
-    _showMessage('Unable to open workspace folder');
+    _showMessage(
+      'Could not open workspace folder. Choose the workspace folder again in Settings.',
+    );
   }
 
   Future<void> _saveDefaultFinancialYear() async {
@@ -542,7 +546,7 @@ class _WorkspaceStatusBanner extends StatelessWidget {
         );
       case WorkspaceStatus.invalid:
         return const _WorkspaceStatusDetails(
-          message: 'Workspace not found or has been moved',
+          message: 'Workspace not found. Choose the folder again in Settings.',
           icon: Icons.error_outline,
           backgroundColor: AppColorScheme.warningSoft,
           borderColor: AppColorScheme.warning,

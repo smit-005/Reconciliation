@@ -279,7 +279,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     if (previewData == null) {
       if (!mounted) return null;
       _showUploadSnackBar(
-        'Could not find valid headers or data in the selected sheet.',
+        'Could not find valid headers or data in the selected sheet. Check sheet selection and column mapping.',
       );
       return null;
     }
@@ -307,7 +307,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     if (previewData == null) {
       if (!mounted) return null;
-      _showUploadSnackBar('Could not build mapping preview for this file');
+      _showUploadSnackBar(
+        'Could not build a mapping preview. Check sheet selection and column mapping.',
+      );
       return null;
     }
 
@@ -331,7 +333,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
 
     if (previewData == null) {
       if (!mounted) return null;
-      _showUploadSnackBar('Could not build mapping preview for this file');
+      _showUploadSnackBar(
+        'Could not build a mapping preview. Check sheet selection and column mapping.',
+      );
       return null;
     }
 
@@ -501,7 +505,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     final normalizedExtension = p.extension(file.name).toLowerCase();
     if (normalizedExtension == '.csv') {
       _showUploadSnackBar(
-        'CSV file selected: ${file.name}. CSV selection is visible now, but the current import parser expects workbook sheets. Please export as .xlsx, .xls, or .xlsm and retry.',
+        'CSV import is not enabled yet. Please export ${file.name} as .xlsx, .xls, or .xlsm and retry.',
       );
     }
 
@@ -764,7 +768,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       if (response.isFailure) {
         _setSectionLoading(sectionCode, false);
         _showUploadSnackBar(
-          'Remap failed for ${file.fileName}: ${response.errorMessage!}',
+          'Could not remap ${file.fileName}. Check sheet selection and column mapping. ${response.errorMessage!}',
         );
         return;
       }
@@ -810,7 +814,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       _showUploadSnackBar('${file.fileName} remapped successfully');
     } catch (e) {
       _setSectionLoading(sectionCode, false);
-      _showUploadSnackBar('Remap failed for ${file.fileName}: $e');
+      AppLogger.warning(
+        'UPLOAD REMAP => failed file=${file.fileName} error=$e',
+      );
+      _showUploadSnackBar(
+        'Could not remap ${file.fileName}. Check sheet selection and column mapping.',
+      );
     }
   }
 
@@ -830,7 +839,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final bytes = pickedFile.bytes;
       if (bytes == null) {
         _setSectionLoading('194Q', false);
-        _showUploadSnackBar('Could not read 194Q source file');
+        _showUploadSnackBar(
+          'Could not read the 194Q source file. Check the workbook and retry.',
+        );
         return;
       }
 
@@ -878,7 +889,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       _setSectionLoading('194Q', false);
-      _showUploadSnackBar('194Q upload error: $e');
+      AppLogger.warning('UPLOAD 194Q => failed error=$e');
+      _showUploadSnackBar(
+        'Could not upload the 194Q source file. Check sheet selection and column mapping.',
+      );
     }
   }
 
@@ -898,7 +912,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final bytes = pickedFile.bytes;
       if (bytes == null) {
         _setSectionLoading(sectionCode, false);
-        _showUploadSnackBar('Could not read $sectionCode source file');
+        _showUploadSnackBar(
+          'Could not read the $sectionCode source file. Check the workbook and retry.',
+        );
         return;
       }
 
@@ -949,7 +965,12 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       _showUploadSnackBar('${pickedFile.name} uploaded');
     } catch (e) {
       _setSectionLoading(sectionCode, false);
-      _showUploadSnackBar('$sectionCode upload error: $e');
+      AppLogger.warning(
+        'UPLOAD SECTION => failed section=$sectionCode error=$e',
+      );
+      _showUploadSnackBar(
+        'Could not upload the $sectionCode source file. Check sheet selection and column mapping.',
+      );
     }
   }
 
@@ -982,7 +1003,9 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       final bytes = pickedFile.bytes;
       if (bytes == null) {
         setState(() => isLoadingTds = false);
-        _showUploadSnackBar('Could not read 26Q file');
+        _showUploadSnackBar(
+          'Could not read the 26Q file. Check the workbook and retry.',
+        );
         return;
       }
       AppLogger.debug(
@@ -1097,7 +1120,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoadingTds = false);
-      _showUploadSnackBar('26Q upload error: $e');
+      AppLogger.warning('UPLOAD 26Q => failed error=$e');
+      _showUploadSnackBar(
+        'Could not upload the 26Q file. Check sheet selection and column mapping.',
+      );
     }
   }
 
@@ -1124,7 +1150,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
       if (!mounted) return;
       if (response.isFailure) {
         setState(() => isLoadingTds = false);
-        _showUploadSnackBar(response.errorMessage ?? '26Q remap failed');
+        _showUploadSnackBar(
+          response.errorMessage ??
+              'Could not remap the 26Q file. Check sheet selection and column mapping.',
+        );
         return;
       }
 
@@ -1160,7 +1189,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoadingTds = false);
-      _showUploadSnackBar('26Q remap failed: $e');
+      AppLogger.warning('UPLOAD 26Q REMAP => failed error=$e');
+      _showUploadSnackBar(
+        'Could not remap the 26Q file. Check sheet selection and column mapping.',
+      );
     }
   }
 
@@ -1344,7 +1376,10 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingSellerMapping = false);
-        _showUploadSnackBar('Failed to open seller mapping: $e');
+        AppLogger.warning('SELLER MAPPING OPEN => failed error=$e');
+        _showUploadSnackBar(
+          'Could not open seller mapping. Check uploaded files and try again.',
+        );
       }
     }
   }
@@ -2244,7 +2279,7 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
             ],
           ),
           child: const Text(
-            'Select one or more section buckets to start building the source-file workspace.',
+            'Select one or more TDS sections to start building the source-file workspace.',
             style: TextStyle(color: Color(0xFF64748B), height: 1.5),
           ),
         ),

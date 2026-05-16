@@ -251,7 +251,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       return const _PanelEmptyHint(
         icon: Icons.search_off_rounded,
         title: 'No review sellers found',
-        message: 'Try another search term or filter.',
+        message:
+            'Clear search, switch status filters, or check another section.',
       );
     }
 
@@ -354,7 +355,7 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
         icon: Icons.search_off_rounded,
         title: 'No ledger candidates found',
         message:
-            'Try searching another ledger seller name, PAN, GST, or section.',
+            'Try another seller name, PAN, GST, or clear search to show same-section ledger sellers.',
       );
     }
 
@@ -374,7 +375,8 @@ class _SellerMappingTwoPanelBodyState extends State<SellerMappingTwoPanelBody> {
       return const _PanelEmptyHint(
         icon: Icons.search_off_rounded,
         title: 'No ledger candidates found',
-        message: 'Use search or mark this 26Q seller as Missing in Books.',
+        message:
+            'Search same-section ledger sellers, or mark this 26Q seller as Missing in Books after review.',
       );
     }
 

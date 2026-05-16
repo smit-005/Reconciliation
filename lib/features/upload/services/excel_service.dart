@@ -3848,7 +3848,7 @@ class ExcelService {
 
     if (explicitSections.length > 1) {
       addWarning(
-        'This ledger appears to contain multiple TDS sections: ${explicitSections.join(', ')}. LedgerMatch will not split mixed ledgers yet; review before confirming.',
+        'This ledger appears to contain multiple TDS sections: ${explicitSections.join(', ')}. Upload one section at a time for reliable matching.',
       );
     }
 

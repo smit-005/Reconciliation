@@ -495,7 +495,7 @@ class _ColumnMappingScreenState extends State<ColumnMappingScreen> {
           const SizedBox(height: 6),
           Text(
             _isPurchaseFile
-                ? 'Required: Party Name, Date, Amount, and PAN/GST.'
+                ? 'Required: Party Name, Bill Date/EOM, and Basic/Bill Amount. PAN/GST is recommended for seller review.'
                 : _isGenericLedgerFile
                 ? 'Required: Date, Party Name, and Amount. PAN/GST is optional. Closing Balance is not allowed.'
                 : 'Required: Party Name, PAN, Section, Amount Paid, TDS Amount, and Date.',

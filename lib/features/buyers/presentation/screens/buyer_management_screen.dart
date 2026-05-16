@@ -311,7 +311,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
     );
     if (!mounted || opened) return;
 
-    _showSnackBar('Buyer folder was not found. Check workspace settings.');
+    _showSnackBar(
+      'Buyer folder was not found. Choose the workspace folder again in Settings.',
+    );
   }
 
   Future<void> addFinancialYear(Buyer buyer) async {
@@ -379,7 +381,9 @@ class _BuyerManagementScreenState extends State<BuyerManagementScreen> {
   Future<void> _openWorkspacePath(String path) async {
     final opened = await workspaceService.openPath(path);
     if (!mounted || opened) return;
-    _showSnackBar('Unable to open workspace item');
+    _showSnackBar(
+      'Could not open workspace item. Choose the workspace folder again in Settings.',
+    );
   }
 
   Future<void> _copyWorkspacePath(String path) async {
