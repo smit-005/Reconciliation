@@ -1,10 +1,14 @@
+export 'app_compact_select_field.dart';
 export 'app_compact_metric_card.dart';
 export 'app_empty_state.dart';
 export 'app_file_summary_card.dart';
+export 'app_filter_bar.dart';
 export 'app_info_chip.dart';
 export 'app_loading.dart';
 export 'app_page_header.dart';
 export 'app_page_scaffold.dart';
+export 'app_search_autocomplete_field.dart';
+export 'app_search_field.dart';
 export 'app_section_card.dart';
 export 'app_section_selector.dart';
 export 'app_status_badge.dart';
