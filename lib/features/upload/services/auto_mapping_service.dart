@@ -80,11 +80,13 @@ class AutoMappingService {
     required List<String> purchaseParties,
     required List<String> tdsParties,
     double threshold = 0.80,
+    bool exactOnly = false,
   }) async {
     final payload = <String, Object>{
       'purchaseParties': List<String>.from(purchaseParties),
       'tdsParties': List<String>.from(tdsParties),
       'threshold': threshold,
+      'exactOnly': exactOnly,
     };
 
     final result = await compute(_autoMapPartiesIsolateEntry, payload);
@@ -102,6 +104,7 @@ class AutoMappingService {
     required List<String> purchaseParties,
     required List<String> tdsParties,
     double threshold = 0.80,
+    bool exactOnly = false,
   }) {
     final normalizationWatch = Stopwatch()..start();
     final uniquePurchase =
@@ -178,6 +181,20 @@ class AutoMappingService {
           ),
         );
         candidateCountAfter += exactMatches.length;
+        continue;
+      }
+
+      if (exactOnly) {
+        results.add(
+          AutoMappingResult(
+            purchaseParty: purchaseProfile.raw,
+            matchedTdsParty: null,
+            score: 0.0,
+            isMatched: false,
+            normalizedPurchaseParty: purchaseProfile.normalized,
+            normalizedMatchedTdsParty: '',
+          ),
+        );
         continue;
       }
 
@@ -466,11 +483,13 @@ Map<String, Object> _autoMapPartiesIsolateEntry(Map<String, Object> payload) {
       .whereType<String>()
       .toList();
   final threshold = (payload['threshold'] as num?)?.toDouble() ?? 0.80;
+  final exactOnly = payload['exactOnly'] == true;
 
   final result = AutoMappingService.autoMapParties(
     purchaseParties: purchaseParties,
     tdsParties: tdsParties,
     threshold: threshold,
+    exactOnly: exactOnly,
   );
 
   return <String, Object>{

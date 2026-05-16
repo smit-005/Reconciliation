@@ -534,6 +534,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
           purchaseParties: purchaseNames,
           tdsParties: tdsNames,
           threshold: 0.80,
+          exactOnly: true,
         );
         if (!mounted) return;
         isolateWatch.stop();
