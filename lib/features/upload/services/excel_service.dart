@@ -56,6 +56,10 @@ class ImportFormatProfileMatch {
 
 class ExcelService {
   static const bool _enableVerboseImportLogs = false;
+  static const int _defaultHeaderScanRowLimit = 20;
+  static const int _defaultStructuredHeaderScanRowLimit = 30;
+  static const int _selectedSheetHeaderScanRowLimit = 80;
+  static const int _moderate26QHelperHeaderScanRowLimit = 25;
   static final Map<String, int> _forcedNumericDateAvoidanceByField =
       <String, int>{};
   static final Map<
@@ -2290,6 +2294,14 @@ class ExcelService {
     for (final entry in decoder.tables.entries) {
       final sheetName = entry.key;
       final table = entry.value;
+      final isExplicitlySelectedSheet =
+          preferredSheetName != null && sheetName == preferredSheetName;
+      final headerScanLimit = isExplicitlySelectedSheet
+          ? _selectedSheetHeaderScanRowLimit
+          : _defaultHeaderScanRowLimit;
+      final structuredHeaderScanLimit = isExplicitlySelectedSheet
+          ? _selectedSheetHeaderScanRowLimit
+          : _defaultStructuredHeaderScanRowLimit;
 
       if (table.rows.isEmpty) continue;
       if (preferredSheetName != null && sheetName != preferredSheetName) {
@@ -2311,6 +2323,7 @@ class ExcelService {
         final ledgerCandidate = _detectGenericLedgerHeaderCandidate(
           table.rows,
           sheetName: sheetName,
+          scanLimit: structuredHeaderScanLimit,
         );
         if (ledgerCandidate != null &&
             (best == null || ledgerCandidate.score > best.score)) {
@@ -2330,6 +2343,7 @@ class ExcelService {
           table.rows,
           type: ExcelImportType.purchase,
           fileLabel: sheetName,
+          scanLimit: structuredHeaderScanLimit,
         );
         if (purchaseCandidates.isNotEmpty) {
           final purchaseCandidate = purchaseCandidates.first;
@@ -2349,7 +2363,7 @@ class ExcelService {
         continue;
       }
 
-      for (int i = 0; i < table.rows.length && i < 20; i++) {
+      for (int i = 0; i < table.rows.length && i < headerScanLimit; i++) {
         final row = table.rows[i];
 
         int purchaseScore = _scoreHeaderRow(
@@ -2748,11 +2762,14 @@ class ExcelService {
     return rows[_findLikely26QHeaderRowIndex(rows)];
   }
 
-  static int _findLikely26QHeaderRowIndex(List<List<dynamic>> rows) {
+  static int _findLikely26QHeaderRowIndex(
+    List<List<dynamic>> rows, {
+    int scanLimit = _moderate26QHelperHeaderScanRowLimit,
+  }) {
     var bestIndex = 0;
     var bestScore = -1;
 
-    for (int i = 0; i < rows.length && i < 10; i++) {
+    for (int i = 0; i < rows.length && i < scanLimit; i++) {
       final score = _scoreHeaderRow(rows[i], type: ExcelImportType.tds26q);
       if (score > bestScore) {
         bestScore = score;
@@ -2768,11 +2785,12 @@ class ExcelService {
     List<List<dynamic>> rows, {
     required ExcelImportType type,
     required String fileLabel,
+    int scanLimit = _defaultStructuredHeaderScanRowLimit,
   }) {
     final candidates =
         <({int headerRowIndex, int score, List<String> matchedFields})>[];
 
-    for (int i = 0; i < rows.length && i < 30; i++) {
+    for (int i = 0; i < rows.length && i < scanLimit; i++) {
       final evaluation = _evaluateStructuredHeaderRow(rows[i], type: type);
       if (evaluation == null) {
         continue;
@@ -5407,11 +5425,13 @@ class ExcelService {
   _detectGenericLedgerHeaderCandidate(
     List<List<dynamic>> rows, {
     required String sheetName,
+    int scanLimit = _defaultStructuredHeaderScanRowLimit,
   }) {
     final candidates = _collectStructuredHeaderCandidates(
       rows,
       type: ExcelImportType.genericLedger,
       fileLabel: sheetName,
+      scanLimit: scanLimit,
     );
     if (candidates.isEmpty) {
       return null;

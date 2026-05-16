@@ -647,6 +647,114 @@ void main() {
       },
     );
 
+    test('generic ledger selected sheet detects header at row 45', () async {
+      final bytes = _buildWorkbook({
+        'Ledger': [
+          ..._decorativePrelude(44),
+          ['Date', 'Party Name', 'Amount'],
+          ['2024-04-02', 'Selected Vendor', 222],
+        ],
+      });
+
+      final response = await ImportUploadFlowService.prepareGenericLedgerImport(
+        buyerId: 'buyer-1',
+        sectionCode: '194C',
+        bytes: bytes,
+        fileName: 'deep-ledger.xlsx',
+        preferredSheetName: 'Ledger',
+        openColumnMapping: _unexpectedColumnMapping,
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(response.data!.sheetName, 'Ledger');
+      expect(response.data!.headerRowIndex, 44);
+      expect(response.data!.parsedRows.single.partyName, 'Selected Vendor');
+    });
+
+    test('purchase selected sheet skips decorative prelude', () async {
+      final bytes = _buildWorkbook({
+        'Purchase': [
+          ..._decorativePrelude(52),
+          ['Bill Date', 'Bill No', 'Party Name', 'Basic Amount'],
+          ['2024-04-02', 'INV-1', 'Selected Vendor', 222],
+        ],
+      });
+
+      final response = await ImportUploadFlowService.preparePurchaseImport(
+        buyerId: 'buyer-1',
+        bytes: bytes,
+        fileName: 'deep-purchase.xlsx',
+        preferredSheetName: 'Purchase',
+        openColumnMapping: _unexpectedColumnMapping,
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(response.data!.sheetName, 'Purchase');
+      expect(response.data!.headerRowIndex, 52);
+      expect(response.data!.parsedRows.single.partyName, 'Selected Vendor');
+    });
+
+    test('selected noise-only workbook still fails safely', () async {
+      final bytes = _buildWorkbook({'Ledger': _decorativePrelude(70)});
+      var mappingOpened = false;
+
+      final response = await ImportUploadFlowService.prepareGenericLedgerImport(
+        buyerId: 'buyer-1',
+        sectionCode: '194C',
+        bytes: bytes,
+        fileName: 'noise-only.xlsx',
+        preferredSheetName: 'Ledger',
+        openColumnMapping:
+            ({
+              required bytes,
+              required fileName,
+              required fileType,
+              required validation,
+              sessionCache,
+              preferredSheetName,
+              preferredHeaderRowIndex,
+              preferredHeadersTrusted,
+              preferredColumnMapping,
+            }) async {
+              mappingOpened = true;
+              return null;
+            },
+      );
+
+      expect(response.isFailure, isTrue);
+      expect(mappingOpened, isFalse);
+    });
+
+    test('26Q selected sheet detects delayed header', () async {
+      final bytes = _buildWorkbook({
+        '26Q': [
+          ..._decorativePrelude(24),
+          ['Date', 'Deductee Name', 'PAN', 'Amount Paid', 'TDS', 'Section'],
+          ['Apr-24', 'Selected Vendor', 'ABCDE1234F', 2220, 222, '194C'],
+        ],
+      });
+      final validation = await ImportUploadFlowService.validateTds26QImport(
+        bytes,
+        preferredSheetName: '26Q',
+      );
+
+      expect(validation.isValid, isTrue);
+      expect(validation.headerRowIndex, 24);
+
+      final response = await ImportUploadFlowService.prepareTds26QImport(
+        bytes: bytes,
+        fileName: 'deep-26q.xlsx',
+        validation: validation,
+        preferredSheetName: '26Q',
+        openColumnMapping: _unexpectedColumnMapping,
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(response.data!.sheetName, '26Q');
+      expect(response.data!.headerRowIndex, 24);
+      expect(response.data!.parsedRows.single.deducteeName, 'Selected Vendor');
+    });
+
     test('26Q safe auto-map is auto-confirmed', () async {
       final bytes = _buildWorkbook({
         '26Q': const [
@@ -1151,6 +1259,21 @@ Uint8List _buildWorkbook(Map<String, List<List<Object?>>> sheets) {
   } finally {
     workbook.dispose();
   }
+}
+
+List<List<Object?>> _decorativePrelude(int rowCount) {
+  return List<List<Object?>>.generate(rowCount, (index) {
+    if (index % 7 == 0) {
+      return const [null, null, null];
+    }
+    if (index % 5 == 0) {
+      return ['Address block line ${index + 1}', null, null];
+    }
+    if (index % 3 == 0) {
+      return ['Report metadata ${index + 1}', null, null];
+    }
+    return ['Decorative title row ${index + 1}', null, null];
+  });
 }
 
 Future<ColumnMappingResult?> _unexpectedColumnMapping({

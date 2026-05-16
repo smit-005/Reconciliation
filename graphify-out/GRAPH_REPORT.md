@@ -1,7 +1,7 @@
 # Graph Report - E:\reconciliation_app_codex  (2026-05-17)
 
 ## Corpus Check
-- 215 files · ~157,324 words
+- 215 files · ~157,721 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -1065,11 +1065,11 @@ Nodes (0):
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `package:flutter/material.dart` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 5`, `Community 6`, `Community 7`, `Community 10`, `Community 11`, `Community 12`, `Community 16`, `Community 19`, `Community 23`?**
-  _High betweenness centrality (0.218) - this node is a cross-community bridge._
+  _High betweenness centrality (0.221) - this node is a cross-community bridge._
 - **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 4` to `Community 2`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 16`, `Community 17`, `Community 22`?**
-  _High betweenness centrality (0.107) - this node is a cross-community bridge._
+  _High betweenness centrality (0.126) - this node is a cross-community bridge._
 - **Why does `package:reconciliation_app/core/config/tds_section_catalog.dart` connect `Community 18` to `Community 2`, `Community 4`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 22`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
 - **What connects `MainActivity`, `main`, `app/app.dart` to the rest of the system?**
   _1549 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
