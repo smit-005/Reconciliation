@@ -326,7 +326,9 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         widget.tdsRows
             .map(
               (row) =>
-                  '${row.deducteeName.trim().toUpperCase()}|${normalizePan(row.panNumber)}',
+                  '${row.deducteeName.trim().toUpperCase()}|'
+                  '${normalizeSellerMappingSectionCode(row.section)}|'
+                  '${normalizePan(row.panNumber)}',
             )
             .toList()
           ..sort();
@@ -347,49 +349,44 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
       return;
     }
 
-    final exactPanSets = <String, Set<String>>{};
-    final normalizedPanSets = <String, Set<String>>{};
+    final candidates = widget.tdsRows.map(
+      (row) => (
+        sellerName: row.deducteeName,
+        panNumber: row.panNumber,
+        sectionCode: row.section,
+      ),
+    );
 
-    for (final row in widget.tdsRows) {
-      final pan = normalizePan(row.panNumber);
-      if (pan.isEmpty) continue;
-
-      final exactName = row.deducteeName.trim().toUpperCase();
-      final normalizedName = _normalizeAlias(row.deducteeName);
-
-      if (exactName.isNotEmpty) {
-        exactPanSets.putIfAbsent(exactName, () => <String>{}).add(pan);
-      }
-      if (normalizedName.isNotEmpty) {
-        normalizedPanSets
-            .putIfAbsent(normalizedName, () => <String>{})
-            .add(pan);
-      }
-    }
-
-    _exactTdsPanLookup = {
-      for (final entry in exactPanSets.entries)
-        if (entry.value.length == 1) entry.key: entry.value.first,
-    };
-    _normalizedTdsPanLookup = {
-      for (final entry in normalizedPanSets.entries)
-        if (entry.value.length == 1) entry.key: entry.value.first,
-    };
+    _exactTdsPanLookup = buildSectionAwarePanPropagationLookup(
+      candidates: candidates,
+      normalizeSellerName: false,
+    );
+    _normalizedTdsPanLookup = buildSectionAwarePanPropagationLookup(
+      candidates: candidates,
+      normalizeSellerName: true,
+    );
     _tdsPanLookupCacheKey = nextCacheKey;
   }
 
-  Set<String> _resolveTargetPans(String mappedName) {
+  Set<String> _resolveTargetPans(String mappedName, String sectionCode) {
     _ensureTdsPanLookups();
     final pans = <String>{};
-    final exactName = mappedName.trim().toUpperCase();
-    final normalizedMappedName = _normalizeAlias(mappedName);
 
-    final exactPan = _exactTdsPanLookup[exactName];
+    final exactPan =
+        _exactTdsPanLookup[buildPanPropagationLookupKey(
+          sellerName: mappedName,
+          sectionCode: sectionCode,
+        )];
     if (exactPan != null && exactPan.isNotEmpty) {
       pans.add(exactPan);
     }
 
-    final normalizedPan = _normalizedTdsPanLookup[normalizedMappedName];
+    final normalizedPan =
+        _normalizedTdsPanLookup[buildPanPropagationLookupKey(
+          sellerName: mappedName,
+          sectionCode: sectionCode,
+          normalizeSellerName: true,
+        )];
     if (normalizedPan != null && normalizedPan.isNotEmpty) {
       pans.add(normalizedPan);
     }
@@ -397,8 +394,8 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
     return pans;
   }
 
-  String _resolveSingleTargetPan(String mappedName) {
-    final pans = _resolveTargetPans(mappedName);
+  String _resolveSingleTargetPan(String mappedName, String sectionCode) {
+    final pans = _resolveTargetPans(mappedName, sectionCode);
     return pans.length == 1 ? pans.first : '';
   }
 
@@ -425,7 +422,7 @@ class _ReconciliationScreenState extends State<ReconciliationScreen> {
         return row;
       }
 
-      final propagatedPan = _resolveSingleTargetPan(mappedName);
+      final propagatedPan = _resolveSingleTargetPan(mappedName, sectionCode);
       if (propagatedPan.isEmpty) {
         return row;
       }

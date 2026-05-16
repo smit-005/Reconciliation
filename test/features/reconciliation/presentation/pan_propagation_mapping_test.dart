@@ -52,4 +52,116 @@ void main() {
       expect(mapping.keys, isNot(contains('DEVOILINDUSTRIES')));
     });
   });
+
+  group('section-aware PAN propagation lookup', () {
+    test('does not resolve PAN from another section for same seller name', () {
+      final exactLookup = buildSectionAwarePanPropagationLookup(
+        candidates: const [
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'AAAAA1111A',
+            sectionCode: '194C',
+          ),
+        ],
+        normalizeSellerName: false,
+      );
+      final normalizedLookup = buildSectionAwarePanPropagationLookup(
+        candidates: const [
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'AAAAA1111A',
+            sectionCode: '194C',
+          ),
+        ],
+        normalizeSellerName: true,
+      );
+
+      final pan = resolveSectionAwarePanPropagation(
+        exactTdsPanLookup: exactLookup,
+        normalizedTdsPanLookup: normalizedLookup,
+        mappedName: 'Shared Vendor',
+        sectionCode: '194J_B',
+      );
+
+      expect(pan, isEmpty);
+    });
+
+    test('resolves PAN within the same section for same seller name', () {
+      final exactLookup = buildSectionAwarePanPropagationLookup(
+        candidates: const [
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'AAAAA1111A',
+            sectionCode: '194C',
+          ),
+        ],
+        normalizeSellerName: false,
+      );
+      final normalizedLookup = buildSectionAwarePanPropagationLookup(
+        candidates: const [
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'AAAAA1111A',
+            sectionCode: '194C',
+          ),
+        ],
+        normalizeSellerName: true,
+      );
+
+      final pan = resolveSectionAwarePanPropagation(
+        exactTdsPanLookup: exactLookup,
+        normalizedTdsPanLookup: normalizedLookup,
+        mappedName: 'Shared Vendor',
+        sectionCode: '194C',
+      );
+
+      expect(pan, 'AAAAA1111A');
+      expect(exactLookup, containsPair('SHARED VENDOR|194C', 'AAAAA1111A'));
+      expect(normalizedLookup, containsPair('SHAREDVENDOR|194C', 'AAAAA1111A'));
+    });
+
+    test('does not resolve PAN when same section has multiple PANs', () {
+      final exactLookup = buildSectionAwarePanPropagationLookup(
+        candidates: const [
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'AAAAA1111A',
+            sectionCode: '194C',
+          ),
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'BBBBB2222B',
+            sectionCode: '194C',
+          ),
+        ],
+        normalizeSellerName: false,
+      );
+      final normalizedLookup = buildSectionAwarePanPropagationLookup(
+        candidates: const [
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'AAAAA1111A',
+            sectionCode: '194C',
+          ),
+          (
+            sellerName: 'Shared Vendor',
+            panNumber: 'BBBBB2222B',
+            sectionCode: '194C',
+          ),
+        ],
+        normalizeSellerName: true,
+      );
+
+      final pan = resolveSectionAwarePanPropagation(
+        exactTdsPanLookup: exactLookup,
+        normalizedTdsPanLookup: normalizedLookup,
+        mappedName: 'Shared Vendor',
+        sectionCode: '194C',
+      );
+
+      expect(pan, isEmpty);
+      expect(exactLookup, isNot(contains('SHARED VENDOR|194C')));
+      expect(normalizedLookup, isNot(contains('SHAREDVENDOR|194C')));
+    });
+  });
 }

@@ -1163,7 +1163,8 @@ class CalculationService {
         row.buyerPan,
         () => normalizePan(row.buyerPan),
       );
-      final key = '$normalizedBuyerPan|${row.resolvedSellerId}';
+      final key =
+          '$normalizedBuyerPan|${row.resolvedSellerId}|${row.section.trim()}|${row.financialYear.trim()}';
       grouped.putIfAbsent(key, () => <ReconciliationRow>[]).add(row);
     }
 

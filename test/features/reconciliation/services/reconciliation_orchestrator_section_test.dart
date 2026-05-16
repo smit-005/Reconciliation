@@ -155,6 +155,119 @@ void main() {
       },
     );
 
+    test(
+      'same seller and FY does not carry timing balance across sections',
+      () async {
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: 'TIMSE1234A',
+          sourceRows: [
+            _sourceRow(section: '194C', amount: 100000),
+            _sourceRow(section: '194J_B', amount: 100000, month: 'May-2024'),
+          ],
+          tdsRows: [
+            _tdsRow(section: '194C', deductedAmount: 100000, tds: 1200),
+            _tdsRow(
+              section: '194J_B',
+              deductedAmount: 100000,
+              tds: 9800,
+              month: 'May-2024',
+            ),
+          ],
+        );
+
+        final bySection = {for (final row in rows.rows) row.section: row};
+
+        expect(bySection['194C']!.openingTimingBalance, 0);
+        expect(bySection['194C']!.monthTdsDifference, 200);
+        expect(bySection['194C']!.closingTimingBalance, 200);
+
+        expect(bySection['194J_B']!.openingTimingBalance, 0);
+        expect(bySection['194J_B']!.monthTdsDifference, -200);
+        expect(bySection['194J_B']!.closingTimingBalance, -200);
+      },
+    );
+
+    test(
+      'same seller and section carries timing balance to next month',
+      () async {
+        final rows = await CalculationService.reconcileSectionWise(
+          buyerName: 'Test Buyer',
+          buyerPan: 'TIMSE2345B',
+          sourceRows: [
+            _sourceRow(section: '194C', amount: 100000),
+            _sourceRow(section: '194C', amount: 100000, month: 'May-2024'),
+          ],
+          tdsRows: [
+            _tdsRow(section: '194C', deductedAmount: 100000, tds: 1200),
+            _tdsRow(
+              section: '194C',
+              deductedAmount: 100000,
+              tds: 800,
+              month: 'May-2024',
+            ),
+          ],
+        );
+
+        final byMonth = {for (final row in rows.rows) row.month: row};
+
+        expect(byMonth['Apr-2024']!.openingTimingBalance, 0);
+        expect(byMonth['Apr-2024']!.monthTdsDifference, 200);
+        expect(byMonth['Apr-2024']!.closingTimingBalance, 200);
+
+        expect(byMonth['May-2024']!.openingTimingBalance, 200);
+        expect(byMonth['May-2024']!.monthTdsDifference, -200);
+        expect(byMonth['May-2024']!.closingTimingBalance, 0);
+      },
+    );
+
+    test('same seller and section resets timing balance by FY', () async {
+      final rows = await CalculationService.reconcileSectionWise(
+        buyerName: 'Test Buyer',
+        buyerPan: 'TIMSE3456C',
+        sourceRows: [
+          _sourceRow(
+            section: '194C',
+            amount: 100000,
+            month: 'Apr-2024',
+            financialYear: '2024-25',
+          ),
+          _sourceRow(
+            section: '194C',
+            amount: 100000,
+            month: 'Apr-2025',
+            financialYear: '2025-26',
+          ),
+        ],
+        tdsRows: [
+          _tdsRow(
+            section: '194C',
+            deductedAmount: 100000,
+            tds: 1200,
+            month: 'Apr-2024',
+            financialYear: '2024-25',
+          ),
+          _tdsRow(
+            section: '194C',
+            deductedAmount: 100000,
+            tds: 800,
+            month: 'Apr-2025',
+            financialYear: '2025-26',
+          ),
+        ],
+      );
+
+      final byFy = {for (final row in rows.rows) row.financialYear: row};
+
+      expect(byFy['2024-25']!.openingTimingBalance, 0);
+      expect(byFy['2024-25']!.monthTdsDifference, 200);
+      expect(byFy['2024-25']!.closingTimingBalance, 200);
+
+      expect(byFy['2025-26']!.openingTimingBalance, 0);
+      expect(byFy['2025-26']!.monthTdsDifference, -200);
+      expect(byFy['2025-26']!.closingTimingBalance, -200);
+    });
+
     test('194I threshold scope resets per month', () async {
       final rows = await CalculationService.reconcileSectionWise(
         buyerName: 'Test Buyer',
@@ -423,6 +536,7 @@ NormalizedTransactionRow _sourceRow({
   String partyName = 'Acme Traders',
   String panNumber = 'ABCPD1234F',
   String month = 'Apr-2024',
+  String financialYear = '2024-25',
   String sourceLedgerFileId = '',
   String sourceLedgerFileName = '',
 }) {
@@ -432,7 +546,7 @@ NormalizedTransactionRow _sourceRow({
     sourceLedgerFileName: sourceLedgerFileName,
     transactionDateRaw: '2024-04-15',
     month: month,
-    financialYear: '2024-25',
+    financialYear: financialYear,
     partyName: partyName,
     panNumber: panNumber,
     gstNo: '',
@@ -453,16 +567,18 @@ Tds26QRow _tdsRow({
   required double tds,
   String deducteeName = 'Acme Traders',
   String panNumber = 'ABCPD1234F',
+  String month = 'Apr-2024',
+  String financialYear = '2024-25',
 }) {
   return Tds26QRow(
-    month: 'Apr-2024',
-    financialYear: '2024-25',
+    month: month,
+    financialYear: financialYear,
     deducteeName: deducteeName,
     panNumber: panNumber,
     deductedAmount: deductedAmount,
     tds: tds,
     section: section,
-    normalizedMonth: 'Apr-2024',
+    normalizedMonth: month,
     normalizedSection: section,
   );
 }
