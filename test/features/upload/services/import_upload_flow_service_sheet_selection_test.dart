@@ -338,6 +338,314 @@ void main() {
       },
     );
 
+    test(
+      'saved purchase sheet-name profile with reordered columns requires review',
+      () async {
+        await ImportProfileService.saveProfile(
+          ImportFormatProfile(
+            buyerId: 'buyer-1',
+            fileType: ImportMappingService.purchaseFileType,
+            sheetNamePattern: 'purchase',
+            headerRowIndex: 0,
+            headersTrusted: true,
+            columnMapping: const {
+              'date': 'COL_0',
+              'party_name': 'COL_1',
+              'basic_amount': 'COL_2',
+            },
+            sampleSignature: ExcelService.buildSampleSignature(
+              'Purchase',
+              const ['Bill Date', 'Party Name', 'Basic Amount'],
+            ),
+            lastUsedAt: DateTime(2026, 5, 16).toIso8601String(),
+          ),
+        );
+        final bytes = _buildWorkbook({
+          'Purchase': const [
+            ['Party Name', 'Basic Amount', 'Bill Date'],
+            ['Selected Vendor', 222, '2024-04-02'],
+          ],
+        });
+        var mappingOpened = false;
+
+        final response = await ImportUploadFlowService.preparePurchaseImport(
+          buyerId: 'buyer-1',
+          bytes: bytes,
+          fileName: 'reordered-purchase.xlsx',
+          preferredSheetName: 'Purchase',
+          openColumnMapping:
+              ({
+                required bytes,
+                required fileName,
+                required fileType,
+                required validation,
+                sessionCache,
+                preferredSheetName,
+                preferredHeaderRowIndex,
+                preferredHeadersTrusted,
+                preferredColumnMapping,
+              }) async {
+                mappingOpened = true;
+                expect(preferredColumnMapping, {
+                  'date': 'COL_0',
+                  'party_name': 'COL_1',
+                  'basic_amount': 'COL_2',
+                });
+                return const ColumnMappingResult(
+                  fileType: ImportMappingService.purchaseFileType,
+                  sheetName: 'Purchase',
+                  headerRowIndex: 0,
+                  headersTrusted: true,
+                  saveProfile: false,
+                  rawToCanonicalMapping: {
+                    'COL_0': 'party_name',
+                    'COL_1': 'basic_amount',
+                    'COL_2': 'date',
+                  },
+                  columnMapping: {
+                    'party_name': 'COL_0',
+                    'basic_amount': 'COL_1',
+                    'date': 'COL_2',
+                  },
+                );
+              },
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(mappingOpened, isTrue);
+        expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+        expect(response.data!.wasAutoConfirmed, isFalse);
+        expect(response.data!.wasManuallyMapped, isTrue);
+        expect(response.data!.parsedRows.single.partyName, 'Selected Vendor');
+      },
+    );
+
+    test('exact purchase saved profile still auto-confirms', () async {
+      const headers = ['Bill Date', 'Party Name', 'Basic Amount'];
+      final sampleSignature = ExcelService.buildSampleSignature(
+        'Purchase',
+        headers,
+      );
+      await ImportProfileService.saveProfile(
+        ImportFormatProfile(
+          buyerId: 'buyer-1',
+          fileType: ImportMappingService.purchaseFileType,
+          sheetNamePattern: 'purchase',
+          headerRowIndex: 0,
+          headersTrusted: true,
+          columnMapping: const {
+            'date': 'Bill Date',
+            'party_name': 'Party Name',
+            'basic_amount': 'Basic Amount',
+          },
+          sampleSignature: sampleSignature,
+          lastUsedAt: DateTime(2026, 5, 16).toIso8601String(),
+        ),
+      );
+      final bytes = _buildWorkbook({
+        'Purchase': const [
+          headers,
+          ['2024-04-02', 'Selected Vendor', 222],
+        ],
+      });
+      var mappingOpened = false;
+
+      final response = await ImportUploadFlowService.preparePurchaseImport(
+        buyerId: 'buyer-1',
+        bytes: bytes,
+        fileName: 'exact-purchase.xlsx',
+        preferredSheetName: 'Purchase',
+        openColumnMapping:
+            ({
+              required bytes,
+              required fileName,
+              required fileType,
+              required validation,
+              sessionCache,
+              preferredSheetName,
+              preferredHeaderRowIndex,
+              preferredHeadersTrusted,
+              preferredColumnMapping,
+            }) async {
+              mappingOpened = true;
+              return null;
+            },
+      );
+
+      expect(response.isSuccess, isTrue);
+      expect(mappingOpened, isFalse);
+      expect(response.data!.usedSavedProfile, isTrue);
+      expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+      expect(response.data!.wasAutoConfirmed, isTrue);
+      expect(response.data!.parsedRows.single.partyName, 'Selected Vendor');
+    });
+
+    test(
+      'newer purchase sheet-name profile does not beat older exact profile',
+      () async {
+        const headers = ['Bill Date', 'Party Name', 'Basic Amount'];
+        await ImportProfileService.saveProfile(
+          ImportFormatProfile(
+            buyerId: 'buyer-1',
+            fileType: ImportMappingService.purchaseFileType,
+            sheetNamePattern: 'purchase',
+            headerRowIndex: 0,
+            headersTrusted: true,
+            columnMapping: const {
+              'date': 'COL_0',
+              'party_name': 'COL_1',
+              'basic_amount': 'COL_2',
+            },
+            sampleSignature: ExcelService.buildSampleSignature(
+              'Purchase',
+              const ['Party Name', 'Basic Amount', 'Bill Date'],
+            ),
+            lastUsedAt: DateTime(2026, 5, 17).toIso8601String(),
+          ),
+        );
+        await ImportProfileService.saveProfile(
+          ImportFormatProfile(
+            buyerId: 'buyer-1',
+            fileType: ImportMappingService.purchaseFileType,
+            sheetNamePattern: 'purchase',
+            headerRowIndex: 0,
+            headersTrusted: true,
+            columnMapping: const {
+              'date': 'Bill Date',
+              'party_name': 'Party Name',
+              'basic_amount': 'Basic Amount',
+            },
+            sampleSignature: ExcelService.buildSampleSignature(
+              'Purchase',
+              headers,
+            ),
+            lastUsedAt: DateTime(2026, 5, 16).toIso8601String(),
+          ),
+        );
+        final bytes = _buildWorkbook({
+          'Purchase': const [
+            headers,
+            ['2024-04-02', 'Selected Vendor', 222],
+          ],
+        });
+        var mappingOpened = false;
+
+        final response = await ImportUploadFlowService.preparePurchaseImport(
+          buyerId: 'buyer-1',
+          bytes: bytes,
+          fileName: 'exact-over-newer-sheet-profile.xlsx',
+          preferredSheetName: 'Purchase',
+          openColumnMapping:
+              ({
+                required bytes,
+                required fileName,
+                required fileType,
+                required validation,
+                sessionCache,
+                preferredSheetName,
+                preferredHeaderRowIndex,
+                preferredHeadersTrusted,
+                preferredColumnMapping,
+              }) async {
+                mappingOpened = true;
+                return null;
+              },
+        );
+
+        expect(response.isSuccess, isTrue);
+        expect(mappingOpened, isFalse);
+        expect(response.data!.usedSavedProfile, isTrue);
+        expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+        expect(response.data!.wasAutoConfirmed, isTrue);
+        expect(response.data!.parsedRows.single.partyName, 'Selected Vendor');
+      },
+    );
+
+    test(
+      'generic ledger sheet-name saved profile opens mapping review',
+      () async {
+        await ImportProfileService.saveProfile(
+          ImportFormatProfile(
+            buyerId: 'buyer-1',
+            fileType: ImportMappingService.genericLedgerFileType,
+            sheetNamePattern: 'ledger',
+            headerRowIndex: 0,
+            headersTrusted: true,
+            columnMapping: const {
+              'date': 'COL_0',
+              'party_name': 'COL_1',
+              'amount': 'COL_2',
+            },
+            sampleSignature: ExcelService.buildSampleSignature('Ledger', const [
+              'Date',
+              'Party Name',
+              'Amount',
+            ]),
+            lastUsedAt: DateTime(2026, 5, 16).toIso8601String(),
+          ),
+        );
+        final bytes = _buildWorkbook({
+          'Ledger': const [
+            ['Party Name', 'Amount', 'Date'],
+            ['Selected Vendor', 222, '2024-04-02'],
+          ],
+        });
+        var mappingOpened = false;
+
+        final response =
+            await ImportUploadFlowService.prepareGenericLedgerImport(
+              buyerId: 'buyer-1',
+              sectionCode: '194C',
+              bytes: bytes,
+              fileName: 'reordered-ledger.xlsx',
+              preferredSheetName: 'Ledger',
+              openColumnMapping:
+                  ({
+                    required bytes,
+                    required fileName,
+                    required fileType,
+                    required validation,
+                    sessionCache,
+                    preferredSheetName,
+                    preferredHeaderRowIndex,
+                    preferredHeadersTrusted,
+                    preferredColumnMapping,
+                  }) async {
+                    mappingOpened = true;
+                    expect(preferredColumnMapping, {
+                      'date': 'COL_0',
+                      'party_name': 'COL_1',
+                      'amount': 'COL_2',
+                    });
+                    return const ColumnMappingResult(
+                      fileType: ImportMappingService.genericLedgerFileType,
+                      sheetName: 'Ledger',
+                      headerRowIndex: 0,
+                      headersTrusted: true,
+                      saveProfile: false,
+                      rawToCanonicalMapping: {
+                        'COL_0': 'party_name',
+                        'COL_1': 'amount',
+                        'COL_2': 'date',
+                      },
+                      columnMapping: {
+                        'party_name': 'COL_0',
+                        'amount': 'COL_1',
+                        'date': 'COL_2',
+                      },
+                    );
+                  },
+            );
+
+        expect(response.isSuccess, isTrue);
+        expect(mappingOpened, isTrue);
+        expect(response.data!.mappingStatus, UploadMappingStatus.confirmed);
+        expect(response.data!.wasAutoConfirmed, isFalse);
+        expect(response.data!.wasManuallyMapped, isTrue);
+        expect(response.data!.parsedRows.single.partyName, 'Selected Vendor');
+      },
+    );
+
     test('26Q safe auto-map is auto-confirmed', () async {
       final bytes = _buildWorkbook({
         '26Q': const [

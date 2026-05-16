@@ -1,11 +1,11 @@
-# Graph Report - E:\reconciliation_app_codex  (2026-05-16)
+# Graph Report - E:\reconciliation_app_codex  (2026-05-17)
 
 ## Corpus Check
-- 215 files · ~155,863 words
+- 215 files · ~156,724 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2113 nodes · 2534 edges · 159 communities detected
+- 2114 nodes · 2535 edges · 158 communities detected
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 44 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -168,7 +168,6 @@
 - [[_COMMUNITY_Community 155|Community 155]]
 - [[_COMMUNITY_Community 156|Community 156]]
 - [[_COMMUNITY_Community 157|Community 157]]
-- [[_COMMUNITY_Community 158|Community 158]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `package:flutter/material.dart` - 63 edges
@@ -198,43 +197,43 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.02
-Nodes (155): app/app.dart, buyer_repository.dart, dart:convert, dart:io, buildSellerDisplayKey, buildSellerSectionDisplayKey, sortSections, BuyerFinancialYearRepository (+147 more)
+Nodes (142): app/app.dart, ImportStagingRepository, staged_26q_rows, BuyerFinancialYearRepository, ledgerSourceKeyForTransactionRow, ledgerSourceLabelForRow, reconciliationRowMatchesLedgerSource, buildPanPropagationLookupKey (+134 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (129): dart:async, dart:typed_data, BatchMappingReviewItem, copyWith, LedgerUploadFile, AlertDialog, AppPageScaffold, AppSectionSelector (+121 more)
+Nodes (131): AppCompactSelectField, build, _displayLabel, Function, Icon, LayoutBuilder, SizedBox, Align (+123 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
-Nodes (100): app_color_scheme.dart, app_loading.dart, app_radius.dart, app_section_card.dart, app_spacing.dart, app_status_badge.dart, app_text_styles.dart, AppRoutes (+92 more)
+Nodes (127): buyer_repository.dart, dart:convert, dart:io, build, MaterialApp, ReconciliationApp, BuyerFinancialYearStore, BuyerRepository (+119 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.02
-Nodes (115): build, MaterialApp, ReconciliationApp, addFinancialYear, AlertDialog, AppEmptyState, AppSectionCard, build (+107 more)
+Nodes (100): app_color_scheme.dart, app_loading.dart, app_radius.dart, app_section_card.dart, app_spacing.dart, app_status_badge.dart, app_text_styles.dart, AppRoutes (+92 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.02
-Nodes (107): _acceptSuggestedMapping, addDeleted, _addDeletedMappingsTargeting, _advanceTwoPanelSelectionIfStale, _allSectionRows, _applyAutoMap, AppSectionSelectorItem, AutoMapDecision (+99 more)
+Nodes (101): buildSellerDisplayKey, buildSellerSectionDisplayKey, sortSections, copyWith, ReconciliationRow, _matchesFinancialYear, ReconciliationExportRowScope, _sellerLabel (+93 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.02
-Nodes (86): ImportStagingRepository, staged_26q_rows, copyWith, NormalizedLedgerRow, copyWith, NormalizedTransactionRow, PurchaseRow, _extractSectionFromText (+78 more)
+Nodes (107): _acceptSuggestedMapping, addDeleted, _addDeletedMappingsTargeting, _advanceTwoPanelSelectionIfStale, _allSectionRows, _applyAutoMap, AppSectionSelectorItem, AutoMapDecision (+99 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.02
-Nodes (91): addScore, addWarning, _appendGenericLedgerNarration, _buildPreviewData, _buildPreviewDataWithProfile, buildSampleSignature, _classifyGenericLedgerRow, _columnScoreCacheKey (+83 more)
+Nodes (100): dart:async, BatchMappingReviewItem, copyWith, LedgerUploadFile, AlertDialog, AppPageScaffold, AppSectionSelector, AppSectionSelectorItem (+92 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.03
-Nodes (78): AppCompactSelectField, build, _displayLabel, Function, Icon, LayoutBuilder, SizedBox, Align (+70 more)
+Cohesion: 0.02
+Nodes (93): extractPanFromGstin, isLegacyUnsupportedSection, looksLikePan, normalizeName, normalizePan, normalizeSection, sectionDisplayLabel, copyWith (+85 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.02
-Nodes (83): _activeSourceFileCount, _activeSourceRowCount, _allowExportFeedbackFrame, _allowLoadingFrame, _applicableButNo26QCount, _applicableButNo26QSellerCount, _applyExportAvailabilitySnapshot, _applyFilters (+75 more)
+Nodes (92): addScore, addWarning, _appendGenericLedgerNarration, _buildPreviewData, _buildPreviewDataWithProfile, buildSampleSignature, _classifyGenericLedgerRow, _columnScoreCacheKey (+84 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.02
-Nodes (77): buildPanPropagationLookupKey, _normalizeMappingKey, resolveSectionAwarePanPropagation, AutoMapDecision, CandidateScore, resolveLedgerSellerTitle, resolveTdsSellerTitle, SellerMappingRowVm (+69 more)
+Nodes (78): _activeSourceFileCount, _activeSourceRowCount, _allowExportFeedbackFrame, _allowLoadingFrame, _applicableButNo26QCount, _applicableButNo26QSellerCount, _applyExportAvailabilitySnapshot, _applyFilters (+70 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.03
@@ -245,16 +244,16 @@ Cohesion: 0.03
 Nodes (68): _ActionColumnLayout, addCandidate, addMapped, build, _buildActionColumn, _buildAllSellerLedgerList, _buildEmptyState, _buildLedgerCandidateList (+60 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.03
-Nodes (63): extractPanFromGstin, isLegacyUnsupportedSection, looksLikePan, normalizeName, normalizePan, normalizeSection, sectionDisplayLabel, _applyFixedDetailColumnWidths (+55 more)
-
-### Community 13 - "Community 13"
-Cohesion: 0.03
-Nodes (59): dart:math, _autoMapBestGuess, BoxDecoration, build, _buildFieldCard, _buildFieldsPanel, _buildFileInfoCard, _buildInfoChip (+51 more)
-
-### Community 14 - "Community 14"
 Cohesion: 0.05
 Nodes (34): flutter(), ResizeChannel(), Send(), SendResponseData(), SetChannelWarnsOnOverflow(), SetMessageHandler(), flutter(), flutter() (+26 more)
+
+### Community 13 - "Community 13"
+Cohesion: 0.04
+Nodes (52): _applyFixedDetailColumnWidths, _applyFixedTechnicalColumnWidths, _applyNumberFormat, _autoFitPivot, _autoFitUsefulColumns, _buildCurrentViewWorkbook, _buildDetailedReportWorkbook, buildExportFileName (+44 more)
+
+### Community 14 - "Community 14"
+Cohesion: 0.04
+Nodes (47): dart:typed_data, build, _chip, Container, FileInfoCard, SizedBox, build, Container (+39 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.06
@@ -266,11 +265,11 @@ Nodes (46): join, alias_name(), allocate_counts(), amount_for(), bill_amount_for
 
 ### Community 17 - "Community 17"
 Cohesion: 0.04
-Nodes (42): applyBelowThresholdClassification, buildBaseStatus, buildComputedAmounts, buildRemarks, buildRow, buildStatusAndRemarks, chooseSellerName, chooseSellerPan (+34 more)
+Nodes (42): dart:math, _autoMapBestGuess, BoxDecoration, build, _buildFieldCard, _buildFieldsPanel, _buildFileInfoCard, _buildInfoChip (+34 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.05
-Nodes (40): copyWith, ReconciliationRow, AlertDialog, Align, _amountText, build, Container, _DataRowCard (+32 more)
+Cohesion: 0.06
+Nodes (32): build, Center, Column, _CompletionBanner, Container, Divider, _EmptyReviewState, fromRows (+24 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.06
@@ -281,144 +280,144 @@ Cohesion: 0.07
 Nodes (29): Architecture Rules, Candidate Rules, Centralized UI, Core Architecture, Core Workflow Rules, Data Handling, Demo Philosophy, Exception Handling (+21 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.09
-Nodes (22): build, Center, Column, _CompletionBanner, Container, Divider, _EmptyReviewState, fromRows (+14 more)
+Cohesion: 0.07
+Nodes (25): applicabilityText, _formatAmount, _formatRate, _natureOfPayment, rateText, SectionRuleExportInfo, SectionRuleExportText, summaryTextForSections (+17 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.09
-Nodes (21): AppSectionCard, _ArchivedBuyersCard, _archivedBuyerSubtitle, build, Container, _DefaultFinancialYearCard, _detailsFor, dispose (+13 more)
-
-### Community 23 - "Community 23"
 Cohesion: 0.1
 Nodes (19): build, Container, ReconciliationAnalyticsPanel, SizedBox, Text, build, _buildApplicableNo26QSummary, _buildFooterNote (+11 more)
 
-### Community 24 - "Community 24"
+### Community 23 - "Community 23"
 Cohesion: 0.1
 Nodes (19): ../../core/utils/normalize_utils.dart, app_settings, buyer_financial_years, buyers, _createAppSettingsTable, _createBuyerFinancialYearsTable, _createImportFormatProfilesTable, _createSellerMappingsTable (+11 more)
 
-### Community 25 - "Community 25"
+### Community 24 - "Community 24"
 Cohesion: 0.14
 Nodes (13): addAll, autoMapParties, AutoMappingBatchResult, AutoMappingResult, AutoMappingService, _buildProfile, _levenshteinDistance, _levenshteinSimilarity (+5 more)
 
-### Community 26 - "Community 26"
+### Community 25 - "Community 25"
 Cohesion: 0.17
 Nodes (11): compare, definitionFor, displayLabel, isLegacyUnsupportedSection, isSupported, normalizeCode, sortKey, _sortOrderFor (+3 more)
 
-### Community 27 - "Community 27"
+### Community 26 - "Community 26"
 Cohesion: 0.29
 Nodes (6): code:powershell (python tools/generate_ledger_match_test_datasets.py --size s), Files, LedgerMatch Synthetic Dataset: export_test_custom_1000_per_section_all_sections, Recreate, Row Counts By File, Scenarios
 
-### Community 28 - "Community 28"
+### Community 27 - "Community 27"
 Cohesion: 0.29
 Nodes (6): code:powershell (python tools/generate_ledger_match_test_datasets.py --size s), Files, LedgerMatch Synthetic Dataset: manual_mapping_small_custom_50_per_section_all_sections, Recreate, Row Counts By File, Scenarios
 
-### Community 29 - "Community 29"
+### Community 28 - "Community 28"
 Cohesion: 0.29
 Nodes (6): code:powershell (python tools/generate_ledger_match_test_datasets.py --size s), Files, LedgerMatch Synthetic Dataset: clean_auto_custom_1000_per_section_all_sections, Recreate, Row Counts By File, Scenarios
 
-### Community 30 - "Community 30"
+### Community 29 - "Community 29"
 Cohesion: 0.29
 Nodes (6): code:powershell (python tools/generate_ledger_match_test_datasets.py --size s), Files, LedgerMatch Synthetic Dataset: custom_1000_per_section_all_sections, Recreate, Row Counts By File, Scenarios
 
-### Community 31 - "Community 31"
+### Community 30 - "Community 30"
 Cohesion: 0.33
 Nodes (5): compareFinancialYearMonthKeys, compareMonthKeys, DateTime, financialYearFromMonthKey, normalizeMonth
 
-### Community 32 - "Community 32"
+### Community 31 - "Community 31"
 Cohesion: 0.33
 Nodes (5): ImportMappingService, isAmountField, isDateField, _normalizeCanonicalKey, ../models/mapping_field_option.dart
 
-### Community 33 - "Community 33"
+### Community 32 - "Community 32"
 Cohesion: 0.4
 Nodes (4): ExcelPreviewHeaderCandidate, finish, _looksLikeManualHeaderSelectionRow, _supportsManualHeaderRowSelection
 
-### Community 34 - "Community 34"
+### Community 33 - "Community 33"
 Cohesion: 0.5
 Nodes (3): SectionRateConfig, SectionRuleConfig, SectionThresholdRule
 
-### Community 35 - "Community 35"
+### Community 34 - "Community 34"
 Cohesion: 0.5
 Nodes (3): SkippedRowSample, SkippedRowSummary, SkippedSellerImpact
 
-### Community 36 - "Community 36"
+### Community 35 - "Community 35"
 Cohesion: 0.5
 Nodes (3): _debugDuplicateSourceSectionLeakage, _debugSectionCounts, _debugSummaryMap
 
-### Community 37 - "Community 37"
+### Community 36 - "Community 36"
 Cohesion: 0.5
 Nodes (3): copyWithHeaderCandidate, ExcelPreviewData, ExcelPreviewHeaderCandidate
 
-### Community 38 - "Community 38"
+### Community 37 - "Community 37"
 Cohesion: 0.67
 Nodes (2): currentIndianFinancialYearLabel, formatFinancialYearDisplayLabel
 
-### Community 39 - "Community 39"
+### Community 38 - "Community 38"
 Cohesion: 0.67
 Nodes (2): parseDouble, round2
 
-### Community 40 - "Community 40"
+### Community 39 - "Community 39"
 Cohesion: 0.67
 Nodes (2): Buyer, copyWith
 
-### Community 41 - "Community 41"
+### Community 40 - "Community 40"
 Cohesion: 0.67
 Nodes (2): copyWith, ReconciliationDebugInfo
 
-### Community 42 - "Community 42"
+### Community 41 - "Community 41"
 Cohesion: 0.67
 Nodes (2): ReconciliationRowExplanation, ReconciliationRowExplanationValue
 
-### Community 43 - "Community 43"
+### Community 42 - "Community 42"
 Cohesion: 0.67
 Nodes (2): Features, Reconciliation App
 
-### Community 44 - "Community 44"
+### Community 43 - "Community 43"
 Cohesion: 1.0
 Nodes (1): MainActivity
 
-### Community 45 - "Community 45"
+### Community 44 - "Community 44"
 Cohesion: 1.0
 Nodes (1): AppRadius
 
-### Community 46 - "Community 46"
+### Community 45 - "Community 45"
 Cohesion: 1.0
 Nodes (1): AppSpacing
 
-### Community 47 - "Community 47"
+### Community 46 - "Community 46"
 Cohesion: 1.0
 Nodes (1): BuyerFinancialYear
 
-### Community 48 - "Community 48"
+### Community 47 - "Community 47"
 Cohesion: 1.0
 Nodes (1): TransactionModel
 
-### Community 49 - "Community 49"
+### Community 48 - "Community 48"
 Cohesion: 1.0
 Nodes (1): ReconciliationStatus
 
-### Community 50 - "Community 50"
+### Community 49 - "Community 49"
 Cohesion: 1.0
 Nodes (1): ReconciliationSummary
 
-### Community 51 - "Community 51"
+### Community 50 - "Community 50"
 Cohesion: 1.0
 Nodes (1): ResolvedSellerIdentity
 
-### Community 52 - "Community 52"
+### Community 51 - "Community 51"
 Cohesion: 1.0
 Nodes (1): ColumnMappingResult
 
-### Community 53 - "Community 53"
+### Community 52 - "Community 52"
 Cohesion: 1.0
 Nodes (1): ImportAuditRecord
 
-### Community 54 - "Community 54"
+### Community 53 - "Community 53"
 Cohesion: 1.0
 Nodes (1): ImportFormatProfile
 
-### Community 55 - "Community 55"
+### Community 54 - "Community 54"
 Cohesion: 1.0
 Nodes (1): MappingFieldOption
+
+### Community 55 - "Community 55"
+Cohesion: 1.0
+Nodes (0): 
 
 ### Community 56 - "Community 56"
 Cohesion: 1.0
@@ -510,15 +509,15 @@ Nodes (0):
 
 ### Community 78 - "Community 78"
 Cohesion: 1.0
-Nodes (0): 
+Nodes (1): graphify
 
 ### Community 79 - "Community 79"
 Cohesion: 1.0
-Nodes (1): graphify
+Nodes (1): Sheet: Deduction
 
 ### Community 80 - "Community 80"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 81 - "Community 81"
 Cohesion: 1.0
@@ -558,11 +557,11 @@ Nodes (1): Sheet: Ledger
 
 ### Community 90 - "Community 90"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (1): Sheet: Deduction
 
 ### Community 91 - "Community 91"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 92 - "Community 92"
 Cohesion: 1.0
@@ -598,11 +597,11 @@ Nodes (1): Sheet: Ledger
 
 ### Community 100 - "Community 100"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (1): Sheet: Deduction
 
 ### Community 101 - "Community 101"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 102 - "Community 102"
 Cohesion: 1.0
@@ -638,11 +637,11 @@ Nodes (1): Sheet: Ledger
 
 ### Community 110 - "Community 110"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (1): Sheet: Deduction
 
 ### Community 111 - "Community 111"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 112 - "Community 112"
 Cohesion: 1.0
@@ -662,11 +661,11 @@ Nodes (1): Sheet: Ledger
 
 ### Community 116 - "Community 116"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (1): Sheet: Deduction
 
 ### Community 117 - "Community 117"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 118 - "Community 118"
 Cohesion: 1.0
@@ -702,11 +701,11 @@ Nodes (1): Sheet: Ledger
 
 ### Community 126 - "Community 126"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (1): Sheet: Deduction
 
 ### Community 127 - "Community 127"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 128 - "Community 128"
 Cohesion: 1.0
@@ -726,11 +725,11 @@ Nodes (1): Sheet: Ledger
 
 ### Community 132 - "Community 132"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (1): Sheet: Deduction
 
 ### Community 133 - "Community 133"
 Cohesion: 1.0
-Nodes (1): Sheet: Deduction
+Nodes (1): Sheet: Ledger
 
 ### Community 134 - "Community 134"
 Cohesion: 1.0
@@ -766,7 +765,7 @@ Nodes (1): Sheet: Ledger
 
 ### Community 142 - "Community 142"
 Cohesion: 1.0
-Nodes (1): Sheet: Ledger
+Nodes (0): 
 
 ### Community 143 - "Community 143"
 Cohesion: 1.0
@@ -828,255 +827,251 @@ Nodes (0):
 Cohesion: 1.0
 Nodes (0): 
 
-### Community 158 - "Community 158"
-Cohesion: 1.0
-Nodes (0): 
-
 ## Knowledge Gaps
-- **1547 isolated node(s):** `MainActivity`, `main`, `app/app.dart`, `ReconciliationApp`, `build` (+1542 more)
+- **1548 isolated node(s):** `MainActivity`, `main`, `app/app.dart`, `ReconciliationApp`, `build` (+1543 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 44`** (2 nodes): `MainActivity.kt`, `MainActivity`
+- **Thin community `Community 43`** (2 nodes): `MainActivity.kt`, `MainActivity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 45`** (2 nodes): `app_radius.dart`, `AppRadius`
+- **Thin community `Community 44`** (2 nodes): `app_radius.dart`, `AppRadius`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 46`** (2 nodes): `app_spacing.dart`, `AppSpacing`
+- **Thin community `Community 45`** (2 nodes): `app_spacing.dart`, `AppSpacing`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 47`** (2 nodes): `buyer_financial_year.dart`, `BuyerFinancialYear`
+- **Thin community `Community 46`** (2 nodes): `buyer_financial_year.dart`, `BuyerFinancialYear`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 48`** (2 nodes): `transaction.dart`, `TransactionModel`
+- **Thin community `Community 47`** (2 nodes): `transaction.dart`, `TransactionModel`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 49`** (2 nodes): `reconciliation_status.dart`, `ReconciliationStatus`
+- **Thin community `Community 48`** (2 nodes): `reconciliation_status.dart`, `ReconciliationStatus`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 50`** (2 nodes): `reconciliation_summary.dart`, `ReconciliationSummary`
+- **Thin community `Community 49`** (2 nodes): `reconciliation_summary.dart`, `ReconciliationSummary`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 51`** (2 nodes): `resolved_seller_identity.dart`, `ResolvedSellerIdentity`
+- **Thin community `Community 50`** (2 nodes): `resolved_seller_identity.dart`, `ResolvedSellerIdentity`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 52`** (2 nodes): `column_mapping_result.dart`, `ColumnMappingResult`
+- **Thin community `Community 51`** (2 nodes): `column_mapping_result.dart`, `ColumnMappingResult`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 53`** (2 nodes): `import_audit_record.dart`, `ImportAuditRecord`
+- **Thin community `Community 52`** (2 nodes): `import_audit_record.dart`, `ImportAuditRecord`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 54`** (2 nodes): `import_format_profile.dart`, `ImportFormatProfile`
+- **Thin community `Community 53`** (2 nodes): `import_format_profile.dart`, `ImportFormatProfile`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 55`** (2 nodes): `mapping_field_option.dart`, `MappingFieldOption`
+- **Thin community `Community 54`** (2 nodes): `mapping_field_option.dart`, `MappingFieldOption`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 56`** (2 nodes): `flutter()`, `binary_messenger_impl.h`
+- **Thin community `Community 55`** (2 nodes): `flutter()`, `binary_messenger_impl.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 57`** (2 nodes): `flutter()`, `byte_buffer_streams.h`
+- **Thin community `Community 56`** (2 nodes): `flutter()`, `byte_buffer_streams.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (2 nodes): `texture_registrar_impl.h`, `flutter()`
+- **Thin community `Community 57`** (2 nodes): `texture_registrar_impl.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 59`** (2 nodes): `flutter()`, `binary_messenger.h`
+- **Thin community `Community 58`** (2 nodes): `flutter()`, `binary_messenger.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 60`** (2 nodes): `flutter()`, `byte_streams.h`
+- **Thin community `Community 59`** (2 nodes): `flutter()`, `byte_streams.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 61`** (2 nodes): `GpuPreference()`, `dart_project.h`
+- **Thin community `Community 60`** (2 nodes): `GpuPreference()`, `dart_project.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 62`** (2 nodes): `encodable_value.h`, `flutter()`
+- **Thin community `Community 61`** (2 nodes): `encodable_value.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (2 nodes): `event_sink.h`, `flutter()`
+- **Thin community `Community 62`** (2 nodes): `event_sink.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 64`** (2 nodes): `event_stream_handler.h`, `flutter()`
+- **Thin community `Community 63`** (2 nodes): `event_stream_handler.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 65`** (2 nodes): `event_stream_handler_functions.h`, `flutter()`
+- **Thin community `Community 64`** (2 nodes): `event_stream_handler_functions.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 66`** (2 nodes): `flutter_engine.h`, `flutter()`
+- **Thin community `Community 65`** (2 nodes): `flutter_engine.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 67`** (2 nodes): `flutter_view.h`, `flutter()`
+- **Thin community `Community 66`** (2 nodes): `flutter_view.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 68`** (2 nodes): `flutter_view_controller.h`, `flutter()`
+- **Thin community `Community 67`** (2 nodes): `flutter_view_controller.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 69`** (2 nodes): `method_call.h`, `flutter()`
+- **Thin community `Community 68`** (2 nodes): `method_call.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 70`** (2 nodes): `method_result.h`, `flutter()`
+- **Thin community `Community 69`** (2 nodes): `method_result.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 71`** (2 nodes): `method_result_functions.h`, `flutter()`
+- **Thin community `Community 70`** (2 nodes): `method_result_functions.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 72`** (2 nodes): `plugin_registrar.h`, `flutter()`
+- **Thin community `Community 71`** (2 nodes): `plugin_registrar.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 73`** (2 nodes): `plugin_registrar_windows.h`, `flutter()`
+- **Thin community `Community 72`** (2 nodes): `plugin_registrar_windows.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 74`** (2 nodes): `plugin_registry.h`, `flutter()`
+- **Thin community `Community 73`** (2 nodes): `plugin_registry.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 75`** (2 nodes): `standard_codec_serializer.h`, `flutter()`
+- **Thin community `Community 74`** (2 nodes): `standard_codec_serializer.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 76`** (2 nodes): `standard_message_codec.h`, `flutter()`
+- **Thin community `Community 75`** (2 nodes): `standard_message_codec.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 77`** (2 nodes): `standard_method_codec.h`, `flutter()`
+- **Thin community `Community 76`** (2 nodes): `standard_method_codec.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 78`** (2 nodes): `texture_registrar.h`, `flutter()`
+- **Thin community `Community 77`** (2 nodes): `texture_registrar.h`, `flutter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 79`** (2 nodes): `CLAUDE.md`, `graphify`
+- **Thin community `Community 78`** (2 nodes): `CLAUDE.md`, `graphify`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 80`** (2 nodes): `Sheet: Deduction`, `26Q_88d0313f.md`
+- **Thin community `Community 79`** (2 nodes): `Sheet: Deduction`, `26Q_88d0313f.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 81`** (2 nodes): `Sheet: Ledger`, `ledger_194A_e75b1e91.md`
+- **Thin community `Community 80`** (2 nodes): `Sheet: Ledger`, `ledger_194A_e75b1e91.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 82`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_cc29b95f.md`
+- **Thin community `Community 81`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_cc29b95f.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 83`** (2 nodes): `Sheet: Ledger`, `ledger_194C_retention_entries_b52d8bd5.md`
+- **Thin community `Community 82`** (2 nodes): `Sheet: Ledger`, `ledger_194C_retention_entries_b52d8bd5.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 84`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_dfa4a8d7.md`
+- **Thin community `Community 83`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_dfa4a8d7.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 85`** (2 nodes): `Sheet: Ledger`, `ledger_194H_a42bc5a3.md`
+- **Thin community `Community 84`** (2 nodes): `Sheet: Ledger`, `ledger_194H_a42bc5a3.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 86`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_be783484.md`
+- **Thin community `Community 85`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_be783484.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 87`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_92445cff.md`
+- **Thin community `Community 86`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_92445cff.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 88`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_44730237.md`
+- **Thin community `Community 87`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_44730237.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 89`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_81f57ad1.md`
+- **Thin community `Community 88`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_81f57ad1.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 90`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_4d7b34e4.md`
+- **Thin community `Community 89`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_4d7b34e4.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 91`** (2 nodes): `Sheet: Deduction`, `26Q_be908c7c.md`
+- **Thin community `Community 90`** (2 nodes): `Sheet: Deduction`, `26Q_be908c7c.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 92`** (2 nodes): `Sheet: Ledger`, `ledger_194A_d568dc79.md`
+- **Thin community `Community 91`** (2 nodes): `Sheet: Ledger`, `ledger_194A_d568dc79.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 93`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_0ab8f8cf.md`
+- **Thin community `Community 92`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_0ab8f8cf.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 94`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_99b2eab5.md`
+- **Thin community `Community 93`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_99b2eab5.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 95`** (2 nodes): `Sheet: Ledger`, `ledger_194H_8f0d40f3.md`
+- **Thin community `Community 94`** (2 nodes): `Sheet: Ledger`, `ledger_194H_8f0d40f3.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 96`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_8877ca33.md`
+- **Thin community `Community 95`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_8877ca33.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 97`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_ad1c3469.md`
+- **Thin community `Community 96`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_ad1c3469.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 98`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_06d54dc0.md`
+- **Thin community `Community 97`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_06d54dc0.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 99`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_de2f0306.md`
+- **Thin community `Community 98`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_de2f0306.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 100`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_e6375450.md`
+- **Thin community `Community 99`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_e6375450.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 101`** (2 nodes): `Sheet: Deduction`, `26Q_1cde4f34.md`
+- **Thin community `Community 100`** (2 nodes): `Sheet: Deduction`, `26Q_1cde4f34.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 102`** (2 nodes): `Sheet: Ledger`, `ledger_194A_8aafe750.md`
+- **Thin community `Community 101`** (2 nodes): `Sheet: Ledger`, `ledger_194A_8aafe750.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 103`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_ce2d24c8.md`
+- **Thin community `Community 102`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_ce2d24c8.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 104`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_4057d047.md`
+- **Thin community `Community 103`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_4057d047.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 105`** (2 nodes): `Sheet: Ledger`, `ledger_194H_6ed421fe.md`
+- **Thin community `Community 104`** (2 nodes): `Sheet: Ledger`, `ledger_194H_6ed421fe.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 106`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_47992d27.md`
+- **Thin community `Community 105`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_47992d27.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 107`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_f00a51a9.md`
+- **Thin community `Community 106`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_f00a51a9.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 108`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_9db87b19.md`
+- **Thin community `Community 107`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_9db87b19.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 109`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_72eeee43.md`
+- **Thin community `Community 108`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_72eeee43.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 110`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_568ae22a.md`
+- **Thin community `Community 109`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_568ae22a.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 111`** (2 nodes): `Sheet: Deduction`, `26Q_ba9ba483.md`
+- **Thin community `Community 110`** (2 nodes): `Sheet: Deduction`, `26Q_ba9ba483.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 112`** (2 nodes): `Sheet: Ledger`, `ledger_194A_7e0c102d.md`
+- **Thin community `Community 111`** (2 nodes): `Sheet: Ledger`, `ledger_194A_7e0c102d.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 113`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_9fed3865.md`
+- **Thin community `Community 112`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_9fed3865.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 114`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_27e55385.md`
+- **Thin community `Community 113`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_27e55385.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 115`** (2 nodes): `Sheet: Ledger`, `ledger_194H_91d3dbe7.md`
+- **Thin community `Community 114`** (2 nodes): `Sheet: Ledger`, `ledger_194H_91d3dbe7.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 116`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_b8b07bba.md`
+- **Thin community `Community 115`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_b8b07bba.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 117`** (2 nodes): `Sheet: Deduction`, `26Q_725a87af.md`
+- **Thin community `Community 116`** (2 nodes): `Sheet: Deduction`, `26Q_725a87af.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 118`** (2 nodes): `Sheet: Ledger`, `ledger_194A_bdc48015.md`
+- **Thin community `Community 117`** (2 nodes): `Sheet: Ledger`, `ledger_194A_bdc48015.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 119`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_8e468415.md`
+- **Thin community `Community 118`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_8e468415.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 120`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_2b68df06.md`
+- **Thin community `Community 119`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_2b68df06.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 121`** (2 nodes): `Sheet: Ledger`, `ledger_194H_853f33e7.md`
+- **Thin community `Community 120`** (2 nodes): `Sheet: Ledger`, `ledger_194H_853f33e7.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 122`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_85b8c5d7.md`
+- **Thin community `Community 121`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_85b8c5d7.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 123`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_441bb249.md`
+- **Thin community `Community 122`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_441bb249.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 124`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_1d99802e.md`
+- **Thin community `Community 123`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_1d99802e.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 125`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_91d32b68.md`
+- **Thin community `Community 124`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_91d32b68.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 126`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_10a933d0.md`
+- **Thin community `Community 125`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_10a933d0.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 127`** (2 nodes): `Sheet: Deduction`, `26Q_9cfd4c4a.md`
+- **Thin community `Community 126`** (2 nodes): `Sheet: Deduction`, `26Q_9cfd4c4a.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 128`** (2 nodes): `Sheet: Ledger`, `ledger_194A_04a801b0.md`
+- **Thin community `Community 127`** (2 nodes): `Sheet: Ledger`, `ledger_194A_04a801b0.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 129`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_132fac6b.md`
+- **Thin community `Community 128`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_132fac6b.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 130`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_a8dc2211.md`
+- **Thin community `Community 129`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_a8dc2211.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 131`** (2 nodes): `Sheet: Ledger`, `ledger_194H_c09bd239.md`
+- **Thin community `Community 130`** (2 nodes): `Sheet: Ledger`, `ledger_194H_c09bd239.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 132`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_746d28f8.md`
+- **Thin community `Community 131`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_746d28f8.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 133`** (2 nodes): `Sheet: Deduction`, `26Q_62a7abbe.md`
+- **Thin community `Community 132`** (2 nodes): `Sheet: Deduction`, `26Q_62a7abbe.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 134`** (2 nodes): `Sheet: Ledger`, `ledger_194A_418b2b37.md`
+- **Thin community `Community 133`** (2 nodes): `Sheet: Ledger`, `ledger_194A_418b2b37.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 135`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_f00bbd2c.md`
+- **Thin community `Community 134`** (2 nodes): `Sheet: Ledger`, `ledger_194C_contractors_main_f00bbd2c.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 136`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_dcaf8c9c.md`
+- **Thin community `Community 135`** (2 nodes): `Sheet: Ledger`, `ledger_194C_site_expenses_dcaf8c9c.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 137`** (2 nodes): `Sheet: Ledger`, `ledger_194H_ecc66e48.md`
+- **Thin community `Community 136`** (2 nodes): `Sheet: Ledger`, `ledger_194H_ecc66e48.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 138`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_730a617c.md`
+- **Thin community `Community 137`** (2 nodes): `Sheet: Ledger`, `ledger_194I_A_730a617c.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 139`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_f4087d4b.md`
+- **Thin community `Community 138`** (2 nodes): `Sheet: Ledger`, `ledger_194I_B_f4087d4b.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 140`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_55fff206.md`
+- **Thin community `Community 139`** (2 nodes): `Sheet: Ledger`, `ledger_194J_A_55fff206.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 141`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_70475741.md`
+- **Thin community `Community 140`** (2 nodes): `Sheet: Ledger`, `ledger_194J_B_70475741.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 142`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_b3e0fe09.md`
+- **Thin community `Community 141`** (2 nodes): `Sheet: Ledger`, `purchase_194Q_b3e0fe09.md`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 143`** (1 nodes): `build.gradle.kts`
+- **Thin community `Community 142`** (1 nodes): `build.gradle.kts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 144`** (1 nodes): `settings.gradle.kts`
+- **Thin community `Community 143`** (1 nodes): `settings.gradle.kts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 145`** (1 nodes): `build.gradle.kts`
+- **Thin community `Community 144`** (1 nodes): `build.gradle.kts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 146`** (1 nodes): `app_ui_exports.dart`
+- **Thin community `Community 145`** (1 nodes): `app_ui_exports.dart`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 147`** (1 nodes): `reconciliation_view_mode.dart`
+- **Thin community `Community 146`** (1 nodes): `reconciliation_view_mode.dart`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 148`** (1 nodes): `upload_mapping_status.dart`
+- **Thin community `Community 147`** (1 nodes): `upload_mapping_status.dart`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 149`** (1 nodes): `generated_plugin_registrant.h`
+- **Thin community `Community 148`** (1 nodes): `generated_plugin_registrant.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 150`** (1 nodes): `flutter_export.h`
+- **Thin community `Community 149`** (1 nodes): `flutter_export.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 151`** (1 nodes): `flutter_messenger.h`
+- **Thin community `Community 150`** (1 nodes): `flutter_messenger.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 152`** (1 nodes): `flutter_plugin_registrar.h`
+- **Thin community `Community 151`** (1 nodes): `flutter_plugin_registrar.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 153`** (1 nodes): `flutter_texture_registrar.h`
+- **Thin community `Community 152`** (1 nodes): `flutter_texture_registrar.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 154`** (1 nodes): `flutter_windows.h`
+- **Thin community `Community 153`** (1 nodes): `flutter_windows.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 155`** (1 nodes): `engine_method_result.cc`
+- **Thin community `Community 154`** (1 nodes): `engine_method_result.cc`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 156`** (1 nodes): `resource.h`
+- **Thin community `Community 155`** (1 nodes): `resource.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 157`** (1 nodes): `utils.h`
+- **Thin community `Community 156`** (1 nodes): `utils.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 158`** (1 nodes): `win32_window.h`
+- **Thin community `Community 157`** (1 nodes): `win32_window.h`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `package:flutter/material.dart` connect `Community 2` to `Community 0`, `Community 1`, `Community 3`, `Community 4`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 13`, `Community 18`, `Community 21`, `Community 22`, `Community 23`?**
-  _High betweenness centrality (0.242) - this node is a cross-community bridge._
-- **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 5` to `Community 0`, `Community 1`, `Community 4`, `Community 6`, `Community 8`, `Community 9`, `Community 10`, `Community 17`, `Community 18`?**
-  _High betweenness centrality (0.110) - this node is a cross-community bridge._
-- **Why does `join` connect `Community 16` to `Community 5`?**
-  _High betweenness centrality (0.041) - this node is a cross-community bridge._
+- **Why does `package:flutter/material.dart` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 9`, `Community 10`, `Community 11`, `Community 14`, `Community 17`, `Community 18`, `Community 22`?**
+  _High betweenness centrality (0.243) - this node is a cross-community bridge._
+- **Why does `package:reconciliation_app/core/utils/normalize_utils.dart` connect `Community 7` to `Community 0`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 9`, `Community 10`, `Community 21`?**
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
+- **Why does `package:reconciliation_app/core/config/tds_section_catalog.dart` connect `Community 7` to `Community 0`, `Community 4`, `Community 5`, `Community 6`, `Community 8`, `Community 9`, `Community 13`, `Community 14`, `Community 21`?**
+  _High betweenness centrality (0.046) - this node is a cross-community bridge._
 - **What connects `MainActivity`, `main`, `app/app.dart` to the rest of the system?**
-  _1547 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1548 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.02 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**

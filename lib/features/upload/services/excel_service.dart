@@ -43,6 +43,17 @@ class _ImportedRowCandidate {
   const _ImportedRowCandidate({required this.rowMap, required this.rowNumber});
 }
 
+enum ImportProfileMatchKind { exactSignature, sheetPattern }
+
+class ImportFormatProfileMatch {
+  final ImportFormatProfile profile;
+  final ImportProfileMatchKind kind;
+
+  const ImportFormatProfileMatch({required this.profile, required this.kind});
+
+  bool get isExactSignature => kind == ImportProfileMatchKind.exactSignature;
+}
+
 class ExcelService {
   static const bool _enableVerboseImportLogs = false;
   static final Map<String, int> _forcedNumericDateAvoidanceByField =
@@ -151,11 +162,27 @@ class ExcelService {
     required String sheetName,
     required String sampleSignature,
   }) async {
+    final match = await findMatchingProfileMatch(
+      buyerId: buyerId,
+      fileType: fileType,
+      sheetName: sheetName,
+      sampleSignature: sampleSignature,
+    );
+    return match?.profile;
+  }
+
+  static Future<ImportFormatProfileMatch?> findMatchingProfileMatch({
+    required String buyerId,
+    required String fileType,
+    required String sheetName,
+    required String sampleSignature,
+  }) async {
     final profiles = await getBuyerImportProfiles(
       buyerId: buyerId,
       fileType: fileType,
     );
 
+    ImportFormatProfile? sheetPatternMatch;
     for (final profile in profiles) {
       final normalizedMapping = _normalizeCanonicalColumnMappingByType(
         _normalizeProfileColumnMapping(profile.columnMapping),
@@ -176,9 +203,23 @@ class ExcelService {
         continue;
       }
 
-      if (matchesSignature || matchesSheet) {
-        return profile;
+      if (matchesSignature) {
+        return ImportFormatProfileMatch(
+          profile: profile,
+          kind: ImportProfileMatchKind.exactSignature,
+        );
       }
+
+      if (matchesSheet && sheetPatternMatch == null) {
+        sheetPatternMatch = profile;
+      }
+    }
+
+    if (sheetPatternMatch != null) {
+      return ImportFormatProfileMatch(
+        profile: sheetPatternMatch,
+        kind: ImportProfileMatchKind.sheetPattern,
+      );
     }
 
     return null;

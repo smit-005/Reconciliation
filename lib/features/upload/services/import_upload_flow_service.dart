@@ -282,14 +282,19 @@ class ImportUploadFlowService {
         inspection.rawHeaderRow,
       );
 
-      final matchedProfile = await ExcelService.findMatchingProfile(
+      final matchedProfileMatch = await ExcelService.findMatchingProfileMatch(
         buyerId: buyerId,
         fileType: ImportMappingService.purchaseFileType,
         sheetName: inspection.sheetName,
         sampleSignature: signature,
       );
+      final matchedProfile = matchedProfileMatch?.profile;
+      final hasExactProfileMatch =
+          matchedProfileMatch?.isExactSignature ?? false;
 
-      if (matchedProfile != null && !forceColumnMapping) {
+      if (matchedProfile != null &&
+          hasExactProfileMatch &&
+          !forceColumnMapping) {
         final parseWatch = Stopwatch()..start();
         final parsedRows = await _parsePurchaseRowsWithProfileInBackground(
           bytes: bytes,
@@ -344,6 +349,7 @@ class ImportUploadFlowService {
       final validation = purchasePreparation.validation;
       final shouldOpenColumnMapping =
           forceColumnMapping ||
+          (matchedProfile != null && !hasExactProfileMatch) ||
           shouldAutoOpenColumnMapping(
             validation: validation,
             fileType: ExcelImportType.purchase,
@@ -513,14 +519,19 @@ class ImportUploadFlowService {
         inspection.sheetName,
         inspection.rawHeaderRow,
       );
-      final matchedProfile = await ExcelService.findMatchingProfile(
+      final matchedProfileMatch = await ExcelService.findMatchingProfileMatch(
         buyerId: buyerId,
         fileType: ImportMappingService.genericLedgerFileType,
         sheetName: inspection.sheetName,
         sampleSignature: signature,
       );
+      final matchedProfile = matchedProfileMatch?.profile;
+      final hasExactProfileMatch =
+          matchedProfileMatch?.isExactSignature ?? false;
 
-      if (matchedProfile != null && !forceColumnMapping) {
+      if (matchedProfile != null &&
+          hasExactProfileMatch &&
+          !forceColumnMapping) {
         final parsedRows =
             await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
               sessionCache?.bytes ?? Uint8List.fromList(bytes),
@@ -581,6 +592,7 @@ class ImportUploadFlowService {
           );
       final shouldOpenColumnMapping =
           forceColumnMapping ||
+          (matchedProfile != null && !hasExactProfileMatch) ||
           shouldAutoOpenColumnMapping(
             validation: validation,
             fileType: ExcelImportType.genericLedger,
