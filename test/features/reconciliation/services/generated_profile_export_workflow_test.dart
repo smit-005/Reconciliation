@@ -379,13 +379,18 @@ void _validateDetailedWorkbook(String path, List<String> sections) {
     'Final_Missing_In_Books',
     'Exception_Summary',
     'Raw_Reconciliation',
-    'Exception_Details',
-    'Technical_Details',
     'TDS_Section_Info',
   ]);
+  _expectSheetHasRows(workbook, 'Section_Summary');
+  _expectSheetHasRows(workbook, 'Ledger_Pivot');
+  _expectSheetHasRows(workbook, 'Final_Missing_In_Books');
+  _expectSheetHasRows(workbook, 'Exception_Summary');
   _expectSheetHasRows(workbook, 'Raw_Reconciliation');
-  _expectSheetHasRows(workbook, 'Exception_Details');
-  _expectSheetHasRows(workbook, 'Technical_Details');
+  for (final section in sections) {
+    _expectSheetHasRows(workbook, '$section Pivot');
+  }
+  _expectSheetMissing(workbook, 'Exception_Details');
+  _expectSheetMissing(workbook, 'Technical_Details');
   _expectSheetMissing(workbook, 'Final_Timing_Difference');
 }
 
