@@ -33,6 +33,7 @@ import 'package:reconciliation_app/features/upload/models/tds_26q_upload_file.da
 import 'package:reconciliation_app/features/upload/models/upload_mapping_status.dart';
 import 'package:reconciliation_app/features/upload/presentation/screens/batch_mapping_review_screen.dart';
 import 'package:reconciliation_app/features/upload/presentation/screens/column_mapping_screen.dart';
+import 'package:reconciliation_app/features/upload/presentation/widgets/upload_bottom_action_buttons.dart';
 import 'package:reconciliation_app/features/upload/presentation/widgets/upload_file_action_card.dart';
 import 'package:reconciliation_app/features/upload/services/batch_mapping_review_service.dart';
 import 'package:reconciliation_app/features/upload/services/excel_service.dart';
@@ -2524,86 +2525,16 @@ class _ExcelUploadScreenState extends State<ExcelUploadScreen> {
   Widget _buildBottomActionBar() {
     return AppStickyActionBar(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      child: Row(
-        children: [
-          OutlinedButton.icon(
-            key: const ValueKey('review_mapping_button'),
-            onPressed: _hasWorkspaceContent ? _reviewWorkspaceStatus : null,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColorScheme.textPrimary,
-              disabledForegroundColor: AppColorScheme.textMuted,
-              side: BorderSide(
-                color: _hasWorkspaceContent
-                    ? AppColorScheme.border
-                    : AppColorScheme.divider,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            icon: const Icon(Icons.fact_check_outlined),
-            label: const Text('Review All Mappings'),
-          ),
-          const Spacer(),
-          if (_has26QReady && _allRequiredMappingsConfirmed)
-            OutlinedButton.icon(
-              onPressed: _isLoadingSellerMapping
-                  ? null
-                  : openSellerMappingScreen,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _isSellerMappingConfirmed
-                    ? AppColorScheme.success
-                    : AppColorScheme.textPrimary,
-                disabledForegroundColor: AppColorScheme.textMuted,
-                side: BorderSide(
-                  color: _isSellerMappingConfirmed
-                      ? AppColorScheme.success.withValues(alpha: 0.38)
-                      : AppColorScheme.border,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 18,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              icon: Icon(
-                _isSellerMappingConfirmed
-                    ? Icons.check_circle_rounded
-                    : Icons.person_search_rounded,
-              ),
-              label: Text(
-                _isLoadingSellerMapping
-                    ? 'Loading...'
-                    : (_isSellerMappingConfirmed
-                          ? 'Seller Mappings Confirmed'
-                          : 'Review Seller Mappings'),
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            key: const ValueKey('open_reconciliation_button'),
-            onPressed: canOpenReconciliation ? openReconciliationScreen : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColorScheme.primary,
-              disabledBackgroundColor: AppColorScheme.surfaceMuted,
-              disabledForegroundColor: AppColorScheme.textMuted,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            icon: const Icon(Icons.arrow_forward_rounded),
-            label: const Text(
-              'Open Reconciliation',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
+      child: UploadBottomActionButtons(
+        hasWorkspaceContent: _hasWorkspaceContent,
+        has26QReady: _has26QReady,
+        allRequiredMappingsConfirmed: _allRequiredMappingsConfirmed,
+        isLoadingSellerMapping: _isLoadingSellerMapping,
+        isSellerMappingConfirmed: _isSellerMappingConfirmed,
+        canOpenReconciliation: canOpenReconciliation,
+        reviewWorkspaceStatus: _reviewWorkspaceStatus,
+        openSellerMappingScreen: openSellerMappingScreen,
+        openReconciliationScreen: openReconciliationScreen,
       ),
     );
   }

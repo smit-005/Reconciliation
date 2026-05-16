@@ -9,7 +9,7 @@ import 'package:reconciliation_app/core/config/tds_section_catalog.dart';
 import 'package:reconciliation_app/core/utils/app_logger.dart';
 import 'package:reconciliation_app/core/utils/normalize_utils.dart';
 import 'package:reconciliation_app/core/widgets/app_compact_select_field.dart';
-import 'package:reconciliation_app/core/widgets/app_section_selector.dart';
+import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_header.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_summary_cards.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_theme.dart';
 import 'package:reconciliation_app/features/reconciliation/presentation/widgets/seller_mapping_review_view.dart';
@@ -2147,143 +2147,29 @@ class _SellerMappingScreenState extends State<SellerMappingScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-      decoration: BoxDecoration(
-        color: SellerMappingTheme.surfaceColor,
-        border: const Border(
-          bottom: BorderSide(color: SellerMappingTheme.borderColor),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconButton.filledTonal(
-                onPressed: () => Navigator.maybePop(context),
-                style: IconButton.styleFrom(
-                  backgroundColor: SellerMappingTheme.primarySoft,
-                  foregroundColor: SellerMappingTheme.primaryColor,
-                ),
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Seller Mapping Audit',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        color: SellerMappingTheme.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.buyerName.trim().isEmpty
-                          ? 'Unnamed Buyer'
-                          : widget.buyerName.trim(),
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: SellerMappingTheme.titleTextColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SegmentedButton<SellerMappingListView>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: SellerMappingListView.needsAction,
-                    label: Text('Needs Action'),
-                  ),
-                  ButtonSegment(
-                    value: SellerMappingListView.allSellers,
-                    label: Text('All Sellers'),
-                  ),
-                ],
-                selected: <SellerMappingListView>{_activeListView},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _activeListView = selection.first;
-                    _invalidateViewCaches(resetPage: true);
-                  });
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              SellerMappingPill(
-                icon: Icons.badge_outlined,
-                label: widget.buyerPan.trim().isEmpty
-                    ? 'PAN unavailable'
-                    : widget.buyerPan.trim().toUpperCase(),
-              ),
-              if (widget.buyerGstNo.trim().isNotEmpty)
-                SellerMappingPill(
-                  icon: Icons.receipt_long_outlined,
-                  label: widget.buyerGstNo.trim().toUpperCase(),
-                ),
-              if (widget.financialYearLabel.trim().isNotEmpty)
-                SellerMappingPill(
-                  icon: Icons.calendar_today_outlined,
-                  label: widget.financialYearLabel.trim(),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: AppSectionSelector(
-                  showContainer: false,
-                  items: _availableSectionCodes.map((sectionCode) {
-                    final isSelected = _activeSectionCode == sectionCode;
-                    final count = _needsActionCountForSection(sectionCode);
-                    final isUnsupportedSection =
-                        isUnsupportedReconciliationSection(sectionCode);
-                    return AppSectionSelectorItem(
-                      value: sectionCode,
-                      label: isUnsupportedSection
-                          ? unsupportedSectionDisplayLabel(sectionCode)
-                          : compactSectionDisplayLabel(sectionCode),
-                      subtitle: 'Needs action',
-                      metricLabel: count.toString(),
-                      isSelected: isSelected,
-                      onTap: () {
-                        setState(() {
-                          _activeSectionCode = sectionCode;
-                          _invalidateViewCaches(resetPage: true);
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.end,
-                children: _buildSummaryMetrics()
-                    .where((metric) => metric.value > 0)
-                    .map((metric) => SellerMappingMetricCard(metric: metric))
-                    .toList(),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return SellerMappingHeader(
+      buyerName: widget.buyerName,
+      buyerPan: widget.buyerPan,
+      buyerGstNo: widget.buyerGstNo,
+      financialYearLabel: widget.financialYearLabel,
+      activeListView: _activeListView,
+      onListViewChanged: (view) {
+        setState(() {
+          _activeListView = view;
+          _invalidateViewCaches(resetPage: true);
+        });
+      },
+      availableSectionCodes: _availableSectionCodes,
+      activeSectionCode: _activeSectionCode,
+      needsActionCountForSection: _needsActionCountForSection,
+      onSectionChanged: (sectionCode) {
+        setState(() {
+          _activeSectionCode = sectionCode;
+          _invalidateViewCaches(resetPage: true);
+        });
+      },
+      summaryMetrics: _buildSummaryMetrics(),
+      onBack: () => Navigator.maybePop(context),
     );
   }
 
