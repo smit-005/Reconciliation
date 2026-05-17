@@ -529,23 +529,29 @@ class ImportUploadFlowService {
       final matchedProfile = matchedProfileMatch?.profile;
       final hasExactProfileMatch =
           matchedProfileMatch?.isExactSignature ?? false;
+      _GenericLedgerUploadPreparation? autoPreparation;
+      ExcelValidationResult? preparedValidation;
 
       if (matchedProfile != null &&
           hasExactProfileMatch &&
           !forceColumnMapping) {
-        final parsedRows =
-            await ExcelService.parseGenericLedgerRowsWithProfileInBackground(
-              sessionCache?.bytes ?? Uint8List.fromList(bytes),
-              sheetName: inspection.sheetName,
-              headerRowIndex: matchedProfile.headerRowIndex,
-              headersTrusted: matchedProfile.headersTrusted,
-              columnMapping: matchedProfile.columnMapping,
+        final profilePreparation =
+            await _prepareGenericLedgerUploadInBackground(
+              bytes: sessionCache?.bytes ?? bytes,
+              preferredSheetName: inspection.sheetName,
               defaultSection: sectionCode,
               sourceFileName: fileName,
+              profileHeaderRowIndex: matchedProfile.headerRowIndex,
+              profileHeadersTrusted: matchedProfile.headersTrusted,
+              profileColumnMapping: matchedProfile.columnMapping,
             );
+        final parsedRows =
+            profilePreparation?.parsedRows ?? const <NormalizedLedgerRow>[];
+        preparedValidation = profilePreparation?.validation;
 
         if (parsedRows.isNotEmpty) {
           final profileValidation =
+              preparedValidation ??
               await ExcelService.validateGenericLedgerFileInBackground(
                 sessionCache?.bytes ?? Uint8List.fromList(bytes),
                 preferredSheetName: inspection.sheetName,
@@ -584,16 +590,21 @@ class ImportUploadFlowService {
         }
       }
 
-      final validation =
-          await ExcelService.validateGenericLedgerFileInBackground(
-            sessionCache?.bytes ?? Uint8List.fromList(bytes),
-            preferredSheetName: inspection.sheetName,
-            expectedSection: sectionCode,
-            sourceFileName: fileName,
-          );
+      final profileWillForceMapping =
+          matchedProfile != null && !hasExactProfileMatch;
+      autoPreparation = preparedValidation == null
+          ? await _prepareGenericLedgerUploadInBackground(
+              bytes: sessionCache?.bytes ?? bytes,
+              preferredSheetName: inspection.sheetName,
+              defaultSection: sectionCode,
+              sourceFileName: fileName,
+              parseRows: !forceColumnMapping && !profileWillForceMapping,
+            )
+          : null;
+      final validation = preparedValidation ?? autoPreparation!.validation;
       final shouldOpenColumnMapping =
           forceColumnMapping ||
-          (matchedProfile != null && !hasExactProfileMatch) ||
+          profileWillForceMapping ||
           shouldAutoOpenColumnMapping(
             validation: validation,
             fileType: ExcelImportType.genericLedger,
@@ -664,12 +675,14 @@ class ImportUploadFlowService {
         return ImportWorkflowResponse.failure(validation.message);
       }
 
-      final parsedRows = await ExcelService.parseGenericLedgerRowsInBackground(
-        sessionCache?.bytes ?? Uint8List.fromList(bytes),
+      autoPreparation ??= await _prepareGenericLedgerUploadInBackground(
+        bytes: sessionCache?.bytes ?? bytes,
+        preferredSheetName: inspection.sheetName,
         defaultSection: sectionCode,
         sourceFileName: fileName,
-        sheetName: inspection.sheetName,
       );
+      final parsedRows =
+          autoPreparation?.parsedRows ?? const <NormalizedLedgerRow>[];
 
       return ImportWorkflowResponse.success(
         GenericLedgerImportPreparation(
@@ -1344,6 +1357,18 @@ class _PurchaseUploadPreparation {
   });
 }
 
+class _GenericLedgerUploadPreparation {
+  final _PurchaseInspectionResult inspection;
+  final ExcelValidationResult validation;
+  final List<NormalizedLedgerRow>? parsedRows;
+
+  const _GenericLedgerUploadPreparation({
+    required this.inspection,
+    required this.validation,
+    required this.parsedRows,
+  });
+}
+
 class _PurchaseInspectionResult {
   final String sheetName;
   final int headerRowIndex;
@@ -1439,6 +1464,51 @@ Future<_PurchaseUploadPreparation?> _preparePurchaseUploadInBackground({
   final result = _deserializePurchaseUploadPreparation(mapPayload);
   _logUploadFreezePerformance(
     'parser_compute_prepare_purchase_upload',
+    computeWatch,
+    details:
+        'sizeBytes=${bytes.length} rows=${result.parsedRows?.length ?? 0} valid=${result.validation.isValid}',
+  );
+  return result;
+}
+
+Future<_GenericLedgerUploadPreparation?>
+_prepareGenericLedgerUploadInBackground({
+  required List<int> bytes,
+  required String? preferredSheetName,
+  required String defaultSection,
+  required String sourceFileName,
+  bool parseRows = true,
+  Map<String, String>? profileColumnMapping,
+  int? profileHeaderRowIndex,
+  bool? profileHeadersTrusted,
+}) async {
+  final computeWatch = Stopwatch()..start();
+  final payload =
+      await compute(_computeGenericLedgerUploadPayload, <String, dynamic>{
+        'bytes': bytes,
+        'preferredSheetName': preferredSheetName,
+        'defaultSection': defaultSection,
+        'sourceFileName': sourceFileName,
+        'parseRows': parseRows,
+        'profileColumnMapping': profileColumnMapping,
+        'profileHeaderRowIndex': profileHeaderRowIndex,
+        'profileHeadersTrusted': profileHeadersTrusted,
+      });
+  computeWatch.stop();
+  if (payload == null) {
+    _logUploadFreezePerformance(
+      'parser_compute_prepare_generic_ledger_upload',
+      computeWatch,
+      details: 'sizeBytes=${bytes.length} result=null',
+    );
+    return null;
+  }
+
+  final result = _deserializeGenericLedgerUploadPreparation(
+    Map<String, dynamic>.from(payload as Map),
+  );
+  _logUploadFreezePerformance(
+    'parser_compute_prepare_generic_ledger_upload',
     computeWatch,
     details:
         'sizeBytes=${bytes.length} rows=${result.parsedRows?.length ?? 0} valid=${result.validation.isValid}',
@@ -1565,6 +1635,77 @@ Map<String, dynamic>? _computeGenericLedgerInspectionPayload(
   ));
 }
 
+Map<String, dynamic>? _computeGenericLedgerUploadPayload(
+  Map<String, dynamic> payload,
+) {
+  final bytes = List<int>.from(payload['bytes'] as List);
+  final preferredSheetName = payload['preferredSheetName'] as String?;
+  final defaultSection = payload['defaultSection'] as String;
+  final sourceFileName = payload['sourceFileName'] as String? ?? '';
+  final parseRows = payload['parseRows'] as bool? ?? true;
+  final profileColumnMapping = payload['profileColumnMapping'] == null
+      ? null
+      : Map<String, String>.from(payload['profileColumnMapping'] as Map);
+  final profileHeaderRowIndex = payload['profileHeaderRowIndex'] as int?;
+  final profileHeadersTrusted = payload['profileHeadersTrusted'] as bool?;
+
+  final sessionCache = ImportSessionCache.fromBytes(bytes);
+  final inspection = ExcelService.inspectExcelFile(
+    sessionCache.bytes,
+    forcedType: ExcelImportType.genericLedger,
+    preferredSheetName: preferredSheetName,
+    sessionCache: sessionCache,
+  );
+  if (inspection == null) {
+    return null;
+  }
+
+  final validation = ExcelService.validateGenericLedgerFile(
+    sessionCache.bytes,
+    preferredSheetName: inspection.sheetName,
+    expectedSection: defaultSection,
+    sourceFileName: sourceFileName,
+    sessionCache: sessionCache,
+  );
+
+  List<NormalizedLedgerRow>? parsedRows;
+  if (profileColumnMapping != null &&
+      profileHeaderRowIndex != null &&
+      profileHeadersTrusted != null) {
+    parsedRows = ExcelService.parseGenericLedgerRowsWithProfile(
+      sessionCache.bytes,
+      sheetName: inspection.sheetName,
+      headerRowIndex: profileHeaderRowIndex,
+      headersTrusted: profileHeadersTrusted,
+      columnMapping: profileColumnMapping,
+      defaultSection: defaultSection,
+      sourceFileName: sourceFileName,
+      sessionCache: sessionCache,
+    );
+  } else if (parseRows && validation.isValid) {
+    parsedRows = ExcelService.parseGenericLedgerRows(
+      sessionCache.bytes,
+      defaultSection: defaultSection,
+      sourceFileName: sourceFileName,
+      sheetName: inspection.sheetName,
+      sessionCache: sessionCache,
+    );
+  }
+
+  return {
+    'inspection': _serializePurchaseInspectionResult((
+      sheetName: inspection.sheetName,
+      headerRowIndex: inspection.headerRowIndex,
+      rawHeaderRow: inspection.rawHeaderRow,
+      headersTrusted: inspection.headersTrusted,
+    )),
+    'validation': _serializeExcelValidationResult(validation),
+    'parsedRows': parsedRows == null
+        ? null
+        : _serializeNormalizedLedgerRows(parsedRows),
+  };
+}
+
 Map<String, dynamic> _serializePurchaseInspectionResult(
   ({
     String sheetName,
@@ -1610,6 +1751,22 @@ _PurchaseUploadPreparation _deserializePurchaseUploadPreparation(
     parsedRows: payload['parsedRows'] == null
         ? null
         : _deserializePurchaseRows(payload['parsedRows'] as List),
+  );
+}
+
+_GenericLedgerUploadPreparation _deserializeGenericLedgerUploadPreparation(
+  Map<String, dynamic> payload,
+) {
+  return _GenericLedgerUploadPreparation(
+    inspection: _deserializePurchaseInspectionResult(
+      Map<String, dynamic>.from(payload['inspection'] as Map),
+    ),
+    validation: _deserializeExcelValidationResult(
+      Map<String, dynamic>.from(payload['validation'] as Map),
+    ),
+    parsedRows: payload['parsedRows'] == null
+        ? null
+        : _deserializeNormalizedLedgerRows(payload['parsedRows'] as List),
   );
 }
 
@@ -1777,6 +1934,64 @@ List<Tds26QRow> _deserializeTdsRows(List rows) {
           panNumber: row['panNumber'] as String? ?? '',
           deductedAmount: (row['deductedAmount'] as num?)?.toDouble() ?? 0.0,
           tds: (row['tds'] as num?)?.toDouble() ?? 0.0,
+          section: row['section'] as String? ?? '',
+        ),
+      )
+      .toList();
+}
+
+List<Map<String, dynamic>> _serializeNormalizedLedgerRows(
+  List<NormalizedLedgerRow> rows,
+) {
+  return rows
+      .map(
+        (row) => <String, dynamic>{
+          'sourceType': row.sourceType,
+          'sourceFileName': row.sourceFileName,
+          'sourceLedgerFileId': row.sourceLedgerFileId,
+          'sourceLedgerUploadedAt': row.sourceLedgerUploadedAt
+              ?.toIso8601String(),
+          'sectionCode': row.sectionCode,
+          'transactionDateRaw': row.transactionDateRaw,
+          'month': row.month,
+          'financialYear': row.financialYear,
+          'partyName': row.partyName,
+          'panNumber': row.panNumber,
+          'gstNo': row.gstNo,
+          'documentNo': row.documentNo,
+          'description': row.description,
+          'amount': row.amount,
+          'taxableAmount': row.taxableAmount,
+          'tdsAmount': row.tdsAmount,
+          'section': row.section,
+        },
+      )
+      .toList();
+}
+
+List<NormalizedLedgerRow> _deserializeNormalizedLedgerRows(List rows) {
+  return rows
+      .map((entry) => Map<String, dynamic>.from(entry as Map))
+      .map(
+        (row) => NormalizedLedgerRow(
+          sourceType: row['sourceType'] as String? ?? '',
+          sourceFileName: row['sourceFileName'] as String? ?? '',
+          sourceLedgerFileId: row['sourceLedgerFileId'] as String? ?? '',
+          sourceLedgerUploadedAt: DateTime.tryParse(
+            row['sourceLedgerUploadedAt'] as String? ?? '',
+          ),
+          sectionCode: row['sectionCode'] as String? ?? '',
+          transactionDateRaw: row['transactionDateRaw'] as String? ?? '',
+          month: row['month'] as String? ?? '',
+          financialYear: row['financialYear'] as String? ?? '',
+          partyName: row['partyName'] as String? ?? '',
+          panNumber: row['panNumber'] as String? ?? '',
+          gstNo: row['gstNo'] as String? ?? '',
+          documentNo: row['documentNo'] as String? ?? '',
+          description: row['description'] as String? ?? '',
+          amount: (row['amount'] as num?)?.toDouble() ?? 0.0,
+          taxableAmount: (row['taxableAmount'] as num?)?.toDouble() ?? 0.0,
+          tdsAmount: (row['tdsAmount'] as num?)?.toDouble() ?? 0.0,
           section: row['section'] as String? ?? '',
         ),
       )
