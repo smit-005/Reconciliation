@@ -92,6 +92,54 @@ class _PurchaseComputation {
   });
 }
 
+class _PreparedReconciliationRow {
+  final String sourceType;
+  final String sourceLedgerFileId;
+  final String sourceLedgerFileName;
+  final String sourceLedgerUploadedAtIso;
+  final String originalSellerName;
+  final String mappedSellerName;
+  final String normalizedSellerName;
+  final String originalPan;
+  final String normalizedPan;
+  final String rawMonth;
+  final String financialYear;
+  final String month;
+  final DateTime chronologyDate;
+  final String section;
+  final double amount;
+  final double tdsAmount;
+
+  const _PreparedReconciliationRow({
+    required this.sourceType,
+    required this.sourceLedgerFileId,
+    required this.sourceLedgerFileName,
+    required this.sourceLedgerUploadedAtIso,
+    required this.originalSellerName,
+    required this.mappedSellerName,
+    required this.normalizedSellerName,
+    required this.originalPan,
+    required this.normalizedPan,
+    required this.rawMonth,
+    required this.financialYear,
+    required this.month,
+    required this.chronologyDate,
+    required this.section,
+    required this.amount,
+    required this.tdsAmount,
+  });
+
+  SellerIdentityObservation toObservation() {
+    return SellerIdentityObservation(
+      originalName: originalSellerName,
+      mappedName: mappedSellerName,
+      normalizedName: normalizedSellerName,
+      originalPan: originalPan,
+      normalizedPan: normalizedPan,
+    );
+  }
+}
+
 class _ResolvedSourceRow {
   final String sourceType;
   final String sourceLedgerFileId;
@@ -353,46 +401,17 @@ class CalculationService {
           normalizeName(mapping.aliasName): normalizePan(mapping.mappedPan),
     };
 
+    final preparedSourceRows = sourceRows
+        .map(
+          (row) => _prepareSourceRow(row: row, nameMapping: normalizedMapping),
+        )
+        .toList();
+    final preparedTdsRows = tdsRows
+        .map((row) => _prepareTdsRow(row: row, nameMapping: normalizedMapping))
+        .toList();
     final observations = <SellerIdentityObservation>[
-      ...sourceRows.map((row) {
-        final section = _normalizeSourceSection(
-          row.section,
-          row.normalizedSection,
-        );
-        return SellerIdentityObservation(
-          originalName: row.partyName,
-          mappedName: _applyNameMapping(
-            row.partyName,
-            normalizedMapping,
-            sectionCode: section,
-          ),
-          normalizedName: _normalizeSellerName(
-            row.partyName,
-            normalizedMapping,
-            sectionCode: section,
-          ),
-          originalPan: row.panNumber,
-          normalizedPan: normalizePan(row.panNumber),
-        );
-      }),
-      ...tdsRows.map((row) {
-        final section = _normalizeTdsSection(row.section);
-        return SellerIdentityObservation(
-          originalName: row.deducteeName,
-          mappedName: _applyNameMapping(
-            row.deducteeName,
-            normalizedMapping,
-            sectionCode: section,
-          ),
-          normalizedName: _normalizeSellerName(
-            row.deducteeName,
-            normalizedMapping,
-            sectionCode: section,
-          ),
-          originalPan: row.panNumber,
-          normalizedPan: normalizePan(row.panNumber),
-        );
-      }),
+      ...preparedSourceRows.map((row) => row.toObservation()),
+      ...preparedTdsRows.map((row) => row.toObservation()),
     ];
     AppLogger.debug(
       'RECON ORCH INPUT => sourceRows=${sourceRows.length} tdsRows=${tdsRows.length} '
@@ -412,12 +431,11 @@ class CalculationService {
     await Future<void>.delayed(Duration.zero);
 
     final resolveSourceWatch = Stopwatch()..start();
-    final resolvedPurchases = sourceRows
+    final resolvedPurchases = preparedSourceRows
         .map(
           (row) => _resolvePurchaseRow(
             buyerPan: normalizedBuyerPan,
             row: row,
-            nameMapping: normalizedMapping,
             resolver: resolver,
             skippedRows: skippedRows,
           ),
@@ -425,12 +443,11 @@ class CalculationService {
         .whereType<_ResolvedSourceRow>()
         .toList();
 
-    final resolvedTdsRows = tdsRows
+    final resolvedTdsRows = preparedTdsRows
         .map(
           (row) => _resolveTdsRow(
             buyerPan: normalizedBuyerPan,
             row: row,
-            nameMapping: normalizedMapping,
             resolver: resolver,
             skippedRows: skippedRows,
           ),
@@ -651,12 +668,9 @@ class CalculationService {
         tdsDifference.abs() <= minorTdsTolerance;
   }
 
-  static _ResolvedSourceRow? _resolvePurchaseRow({
-    required String buyerPan,
+  static _PreparedReconciliationRow _prepareSourceRow({
     required NormalizedTransactionRow row,
     required Map<String, String> nameMapping,
-    required SellerIdentityResolver resolver,
-    required _SkippedRowAccumulator skippedRows,
   }) {
     final section = _normalizeSourceSection(row.section, row.normalizedSection);
     final mappedName = _applyNameMapping(
@@ -664,11 +678,7 @@ class CalculationService {
       nameMapping,
       sectionCode: section,
     );
-    final normalizedName = _normalizeSellerName(
-      row.partyName,
-      nameMapping,
-      sectionCode: section,
-    );
+    final normalizedName = normalizeName(mappedName);
     final month = row.normalizedMonth.trim().isNotEmpty
         ? row.normalizedMonth.trim()
         : normalizeMonth(row.month);
@@ -679,35 +689,7 @@ class CalculationService {
       row.taxableAmount > 0 ? row.taxableAmount : row.amount,
     );
 
-    if (month.isEmpty || financialYear.isEmpty) {
-      skippedRows.add(
-        sourceType: row.sourceType,
-        reason: 'Missing month',
-        sellerName: row.partyName,
-        month: row.month,
-      );
-      return null;
-    }
-
-    if (amount == 0.0) {
-      skippedRows.add(
-        sourceType: row.sourceType,
-        reason: 'Missing required numeric data',
-        sellerName: row.partyName,
-        month: row.month,
-      );
-      return null;
-    }
-
-    final identity = resolver.resolve(
-      buyerPan: buyerPan,
-      originalName: row.partyName,
-      mappedName: mappedName,
-      originalPan: row.panNumber,
-      sectionCode: section,
-    );
-
-    return _ResolvedSourceRow(
+    return _PreparedReconciliationRow(
       sourceType: row.sourceType,
       sourceLedgerFileId: row.sourceLedgerFileId.trim().isNotEmpty
           ? row.sourceLedgerFileId.trim()
@@ -715,27 +697,24 @@ class CalculationService {
       sourceLedgerFileName: row.sourceLedgerFileName.trim(),
       sourceLedgerUploadedAtIso:
           row.sourceLedgerUploadedAt?.toIso8601String() ?? '',
-      buyerPan: buyerPan,
       originalSellerName: row.partyName,
       mappedSellerName: mappedName,
       normalizedSellerName: normalizedName,
       originalPan: row.panNumber,
+      normalizedPan: normalizePan(row.panNumber),
+      rawMonth: row.month,
       financialYear: financialYear,
       month: month,
       chronologyDate: _resolveChronologyDate(row.transactionDateRaw, month),
       section: section,
       amount: amount,
       tdsAmount: 0.0,
-      identity: identity,
     );
   }
 
-  static _ResolvedSourceRow? _resolveTdsRow({
-    required String buyerPan,
+  static _PreparedReconciliationRow _prepareTdsRow({
     required Tds26QRow row,
     required Map<String, String> nameMapping,
-    required SellerIdentityResolver resolver,
-    required _SkippedRowAccumulator skippedRows,
   }) {
     final section = _normalizeTdsSection(row.section);
     final mappedName = _applyNameMapping(
@@ -743,11 +722,7 @@ class CalculationService {
       nameMapping,
       sectionCode: section,
     );
-    final normalizedName = _normalizeSellerName(
-      row.deducteeName,
-      nameMapping,
-      sectionCode: section,
-    );
+    final normalizedName = normalizeName(mappedName);
     final month = row.normalizedMonth.trim().isNotEmpty
         ? row.normalizedMonth.trim()
         : normalizeMonth(row.month);
@@ -755,22 +730,102 @@ class CalculationService {
         ? row.financialYear.trim()
         : financialYearFromMonthKey(month);
 
-    if (month.isEmpty || financialYear.isEmpty) {
+    return _PreparedReconciliationRow(
+      sourceType: 'tds26q',
+      sourceLedgerFileId: '',
+      sourceLedgerFileName: '',
+      sourceLedgerUploadedAtIso: '',
+      originalSellerName: row.deducteeName,
+      mappedSellerName: mappedName,
+      normalizedSellerName: normalizedName,
+      originalPan: row.panNumber,
+      normalizedPan: normalizePan(row.panNumber),
+      rawMonth: row.month,
+      financialYear: financialYear,
+      month: month,
+      chronologyDate: _resolveChronologyDate(row.month, month),
+      section: section,
+      amount: round2(row.deductedAmount),
+      tdsAmount: round2(row.tds),
+    );
+  }
+
+  static _ResolvedSourceRow? _resolvePurchaseRow({
+    required String buyerPan,
+    required _PreparedReconciliationRow row,
+    required SellerIdentityResolver resolver,
+    required _SkippedRowAccumulator skippedRows,
+  }) {
+    if (row.month.isEmpty || row.financialYear.isEmpty) {
       skippedRows.add(
-        sourceType: 'tds26q',
+        sourceType: row.sourceType,
         reason: 'Missing month',
-        sellerName: row.deducteeName,
-        month: row.month,
+        sellerName: row.originalSellerName,
+        month: row.rawMonth,
+      );
+      return null;
+    }
+
+    if (row.amount == 0.0) {
+      skippedRows.add(
+        sourceType: row.sourceType,
+        reason: 'Missing required numeric data',
+        sellerName: row.originalSellerName,
+        month: row.rawMonth,
       );
       return null;
     }
 
     final identity = resolver.resolve(
       buyerPan: buyerPan,
-      originalName: row.deducteeName,
-      mappedName: mappedName,
-      originalPan: row.panNumber,
-      sectionCode: section,
+      originalName: row.originalSellerName,
+      mappedName: row.mappedSellerName,
+      originalPan: row.originalPan,
+      sectionCode: row.section,
+    );
+
+    return _ResolvedSourceRow(
+      sourceType: row.sourceType,
+      sourceLedgerFileId: row.sourceLedgerFileId,
+      sourceLedgerFileName: row.sourceLedgerFileName,
+      sourceLedgerUploadedAtIso: row.sourceLedgerUploadedAtIso,
+      buyerPan: buyerPan,
+      originalSellerName: row.originalSellerName,
+      mappedSellerName: row.mappedSellerName,
+      normalizedSellerName: row.normalizedSellerName,
+      originalPan: row.originalPan,
+      financialYear: row.financialYear,
+      month: row.month,
+      chronologyDate: row.chronologyDate,
+      section: row.section,
+      amount: row.amount,
+      tdsAmount: 0.0,
+      identity: identity,
+    );
+  }
+
+  static _ResolvedSourceRow? _resolveTdsRow({
+    required String buyerPan,
+    required _PreparedReconciliationRow row,
+    required SellerIdentityResolver resolver,
+    required _SkippedRowAccumulator skippedRows,
+  }) {
+    if (row.month.isEmpty || row.financialYear.isEmpty) {
+      skippedRows.add(
+        sourceType: 'tds26q',
+        reason: 'Missing month',
+        sellerName: row.originalSellerName,
+        month: row.rawMonth,
+      );
+      return null;
+    }
+
+    final identity = resolver.resolve(
+      buyerPan: buyerPan,
+      originalName: row.originalSellerName,
+      mappedName: row.mappedSellerName,
+      originalPan: row.originalPan,
+      sectionCode: row.section,
     );
 
     return _ResolvedSourceRow(
@@ -779,16 +834,16 @@ class CalculationService {
       sourceLedgerFileName: '',
       sourceLedgerUploadedAtIso: '',
       buyerPan: buyerPan,
-      originalSellerName: row.deducteeName,
-      mappedSellerName: mappedName,
-      normalizedSellerName: normalizedName,
-      originalPan: row.panNumber,
-      financialYear: financialYear,
-      month: month,
-      chronologyDate: _resolveChronologyDate(row.month, month),
-      section: section,
-      amount: round2(row.deductedAmount),
-      tdsAmount: round2(row.tds),
+      originalSellerName: row.originalSellerName,
+      mappedSellerName: row.mappedSellerName,
+      normalizedSellerName: row.normalizedSellerName,
+      originalPan: row.originalPan,
+      financialYear: row.financialYear,
+      month: row.month,
+      chronologyDate: row.chronologyDate,
+      section: row.section,
+      amount: row.amount,
+      tdsAmount: row.tdsAmount,
       identity: identity,
     );
   }
@@ -1319,16 +1374,6 @@ class CalculationService {
     return mapping[normalized]?.trim().isNotEmpty == true
         ? mapping[normalized]!.trim()
         : name.trim();
-  }
-
-  static String _normalizeSellerName(
-    String name,
-    Map<String, String> mapping, {
-    String sectionCode = '',
-  }) {
-    return normalizeName(
-      _applyNameMapping(name, mapping, sectionCode: sectionCode),
-    );
   }
 
   static Map<String, String> _normalizeNameMapping(
