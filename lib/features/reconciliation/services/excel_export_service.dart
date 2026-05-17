@@ -1747,31 +1747,31 @@ class ExcelExportService {
     final grouped = _groupRowsForPivot(sortedRows);
 
     sheet.getRangeByName('A1:K1').merge();
-    sheet
-        .getRangeByName('A1')
-        .setText(
-          title ??
-              (rows.isNotEmpty
-                  ? rows.first.buyerName.toUpperCase()
-                  : 'PIVOT SUMMARY'),
-        );
-    sheet.getRangeByName('A1').cellStyle.bold = true;
-    sheet.getRangeByName('A1').cellStyle.fontSize = 20;
-    sheet.getRangeByName('A1').cellStyle.hAlign = xlsio.HAlignType.center;
-    sheet.getRangeByName('A1').cellStyle.vAlign = xlsio.VAlignType.center;
-    sheet.getRangeByName('A1').cellStyle.backColor = '#D9E1F2';
+    final titleCell = sheet.getRangeByName('A1');
+    titleCell.setText(
+      title ??
+          (rows.isNotEmpty
+              ? rows.first.buyerName.toUpperCase()
+              : 'PIVOT SUMMARY'),
+    );
+    final titleStyle = titleCell.cellStyle;
+    titleStyle.bold = true;
+    titleStyle.fontSize = 20;
+    titleStyle.hAlign = xlsio.HAlignType.center;
+    titleStyle.vAlign = xlsio.VAlignType.center;
+    titleStyle.backColor = '#D9E1F2';
 
     sheet.getRangeByName('A2:K2').merge();
-    sheet
-        .getRangeByName('A2')
-        .setText(
-          'Generated on ${DateTime.now().day.toString().padLeft(2, '0')}-'
-          '${DateTime.now().month.toString().padLeft(2, '0')}-'
-          '${DateTime.now().year}',
-        );
-    sheet.getRangeByName('A2').cellStyle.hAlign = xlsio.HAlignType.center;
-    sheet.getRangeByName('A2').cellStyle.backColor = '#F3F4F6';
-    sheet.getRangeByName('A2').cellStyle.bold = true;
+    final generatedCell = sheet.getRangeByName('A2');
+    generatedCell.setText(
+      'Generated on ${DateTime.now().day.toString().padLeft(2, '0')}-'
+      '${DateTime.now().month.toString().padLeft(2, '0')}-'
+      '${DateTime.now().year}',
+    );
+    final generatedStyle = generatedCell.cellStyle;
+    generatedStyle.hAlign = xlsio.HAlignType.center;
+    generatedStyle.backColor = '#F3F4F6';
+    generatedStyle.bold = true;
 
     int rowIndex = 4;
 
@@ -1792,21 +1792,24 @@ class ExcelExportService {
           ? seller.toUpperCase()
           : '${seller.toUpperCase()}    $ledgerContext';
 
-      sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).merge();
-      sheet.getRangeByIndex(rowIndex, 1).setText(sellerHeader);
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 15;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
-          xlsio.HAlignType.left;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.vAlign =
-          xlsio.VAlignType.center;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.wrapText = true;
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#E2EFDA';
-      sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
-          xlsio.LineStyle.thin;
-      sheet.getRangeByIndex(rowIndex, 1).rowHeight = ledgerContext.isEmpty
-          ? 24
-          : 30;
+      final sellerHeaderRange = sheet.getRangeByIndex(
+        rowIndex,
+        1,
+        rowIndex,
+        11,
+      );
+      sellerHeaderRange.merge();
+      final sellerHeaderCell = sheet.getRangeByIndex(rowIndex, 1);
+      sellerHeaderCell.setText(sellerHeader);
+      final sellerHeaderStyle = sellerHeaderCell.cellStyle;
+      sellerHeaderStyle.bold = true;
+      sellerHeaderStyle.fontSize = 15;
+      sellerHeaderStyle.hAlign = xlsio.HAlignType.left;
+      sellerHeaderStyle.vAlign = xlsio.VAlignType.center;
+      sellerHeaderStyle.wrapText = true;
+      sellerHeaderStyle.backColor = '#E2EFDA';
+      sellerHeaderStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+      sellerHeaderCell.rowHeight = ledgerContext.isEmpty ? 24 : 30;
       rowIndex++;
 
       for (final fy in fyMap.keys) {
@@ -1829,88 +1832,75 @@ class ExcelExportService {
         grandTdsDiff += fyTdsDiff;
         grandAmtDiff += fyAmtDiff;
 
-        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).merge();
-        sheet.getRangeByIndex(rowIndex, 1).setText('FY $fy');
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.bold = true;
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.fontSize = 12;
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
-            xlsio.HAlignType.left;
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.backColor = '#EDEDED';
-        sheet.getRangeByIndex(rowIndex, 1).cellStyle.borders.all.lineStyle =
-            xlsio.LineStyle.thin;
+        final fyHeaderRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
+        fyHeaderRange.merge();
+        final fyHeaderCell = sheet.getRangeByIndex(rowIndex, 1);
+        fyHeaderCell.setText('FY $fy');
+        final fyHeaderStyle = fyHeaderCell.cellStyle;
+        fyHeaderStyle.bold = true;
+        fyHeaderStyle.fontSize = 12;
+        fyHeaderStyle.hAlign = xlsio.HAlignType.left;
+        fyHeaderStyle.backColor = '#EDEDED';
+        fyHeaderStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
         rowIndex++;
 
         _writePivotHeader(sheet, rowIndex);
         rowIndex++;
 
         for (final r in fyRows) {
-          sheet.getRangeByIndex(rowIndex, 1).setText(r.month);
-          sheet.getRangeByIndex(rowIndex, 2).setNumber(_round2(r.basicAmount));
-          sheet
-              .getRangeByIndex(rowIndex, 3)
-              .setNumber(_round2(r.applicableAmount));
-          sheet.getRangeByIndex(rowIndex, 4).setNumber(_round2(r.tds26QAmount));
-          sheet
-              .getRangeByIndex(rowIndex, 5)
-              .setNumber(_round2(r.amountDifference));
-          sheet.getRangeByIndex(rowIndex, 6).setNumber(_round2(r.expectedTds));
-          sheet.getRangeByIndex(rowIndex, 7).setNumber(_round2(r.actualTds));
-          sheet.getRangeByIndex(rowIndex, 8).setNumber(r.tdsRateUsed);
-          sheet
-              .getRangeByIndex(rowIndex, 9)
-              .setNumber(_round2(r.tdsDifference));
-          sheet.getRangeByIndex(rowIndex, 10).setText(r.status);
-          sheet
-              .getRangeByIndex(rowIndex, 11)
-              .setText(r.remarks.trim().isEmpty ? '-' : r.remarks);
-
           final range = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
-          sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).rowHeight = 20;
-          if (r.status == ReconciliationStatus.matched) {
-            range.cellStyle.backColor = '#E2F0D9';
-          } else if (r.status == ReconciliationStatus.shortDeduction) {
-            range.cellStyle.backColor = '#FCE4D6';
-          } else if (r.status == ReconciliationStatus.excessDeduction) {
-            range.cellStyle.backColor = '#F4CCCC';
-          } else if (r.status == ReconciliationStatus.timingDifference) {
-            range.cellStyle.backColor = '#DDEBF7';
-          } else if (r.status == ReconciliationStatus.purchaseOnly) {
-            range.cellStyle.backColor = '#EAF3FF';
-          } else if (r.status == ReconciliationStatus.onlyIn26Q) {
-            range.cellStyle.backColor = '#F1E6FF';
-          } else {
-            range.cellStyle.backColor = '#F5F5F5';
-          }
+          final monthCell = sheet.getRangeByIndex(rowIndex, 1);
+          final basicCell = sheet.getRangeByIndex(rowIndex, 2);
+          final applicableCell = sheet.getRangeByIndex(rowIndex, 3);
+          final tds26QCell = sheet.getRangeByIndex(rowIndex, 4);
+          final amountDiffCell = sheet.getRangeByIndex(rowIndex, 5);
+          final expectedTdsCell = sheet.getRangeByIndex(rowIndex, 6);
+          final actualTdsCell = sheet.getRangeByIndex(rowIndex, 7);
+          final rateCell = sheet.getRangeByIndex(rowIndex, 8);
+          final tdsDiffCell = sheet.getRangeByIndex(rowIndex, 9);
+          final statusCell = sheet.getRangeByIndex(rowIndex, 10);
+          final remarksCell = sheet.getRangeByIndex(rowIndex, 11);
 
-          range.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-          range.cellStyle.vAlign = xlsio.VAlignType.center;
+          monthCell.setText(r.month);
+          basicCell.setNumber(_round2(r.basicAmount));
+          applicableCell.setNumber(_round2(r.applicableAmount));
+          tds26QCell.setNumber(_round2(r.tds26QAmount));
+          amountDiffCell.setNumber(_round2(r.amountDifference));
+          expectedTdsCell.setNumber(_round2(r.expectedTds));
+          actualTdsCell.setNumber(_round2(r.actualTds));
+          rateCell.setNumber(r.tdsRateUsed);
+          tdsDiffCell.setNumber(_round2(r.tdsDifference));
+          statusCell.setText(r.status);
+          remarksCell.setText(r.remarks.trim().isEmpty ? '-' : r.remarks);
 
-          for (int col = 2; col <= 9; col++) {
-            sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
-                xlsio.HAlignType.right;
-          }
+          final rangeStyle = range.cellStyle;
+          range.rowHeight = 20;
+          rangeStyle.backColor = _pivotStatusBackColor(r.status);
+          rangeStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+          rangeStyle.vAlign = xlsio.VAlignType.center;
 
-          sheet.getRangeByIndex(rowIndex, 1).cellStyle.hAlign =
-              xlsio.HAlignType.left;
-          sheet.getRangeByIndex(rowIndex, 10).cellStyle.hAlign =
-              xlsio.HAlignType.center;
-          sheet.getRangeByIndex(rowIndex, 11).cellStyle.hAlign =
-              xlsio.HAlignType.left;
+          sheet.getRangeByIndex(rowIndex, 2, rowIndex, 9).cellStyle.hAlign =
+              xlsio.HAlignType.right;
+
+          monthCell.cellStyle.hAlign = xlsio.HAlignType.left;
+          statusCell.cellStyle.hAlign = xlsio.HAlignType.center;
+          remarksCell.cellStyle.hAlign = xlsio.HAlignType.left;
 
           if (r.tdsDifference < 0) {
-            sheet.getRangeByIndex(rowIndex, 9).cellStyle.fontColor = '#FF0000';
+            tdsDiffCell.cellStyle.fontColor = '#FF0000';
           } else if (r.tdsDifference > 0) {
-            sheet.getRangeByIndex(rowIndex, 9).cellStyle.fontColor = '#008000';
+            tdsDiffCell.cellStyle.fontColor = '#008000';
           }
           if (r.amountDifference < 0) {
-            sheet.getRangeByIndex(rowIndex, 5).cellStyle.fontColor = '#FF0000';
+            amountDiffCell.cellStyle.fontColor = '#FF0000';
           } else if (r.amountDifference > 0) {
-            sheet.getRangeByIndex(rowIndex, 5).cellStyle.fontColor = '#008000';
+            amountDiffCell.cellStyle.fontColor = '#008000';
           }
 
           rowIndex++;
         }
 
+        final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
         sheet.getRangeByIndex(rowIndex, 1).setText('TOTAL');
         sheet.getRangeByIndex(rowIndex, 2).setNumber(_round2(fyBasic));
         sheet.getRangeByIndex(rowIndex, 3).setNumber(_round2(fyApplicable));
@@ -1921,22 +1911,21 @@ class ExcelExportService {
         sheet.getRangeByIndex(rowIndex, 8).setText('');
         sheet.getRangeByIndex(rowIndex, 9).setNumber(_round2(fyTdsDiff));
 
-        final totalRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
-        totalRange.cellStyle.bold = true;
-        totalRange.cellStyle.fontSize = 11;
-        totalRange.cellStyle.backColor = '#FFF2CC';
-        totalRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-        sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).rowHeight = 22;
+        final totalStyle = totalRange.cellStyle;
+        totalStyle.bold = true;
+        totalStyle.fontSize = 11;
+        totalStyle.backColor = '#FFF2CC';
+        totalStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+        totalRange.rowHeight = 22;
 
-        for (int col = 2; col <= 9; col++) {
-          sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
-              xlsio.HAlignType.right;
-        }
+        sheet.getRangeByIndex(rowIndex, 2, rowIndex, 9).cellStyle.hAlign =
+            xlsio.HAlignType.right;
 
         rowIndex += 3;
       }
     }
 
+    final grandRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
     sheet.getRangeByIndex(rowIndex, 1).setText('GRAND TOTAL');
     sheet.getRangeByIndex(rowIndex, 2).setNumber(_round2(grandBasic));
     sheet.getRangeByIndex(rowIndex, 3).setNumber(_round2(grandApplicable));
@@ -1947,21 +1936,38 @@ class ExcelExportService {
     sheet.getRangeByIndex(rowIndex, 8).setText('');
     sheet.getRangeByIndex(rowIndex, 9).setNumber(_round2(grandTdsDiff));
 
-    final grandRange = sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11);
-    grandRange.cellStyle.bold = true;
-    grandRange.cellStyle.fontSize = 12;
-    grandRange.cellStyle.backColor = '#FFD966';
-    grandRange.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-    sheet.getRangeByIndex(rowIndex, 1, rowIndex, 11).rowHeight = 24;
+    final grandStyle = grandRange.cellStyle;
+    grandStyle.bold = true;
+    grandStyle.fontSize = 12;
+    grandStyle.backColor = '#FFD966';
+    grandStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+    grandRange.rowHeight = 24;
 
-    for (int col = 2; col <= 9; col++) {
-      sheet.getRangeByIndex(rowIndex, col).cellStyle.hAlign =
-          xlsio.HAlignType.right;
-    }
+    sheet.getRangeByIndex(rowIndex, 2, rowIndex, 9).cellStyle.hAlign =
+        xlsio.HAlignType.right;
 
     _applyNumberFormat(sheet, 1, rowIndex, [2, 3, 4, 5, 6, 7, 9]);
     sheet.getRangeByIndex(1, 8, rowIndex, 8).numberFormat = '0.00%';
     _autoFitPivot(sheet);
+  }
+
+  static String _pivotStatusBackColor(String status) {
+    switch (status) {
+      case ReconciliationStatus.matched:
+        return '#E2F0D9';
+      case ReconciliationStatus.shortDeduction:
+        return '#FCE4D6';
+      case ReconciliationStatus.excessDeduction:
+        return '#F4CCCC';
+      case ReconciliationStatus.timingDifference:
+        return '#DDEBF7';
+      case ReconciliationStatus.purchaseOnly:
+        return '#EAF3FF';
+      case ReconciliationStatus.onlyIn26Q:
+        return '#F1E6FF';
+      default:
+        return '#F5F5F5';
+    }
   }
 
   static Map<String, Map<String, List<ReconciliationRow>>> _groupRowsForPivot(
