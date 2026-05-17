@@ -333,6 +333,11 @@ class SellerMappingPreflightService {
       final allSectionCandidates =
           sourceGroupsBySection[tdsGroup.sectionCode] ??
           const <_SourceAliasAccumulator>[];
+      final reviewedSeparateFallbackCount = sourceCandidates.isEmpty
+          ? sourceAliasCandidateIndex.reviewedSeparateCountForSection(
+              tdsGroup.sectionCode,
+            )
+          : 0;
       if (sourceCandidates.length < allSectionCandidates.length) {
         reducedCandidateHits += 1;
         AppLogger.debug(
@@ -343,6 +348,7 @@ class SellerMappingPreflightService {
         tdsGroup: tdsGroup,
         sourceCandidates: sourceCandidates,
         savedMappingLookup: savedMappingLookup,
+        reviewedSeparateFallbackCount: reviewedSeparateFallbackCount,
       );
       reviewedSeparateCount += matches.reviewedSeparateCount;
       reviewedSeparateSkippedBlockers +=
@@ -525,13 +531,14 @@ class SellerMappingPreflightService {
     required _TdsSellerAccumulator tdsGroup,
     required List<_SourceAliasAccumulator> sourceCandidates,
     required _SavedMappingLookup savedMappingLookup,
+    int reviewedSeparateFallbackCount = 0,
   }) {
     final exactSavedMatches = <_MatchedSourceAlias>[];
     final safePanMatches = <_MatchedSourceAlias>[];
     final safeNameMatches = <_MatchedSourceAlias>[];
     final riskyMatches = <_MatchedSourceAlias>[];
     final panConflictMatches = <_MatchedSourceAlias>[];
-    var reviewedSeparateCount = 0;
+    var reviewedSeparateCount = reviewedSeparateFallbackCount;
     var reviewedSeparateSkippedBlockers = 0;
 
     _PreflightMatchResult buildResult({
@@ -924,16 +931,15 @@ class _SourceAliasAccumulator {
 }
 
 class _SourceAliasCandidateIndex {
-  final Map<String, List<_SourceAliasAccumulator>> _allBySection;
   final Map<String, List<_SourceAliasAccumulator>> _aliasBySectionAndName;
   final Map<String, List<_SourceAliasAccumulator>> _suggestedBySectionAndName;
   final Map<String, List<_SourceAliasAccumulator>> _panBySectionAndValue;
   final Map<String, List<_SourceAliasAccumulator>> _savedExactBySectionAndName;
   final Map<String, List<_SourceAliasAccumulator>>
   _savedFallbackBySectionAndName;
+  final Map<String, int> _reviewedSeparateCountBySection;
 
   const _SourceAliasCandidateIndex._({
-    required Map<String, List<_SourceAliasAccumulator>> allBySection,
     required Map<String, List<_SourceAliasAccumulator>> aliasBySectionAndName,
     required Map<String, List<_SourceAliasAccumulator>>
     suggestedBySectionAndName,
@@ -942,18 +948,18 @@ class _SourceAliasCandidateIndex {
     savedExactBySectionAndName,
     required Map<String, List<_SourceAliasAccumulator>>
     savedFallbackBySectionAndName,
-  }) : _allBySection = allBySection,
-       _aliasBySectionAndName = aliasBySectionAndName,
+    required Map<String, int> reviewedSeparateCountBySection,
+  }) : _aliasBySectionAndName = aliasBySectionAndName,
        _suggestedBySectionAndName = suggestedBySectionAndName,
        _panBySectionAndValue = panBySectionAndValue,
        _savedExactBySectionAndName = savedExactBySectionAndName,
-       _savedFallbackBySectionAndName = savedFallbackBySectionAndName;
+       _savedFallbackBySectionAndName = savedFallbackBySectionAndName,
+       _reviewedSeparateCountBySection = reviewedSeparateCountBySection;
 
   factory _SourceAliasCandidateIndex.build({
     required List<_SourceAliasAccumulator> sourceGroups,
     required List<SellerMapping> existingMappings,
   }) {
-    final allBySection = <String, List<_SourceAliasAccumulator>>{};
     final aliasBySectionAndName = <String, List<_SourceAliasAccumulator>>{};
     final suggestedBySectionAndName = <String, List<_SourceAliasAccumulator>>{};
     final panBySectionAndValue = <String, List<_SourceAliasAccumulator>>{};
@@ -961,6 +967,8 @@ class _SourceAliasCandidateIndex {
         <String, List<_SourceAliasAccumulator>>{};
     final savedFallbackBySectionAndName =
         <String, List<_SourceAliasAccumulator>>{};
+    final reviewedSeparateAliasSectionKeys = <String>{};
+    final reviewedSeparateCountBySection = <String, int>{};
 
     final exactSavedNamesByAliasAndSection = <String, Set<String>>{};
     final fallbackSavedNamesByAlias = <String, Set<String>>{};
@@ -971,7 +979,15 @@ class _SourceAliasCandidateIndex {
         mapping.sectionCode,
       );
       final mappedName = normalizeName(mapping.mappedName);
+      final isReviewedSeparate = mapping.mappedName
+          .trim()
+          .toUpperCase()
+          .startsWith('__SEPARATE__:');
       if (alias.isEmpty || mappedName.isEmpty) continue;
+
+      if (sectionCode != 'ALL' && isReviewedSeparate) {
+        reviewedSeparateAliasSectionKeys.add('$alias|$sectionCode');
+      }
 
       if (sectionCode == 'ALL') {
         fallbackSavedNamesByAlias
@@ -993,9 +1009,12 @@ class _SourceAliasCandidateIndex {
     }
 
     for (final source in sourceGroups) {
-      allBySection
-          .putIfAbsent(source.sectionCode, () => <_SourceAliasAccumulator>[])
-          .add(source);
+      if (reviewedSeparateAliasSectionKeys.contains(
+        '${source.alias}|${source.sectionCode}',
+      )) {
+        reviewedSeparateCountBySection[source.sectionCode] =
+            (reviewedSeparateCountBySection[source.sectionCode] ?? 0) + 1;
+      }
       addToIndex(
         aliasBySectionAndName,
         '${source.sectionCode}|${source.alias}',
@@ -1044,19 +1063,16 @@ class _SourceAliasCandidateIndex {
     }
 
     return _SourceAliasCandidateIndex._(
-      allBySection: allBySection,
       aliasBySectionAndName: aliasBySectionAndName,
       suggestedBySectionAndName: suggestedBySectionAndName,
       panBySectionAndValue: panBySectionAndValue,
       savedExactBySectionAndName: savedExactBySectionAndName,
       savedFallbackBySectionAndName: savedFallbackBySectionAndName,
+      reviewedSeparateCountBySection: reviewedSeparateCountBySection,
     );
   }
 
   List<_SourceAliasAccumulator> candidatesFor(_TdsSellerAccumulator tdsGroup) {
-    final allSectionCandidates =
-        _allBySection[tdsGroup.sectionCode] ??
-        const <_SourceAliasAccumulator>[];
     final reduced = <String, _SourceAliasAccumulator>{};
 
     void addAll(Iterable<_SourceAliasAccumulator> values) {
@@ -1088,10 +1104,11 @@ class _SourceAliasCandidateIndex {
       );
     }
 
-    if (reduced.isEmpty) {
-      return allSectionCandidates;
-    }
     return reduced.values.toList();
+  }
+
+  int reviewedSeparateCountForSection(String sectionCode) {
+    return _reviewedSeparateCountBySection[sectionCode] ?? 0;
   }
 }
 

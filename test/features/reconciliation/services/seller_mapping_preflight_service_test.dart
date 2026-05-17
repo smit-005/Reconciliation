@@ -244,6 +244,172 @@ void main() {
     );
 
     test(
+      '26Q-only unresolved rows still appear without scanning unrelated section candidates',
+      () async {
+        const buyerPan = 'PREFT6611F';
+        await _clearMappings(buyerPan);
+
+        final result = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Six B',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(name: 'Unresolved 26Q Vendor', pan: '', section: '194C'),
+          ],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(
+                name: 'Unrelated Ledger Vendor',
+                pan: '',
+                section: '194C',
+              ),
+            ],
+          },
+        );
+
+        final tdsOnlyRow = result.reviewRows.singleWhere(
+          (row) => row.purchasePartyDisplayName == 'Unresolved 26Q Vendor',
+        );
+        expect(tdsOnlyRow.is26QUnmatched, isTrue);
+        expect(tdsOnlyRow.sourceRowCount, 0);
+        expect(tdsOnlyRow.preflightReasonCode, 'unresolved_identity');
+        expect(
+          result.reviewRows.any(
+            (row) =>
+                row.purchasePartyDisplayName == 'Unrelated Ledger Vendor' &&
+                row.isPurchaseOnly,
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'reviewed separate same-section source aliases keep empty-candidate 26Q sellers safe',
+      () async {
+        const buyerPan = 'PREFT6622F';
+        await _clearMappings(buyerPan);
+        await SellerMappingService.saveMapping(
+          SellerMapping(
+            buyerName: 'Buyer Six C',
+            buyerPan: buyerPan,
+            aliasName: 'Reviewed Separate Ledger',
+            sectionCode: '194C',
+            mappedPan: '',
+            mappedName: '__SEPARATE__:Reviewed Separate Ledger',
+          ),
+        );
+
+        final result = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Six C',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(name: 'Unmatched Reviewed 26Q', pan: '', section: '194C'),
+          ],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(
+                name: 'Reviewed Separate Ledger',
+                pan: '',
+                section: '194C',
+              ),
+            ],
+          },
+        );
+
+        final row = result.reviewRows.singleWhere(
+          (row) => row.purchasePartyDisplayName == 'Unmatched Reviewed 26Q',
+        );
+        expect(row.is26QUnmatched, isTrue);
+        expect(row.requiresDangerousReview, isFalse);
+        expect(
+          row.preflightReasonDetail,
+          contains('explicitly reviewed and kept separate'),
+        );
+        expect(result.pendingReviewCount, 0);
+      },
+    );
+
+    test(
+      'same seller name in another section does not become a source candidate',
+      () async {
+        const buyerPan = 'PREFT6633F';
+        await _clearMappings(buyerPan);
+
+        final result = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Six D',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(
+              name: 'Cross Section Vendor',
+              pan: 'ABCDE1234F',
+              section: '194C',
+            ),
+          ],
+          sourceRowsBySection: {
+            '194H': [
+              _sourceRow(
+                name: 'Cross Section Vendor',
+                pan: 'ABCDE1234F',
+                section: '194H',
+              ),
+            ],
+          },
+        );
+
+        final tdsOnlyRow = result.reviewRows.singleWhere(
+          (row) =>
+              row.purchasePartyDisplayName == 'Cross Section Vendor' &&
+              row.sectionCode == '194C',
+        );
+        expect(tdsOnlyRow.is26QUnmatched, isTrue);
+        expect(tdsOnlyRow.sourceRowCount, 0);
+        expect(
+          result.reviewRows.any(
+            (row) =>
+                row.sectionCode == '194H' &&
+                row.purchasePartyDisplayName == 'Cross Section Vendor' &&
+                row.tdsDisplayName == 'Cross Section Vendor',
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'same-section name match still appears as a reviewable candidate',
+      () async {
+        const buyerPan = 'PREFT6644F';
+        await _clearMappings(buyerPan);
+
+        final result = await SellerMappingPreflightService.analyze(
+          buyerName: 'Buyer Six E',
+          buyerPan: buyerPan,
+          tdsRows: [
+            _tdsRow(
+              name: 'Same Section Vendor',
+              pan: 'ABCDE1234F',
+              section: '194C',
+            ),
+          ],
+          sourceRowsBySection: {
+            '194C': [
+              _sourceRow(name: 'Same Section Vendor', pan: '', section: '194C'),
+            ],
+          },
+        );
+
+        final row = result.reviewRows.singleWhere(
+          (row) => row.purchasePartyDisplayName == 'Same Section Vendor',
+        );
+        expect(row.is26QUnmatched, isFalse);
+        expect(row.sourceRowCount, 1);
+        expect(row.tdsDisplayName, 'Same Section Vendor');
+        expect(row.requiresDangerousReview, isTrue);
+        expect(row.preflightReasonCode, 'unresolved_identity');
+      },
+    );
+
+    test(
       'numeric and date-like source seller keys are dropped before preflight grouping',
       () async {
         const buyerPan = 'PREFT7777G';
